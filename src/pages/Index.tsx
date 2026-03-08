@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Bot, Search, FileText, Zap, Rocket, BarChart3, Globe, Linkedin,
-  ShieldCheck, Upload, UserCog, Mail, Timer, ChevronRight
+  ShieldCheck, Upload, UserCog, Mail, Timer, ChevronRight, Eye
 } from "lucide-react";
 import StatsBar from "@/components/StatsBar";
 import JobSearch from "@/components/JobSearch";
@@ -17,6 +17,7 @@ import CSVUpload from "@/components/CSVUpload";
 import ApplicantProfileForm from "@/components/ApplicantProfileForm";
 import EmailEngineDashboard from "@/components/EmailEngineDashboard";
 import CronMonitorPanel from "@/components/CronMonitorPanel";
+import EmailOpenTracker from "@/components/EmailOpenTracker";
 import { fetchApplications, type JobApplication } from "@/lib/api";
 
 interface NavItem {
@@ -56,6 +57,7 @@ const Index = () => {
     { id: "scraper", label: "Scraper", icon: Globe, group: "Discovery" },
     { id: "email-engine", label: "Email Engine", icon: Mail, group: "Outreach" },
     { id: "review", label: "Review Queue", icon: ShieldCheck, group: "Outreach" },
+    { id: "tracking", label: "Open Tracking", icon: Eye, group: "Outreach" },
     { id: "csv", label: "CSV Import", icon: Upload, group: "Tools" },
     { id: "profile", label: "Profile", icon: UserCog, group: "Tools" },
     { id: "cron", label: "Cron Monitor", icon: Timer, group: "Tools" },
@@ -101,6 +103,11 @@ const Index = () => {
         icon: ShieldCheck, title: "Email Review Queue & Bounce Analytics", subtitle: "pre-send review",
         description: "Review pending emails before they're sent. Approve verified domains in bulk or reject suspicious ones.",
         component: <ReviewQueue />,
+      },
+      tracking: {
+        icon: Eye, title: "Email Open Tracking", subtitle: "real-time",
+        description: "See which companies opened your application emails, how many times, and when. Powered by invisible tracking pixels.",
+        component: <EmailOpenTracker />,
       },
       csv: {
         icon: Upload, title: "CSV Job Import", subtitle: "bulk upload",
