@@ -47,7 +47,7 @@ export default function CSVUpload({ onImported }: CSVUploadProps) {
         hiring_email: row["hiring_email"] || row["email"] || row["contact_email"] || "",
         hiring_manager: row["hiring_manager"] || row["contact"] || row["manager"] || "",
         status: "pending",
-      })).filter(j => j.company_name.length > 0);
+      })).filter(j => j.company_name.length > 0) as ParsedJob[];
 
       setJobs(parsed);
       toast({

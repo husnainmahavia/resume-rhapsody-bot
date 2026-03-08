@@ -192,6 +192,24 @@ export async function updateLinkedInOutreach(id: string, updates: Record<string,
   return data;
 }
 
+// Hunter.io email lookup
+export async function findEmailByDomain(companyDomain: string) {
+  const { data, error } = await supabase.functions.invoke("find-email", {
+    body: { companyDomain },
+  });
+  if (error) throw error;
+  return data;
+}
+
+// Career page scraper
+export async function scrapeCareerPages(companyDomain: string) {
+  const { data, error } = await supabase.functions.invoke("scrape-careers", {
+    body: { companyDomain },
+  });
+  if (error) throw error;
+  return data;
+}
+
 // Bounce analytics
 export async function getBounceAnalytics() {
   const { data: blacklist } = await supabase

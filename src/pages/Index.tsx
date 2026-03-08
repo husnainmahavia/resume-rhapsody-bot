@@ -177,6 +177,20 @@ const Index = () => {
                   <ReviewQueue />
                 </motion.div>
               </TabsContent>
+              <TabsContent value="csv">
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass rounded-lg p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Upload className="h-4 w-4 text-primary" />
+                    <h2 className="font-semibold">CSV Job Import</h2>
+                    <span className="text-xs text-muted-foreground ml-auto font-mono">bulk upload</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Upload a CSV with company names, domains, job titles, and emails. Jobs are imported into the pipeline for processing.
+                  </p>
+                  <CSVUpload onImported={loadApplications} />
+                </motion.div>
+              </TabsContent>
+
               <TabsContent value="search">
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass rounded-lg p-5">
                   <div className="flex items-center gap-2 mb-4">
