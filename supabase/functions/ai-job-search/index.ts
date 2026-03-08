@@ -13,21 +13,27 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
-    const prompt = `You are a job search assistant. Find 5-8 realistic job listings that would be relevant for someone with these skills: ${skills.join(", ")}.
+    const prompt = `You are a job search assistant. Find 5-8 REAL job listings from REAL companies that are actively hiring in ${location || "Manchester, UK"} for someone with these skills: ${skills.join(", ")}.
 
-Location preference: ${location || "Manchester, UK or Remote"}
+CRITICAL RULES:
+- ONLY use REAL, well-known companies that actually exist (e.g., BBC, NHS, Booking.com, Amazon, THG, AO.com, Autotrader, etc.)
+- Use REAL company career/HR email addresses. Look up the actual format used by each company (e.g., careers@company.com, recruitment@company.co.uk, jobs@company.com)
+- If you don't know the real email, use the standard format: careers@companydomain.com or hr@companydomain.com using the company's REAL domain
+- Job URLs should point to real career pages (e.g., https://careers.company.com/jobs/...)
+- Hiring manager names should be realistic but you can make these up
+- DO NOT invent fictional companies or domains
+
 Job type preference: ${jobType || "Full-time"}
-Focus on jobs posted in the last 3 days.
 
 For each job, provide:
 - title: Job title
-- company: Company name
+- company: Real company name
 - location: Job location
-- salary_range: Estimated salary range
+- salary_range: Realistic salary range for the UK market
 - description: Brief 2-3 sentence description of the role
-- url: A plausible job URL (use realistic company career page URLs)
-- hiring_manager: A realistic hiring manager name
-- hiring_email: A realistic HR/hiring email for the company
+- url: Real company careers page URL
+- hiring_manager: A realistic name
+- hiring_email: The company's REAL recruitment/careers email address
 
 Return ONLY valid JSON array. No markdown, no explanation.`;
 
