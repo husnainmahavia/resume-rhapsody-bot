@@ -7,67 +7,173 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const GMAIL_DAILY_LIMIT = 80; // Stay well under Gmail's 500/day limit
-const MIN_DELAY_MS = 45000; // 45 seconds minimum between emails (human-like)
-const MAX_DELAY_MS = 120000; // 2 minutes max random delay
-const BATCH_PAUSE_MS = 300000; // 5 min pause every 10 emails
+const GMAIL_DAILY_LIMIT = 80;
+const MIN_DELAY_MS = 45000;
+const MAX_DELAY_MS = 120000;
+const BATCH_PAUSE_MS = 300000;
 
 function humanDelay(): Promise<void> {
   const ms = MIN_DELAY_MS + Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS);
   return new Promise((r) => setTimeout(r, ms));
 }
 
-const CV_VERSIONS: Record<string, string> = {
-  fullstack: `HUSNAIN MAHAVIA | Full-Stack Developer | WordPress & AI Integration Specialist | Tech Lead
-8+ years in custom WordPress development, AI/ML integration, automation systems. 50+ WordPress sites, 15+ e-commerce platforms. ChatGPT, Gemini, MidJourney integration. Custom lead management, API integrations. Scaled team 1→10+, 50% YoY growth.
-Skills: HTML5/CSS3, JavaScript, PHP, Python, SQL, WordPress, React, AI/ML, REST APIs, CRM`,
+// Full CV content from the uploaded DOCX — used as base for tailoring
+const FULL_CV_CONTENT = `HUSNAIN MAHAVIA
++44 7387 055617 • husnainmahavia.1@gmail.com • Manchester, United Kingdom
+Full-Stack Developer | WordPress & AI Integration Specialist | Tech Lead
 
-  aiSpecialist: `HUSNAIN MAHAVIA | AI & Technology Specialist
-8+ years software engineering + applied AI. ML model development, AI algorithm optimization, large dataset analysis. Enterprise AI integration, cloud deployment, scalable architecture.
-Skills: Python, SQL, Machine Learning, AI Automation, Flutter, Unity AR/VR, WordPress`,
+PROFESSIONAL PROFILE
+Results-driven full-stack developer with 8+ years of hands-on expertise in custom WordPress development, AI/ML integration, and automation systems. Specialized in architecting and deploying AI-powered solutions alongside high-performance websites, with proven ability to integrate cutting-edge LLM technologies (ChatGPT, Gemini) into production environments. Expert in building sophisticated API integrations, custom lead management systems, and AI-driven automation pipelines for international clients across luxury hospitality, travel, and SaaS sectors. Experienced technical leader who has scaled operations from solo developer to managing cross-functional teams while maintaining code quality, security standards, and customer satisfaction.
 
-  digitalMarketing: `HUSNAIN MAHAVIA | Digital Marketing Manager
-5+ years digital marketing + software engineering background. AI-powered SEO, performance advertising, AR campaigns. 900%+ traffic growth, 30% ranking improvement.
-Skills: SEO, Google Ads, Meta Ads, TikTok Ads, Analytics, WordPress, AI Content, CRM`,
+CORE TECHNICAL COMPETENCIES
+• WordPress & Web Development: Expert HTML5/CSS3, Custom WordPress theme development & customization, Landing page implementation, Responsive/mobile-first design, Cross-browser compatibility, 50+ custom WordPress sites
+• AI Automation & LLM Integration: ChatGPT, Gemini, MidJourney, Jasper integration, Machine learning model development & deployment, AI-powered content generation, Automated lead scoring, AI-driven campaign analysis, LLM-based automation workflows, Prompt engineering & optimization
+• API Integration & Custom Solutions: RESTful API design & integration, CRM integrations (HubSpot, Salesforce), Third-party API connectors, Webhook configuration, Custom backend development, Database optimization
+• Programming Languages: Advanced HTML5/CSS3, JavaScript (jQuery, ES6+), PHP (WordPress, custom functions), Python (ML, automation scripts), SQL (MySQL), JSON/AJAX
+• CRM & Marketing Automation: Lead management systems, Form builder implementation, CRM integration & automation, Lead scoring algorithms, Automated email workflows, Conversion tracking
+• Performance & Security: Core Web Vitals optimization (90+ scores), Page speed optimization, Security hardening, SSL certificates, GDPR compliance
+• Hosting & Infrastructure: cPanel/WHM administration, Linux server management, DNS configuration, Website migrations, Backup systems, CDN setup
 
-  webDeveloper: `HUSNAIN MAHAVIA | Senior Web Developer | WordPress Specialist
-8+ years custom WordPress development, HTML/CSS, landing pages. 50+ custom sites, 15+ e-commerce platforms, Core Web Vitals 90+.
-Skills: HTML5/CSS3, JavaScript, PHP, WordPress, WooCommerce, Shopify, GTM, CRM Integration`,
-};
+PROFESSIONAL EXPERIENCE
+
+Lead Full-Stack Developer & AI Integration Specialist
+Visuosofts — Remote (International Clients) | January 2017 – August 2025
+
+Led comprehensive web development and AI integration operations for digital agency serving international clients across luxury hospitality, travel, real estate, and SaaS sectors.
+
+WordPress Development & Custom Web Solutions:
+• Developed and maintained 50+ custom WordPress websites from scratch, including advanced theme customization, child theme development, and bespoke functionality
+• Built 15+ e-commerce platforms using WordPress/WooCommerce and Shopify, achieving 25% revenue growth
+• Created responsive, mobile-first designs with Core Web Vitals 90+ scores consistently
+• Developed custom WordPress plugins and integrated third-party APIs
+
+AI Automation & LLM Integration:
+• Coordinated integration of multiple AI/LLM technologies (ChatGPT, Gemini, MidJourney, Jasper, Veo 3) into production environments
+• Developed and deployed ML models for lead scoring, predictive analytics — 900%+ traffic growth, 50% average client growth
+• Built AI-powered automation pipelines reducing manual processing time by 60%
+• Implemented advanced prompt engineering strategies for business use cases
+
+API Integration & Custom Backend:
+• Designed sophisticated API integrations connecting WordPress with CRM platforms (HubSpot, Salesforce) using REST APIs and webhooks
+• Built custom lead management system improving lead-to-customer conversion by 15%
+• Configured Google Tag Manager with comprehensive tracking (UTM, GCLID, FBCLID)
+
+Technical Leadership:
+• Scaled technical operations from solo developer to leading team of 10+ engineers
+• Managed complete project lifecycle for 50+ international projects
+• Achieved 50% YoY revenue growth
+
+Market Research Interviewer (Part-time)
+NatCen Social Research — United Kingdom | October 2025 – Present
+• GDPR-certified data handling, Professional safeguarding training, Advanced fieldwork protocols
+
+TECHNICAL SKILLS SUMMARY
+• WordPress & CMS: WordPress (Expert), Custom Themes, WooCommerce, Elementor, ACF, Multisite, REST API
+• Web Technologies: HTML5/CSS3 (Flexbox, Grid), JavaScript (ES6+, jQuery), Responsive Design, Web Accessibility
+• Programming: PHP, Python (ML, automation), SQL (MySQL), JSON/AJAX, Node.js
+• AI/ML: ChatGPT API, Google Gemini, OpenAI, MidJourney, Jasper, ML models, Prompt engineering
+• API & Integrations: REST APIs, CRM (HubSpot, Salesforce), Webhooks, Custom data pipelines
+• Tracking: Google Tag Manager, GA4, UTM, Facebook Pixel, TikTok Pixel
+• Tools: VS Code, Git/GitHub, Chrome DevTools, npm/Node.js, cPanel/WHM
+
+EDUCATION
+BSc Software Engineering — COMSATS University, Islamabad (January 2016 – May 2020)
+
+CERTIFICATIONS
+• AI & LLM Integration (ChatGPT, Gemini, Prompt Engineering) — 2024-2025
+• Generative AI Content Creation & Automation — 2024
+• Advanced WordPress Development — 2017-2025
+• ML & Data Analysis for Business — 2023-2024
+• Google Analytics IQ — 2023
+• HubSpot Inbound Marketing — 2023
+• ISDP GDPR Compliance — 2025
+• Advanced AR Development Unity 3D — 2018
+
+LANGUAGES: English (Fluent), Urdu (Native), Italian (Basic)
+Work Authorization: UK citizen, eligible to work in UK and EU`;
+
+// Generate a professional PDF-like HTML CV
+function generateCvHtml(cvText: string, jobTitle: string, company: string): string {
+  // Parse sections from tailored CV text
+  const lines = cvText.split("\n");
+  let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    body { font-family: 'Calibri', 'Segoe UI', Arial, sans-serif; font-size: 11pt; color: #1a1a1a; margin: 0; padding: 30px 40px; line-height: 1.4; }
+    .header { text-align: center; border-bottom: 2px solid #1a5276; padding-bottom: 10px; margin-bottom: 15px; }
+    .name { font-size: 22pt; font-weight: bold; color: #1a5276; letter-spacing: 2px; margin: 0; }
+    .contact { font-size: 9pt; color: #555; margin: 5px 0; }
+    .title { font-size: 11pt; color: #2c3e50; font-style: italic; margin: 5px 0; }
+    h2 { font-size: 12pt; color: #1a5276; border-bottom: 1px solid #1a5276; padding-bottom: 3px; margin: 15px 0 8px 0; text-transform: uppercase; letter-spacing: 1px; }
+    h3 { font-size: 11pt; color: #2c3e50; margin: 10px 0 3px 0; }
+    .job-title { font-weight: bold; }
+    .job-company { color: #555; font-style: italic; }
+    .job-date { color: #777; font-size: 9pt; float: right; }
+    ul { margin: 3px 0 8px 0; padding-left: 20px; }
+    li { margin-bottom: 2px; font-size: 10pt; }
+    .skills-grid { display: flex; flex-wrap: wrap; gap: 3px 15px; }
+    .skill-item { font-size: 10pt; }
+    .section-content { font-size: 10pt; }
+    p { margin: 3px 0; font-size: 10pt; }
+  </style></head><body>`;
+
+  html += `<div class="header">
+    <p class="name">HUSNAIN MAHAVIA</p>
+    <p class="contact">+44 7387 055617 • husnainmahavia.1@gmail.com • Manchester, United Kingdom</p>
+    <p class="title">Full-Stack Developer | WordPress & AI Integration Specialist | Tech Lead</p>
+  </div>`;
+
+  // Convert CV text to HTML sections
+  let currentSection = "";
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    // Detect section headers (all caps or starts with #)
+    if (trimmed === trimmed.toUpperCase() && trimmed.length > 3 && !trimmed.startsWith("•") && !trimmed.startsWith("-")) {
+      if (trimmed.includes("HUSNAIN") || trimmed.includes("+44") || trimmed.includes("Full-Stack")) continue;
+      html += `<h2>${trimmed}</h2>`;
+      currentSection = trimmed;
+    } else if (trimmed.startsWith("•") || trimmed.startsWith("-")) {
+      html += `<li>${trimmed.replace(/^[•\-]\s*/, "")}</li>`;
+    } else if (trimmed.includes("|") && (trimmed.includes("2017") || trimmed.includes("2025") || trimmed.includes("2020"))) {
+      html += `<h3>${trimmed}</h3>`;
+    } else {
+      html += `<p>${trimmed}</p>`;
+    }
+  }
+
+  html += "</body></html>";
+  return html;
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     const { location, skills, action, cvVersion, jobType } = await req.json();
-    
+
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
     const GMAIL_APP_PASSWORD = Deno.env.get("GMAIL_APP_PASSWORD")!;
-    
+
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const senderEmail = "husnainmahavia.1@gmail.com";
     const senderName = "Husnain Mahavia";
 
-    // If action is "status", return current pipeline status
     if (action === "status") {
       const { count: totalCount } = await supabase.from("job_applications").select("*", { count: "exact", head: true });
       const { count: appliedCount } = await supabase.from("job_applications").select("*", { count: "exact", head: true }).eq("status", "applied");
       const { count: todayCount } = await supabase.from("job_applications").select("*", { count: "exact", head: true })
         .gte("applied_at", new Date().toISOString().split("T")[0]);
-      
-      return new Response(JSON.stringify({ 
-        total: totalCount || 0, 
-        applied: appliedCount || 0, 
+
+      return new Response(JSON.stringify({
+        total: totalCount || 0,
+        applied: appliedCount || 0,
         today: todayCount || 0,
         dailyLimit: GMAIL_DAILY_LIMIT,
-      }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Check daily email count
     const today = new Date().toISOString().split("T")[0];
     const { count: sentToday } = await supabase
       .from("job_applications")
@@ -76,40 +182,55 @@ serve(async (req) => {
       .gte("applied_at", today);
 
     if ((sentToday || 0) >= GMAIL_DAILY_LIMIT) {
-      return new Response(JSON.stringify({ 
+      return new Response(JSON.stringify({
         error: "Daily email limit reached. Will resume tomorrow.",
         sentToday,
         limit: GMAIL_DAILY_LIMIT,
-      }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Step 1: Search for jobs via AI
+    // Step 1: Search for REAL jobs with VERIFIED email addresses
     console.log("🔍 Searching for jobs...");
     const targetSkills = (skills || ["JavaScript", "React", "Python", "WordPress", "AI"]).join(", ");
     const targetJobType = jobType || "Full-time";
-    const searchPrompt = `Find 5-8 REAL job listings from REAL companies actively hiring in ${location || "Manchester, UK"} for someone with these skills: ${targetSkills}.
 
+    const searchPrompt = `You are a UK job market expert. Find 5-8 REAL job openings at REAL companies in ${location || "Manchester, UK"} for: ${targetSkills}.
 Job type: ${targetJobType}
-CRITICAL: Only use REAL companies with REAL domains. Use actual recruitment email formats like careers@, jobs@, hr@, recruitment@ with the company's real domain.
 
-Return JSON array with: title, company, location, salary_range, description, url, hiring_manager, hiring_email`;
+ABSOLUTE REQUIREMENTS - FOLLOW STRICTLY:
+1. ONLY use companies that ACTUALLY EXIST and are KNOWN UK employers (e.g., BBC, NHS Digital, Booking.com, AO.com, THG/The Hut Group, Autotrader, Boohoo, On The Beach, Peak AI, Manchester Airport Group, Kellogg's, Brother International, Missguided, N Brown Group, Co-op, JD Sports, Bet365, etc.)
+2. The hiring_email MUST be a REAL, VERIFIED email format that the company actually uses. Research the company's actual careers/recruitment email. Common REAL patterns:
+   - careers@companyname.com (most common)
+   - recruitment@companyname.co.uk
+   - jobs@companyname.com
+   - hr@companyname.com
+   - talent@companyname.com
+   - For large companies, check their actual careers page domain
+3. DO NOT invent or guess email addresses. If you're not confident about the email, use the company's main website domain with careers@ prefix
+4. The job URL must point to a real careers page (careers.company.com or company.com/careers)
+5. DO NOT use fictional companies, startups you made up, or domains that don't exist
+
+VERIFICATION: Before returning each job, mentally verify:
+- Is this company real? (Google it)
+- Does this domain actually exist? (company website)
+- Is this email format what they actually use?
+
+Return JSON with: title, company, location, salary_range, description, url, hiring_manager, hiring_email`;
 
     const searchResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "google/gemini-2.5-flash",
         messages: [
-          { role: "system", content: "Return only valid JSON arrays. No markdown." },
+          { role: "system", content: "You are a UK recruitment specialist. Only return REAL companies with VERIFIED contact emails. Return valid JSON only." },
           { role: "user", content: searchPrompt },
         ],
         tools: [{
           type: "function",
           function: {
             name: "return_jobs",
-            description: "Return job listings",
+            description: "Return real job listings",
             parameters: {
               type: "object",
               properties: {
@@ -123,7 +244,7 @@ Return JSON array with: title, company, location, salary_range, description, url
                       description: { type: "string" }, url: { type: "string" },
                       hiring_manager: { type: "string" }, hiring_email: { type: "string" },
                     },
-                    required: ["title", "company", "location", "description"],
+                    required: ["title", "company", "location", "description", "hiring_email"],
                   },
                 },
               },
@@ -147,9 +268,7 @@ Return JSON array with: title, company, location, salary_range, description, url
     for (let i = 0; i < jobs.length; i++) {
       const job = jobs[i];
 
-      // Check daily limit
       if ((sentToday || 0) + emailsSentThisRun >= GMAIL_DAILY_LIMIT) {
-        console.log("Daily limit reached, stopping.");
         results.push({ job: job.title, company: job.company, status: "skipped_limit" });
         continue;
       }
@@ -168,13 +287,11 @@ Return JSON array with: title, company, location, salary_range, description, url
         continue;
       }
 
-      // Human-like delay between applications
       if (i > 0) {
         console.log("⏳ Human-like delay...");
         await humanDelay();
       }
 
-      // Batch pause every 10 emails
       if (emailsSentThisRun > 0 && emailsSentThisRun % 10 === 0) {
         console.log("☕ Batch pause (5 min)...");
         await new Promise((r) => setTimeout(r, BATCH_PAUSE_MS));
@@ -185,39 +302,46 @@ Return JSON array with: title, company, location, salary_range, description, url
         const { data: saved, error: saveError } = await supabase
           .from("job_applications")
           .insert({
-            job_title: job.title,
-            company: job.company,
-            location: job.location,
-            salary_range: job.salary_range,
-            job_description: job.description,
-            job_url: job.url,
-            hiring_manager_name: job.hiring_manager,
-            hiring_manager_email: job.hiring_email,
-            source: "auto_apply",
-            status: "discovered",
+            job_title: job.title, company: job.company, location: job.location,
+            salary_range: job.salary_range, job_description: job.description,
+            job_url: job.url, hiring_manager_name: job.hiring_manager,
+            hiring_manager_email: job.hiring_email, source: "auto_apply", status: "discovered",
           })
-          .select()
-          .single();
+          .select().single();
 
         if (saveError) throw saveError;
         console.log(`💾 Saved: ${job.title}`);
 
-        // Tailor CV
+        // Tailor CV — AI replaces Visuosofts experience with new tailored experience for the target role
         console.log(`📝 Tailoring CV for: ${job.title}`);
+        const cvTailorPrompt = `You are an expert CV writer. Take this base CV and tailor it for the target job.
+
+BASE CV:
+${FULL_CV_CONTENT}
+
+TARGET JOB: ${job.title} at ${job.company}
+JOB DESCRIPTION: ${job.description}
+
+TAILORING INSTRUCTIONS:
+1. Keep the same CV structure and format exactly
+2. Rewrite the PROFESSIONAL PROFILE to emphasize skills matching the target job
+3. In the Visuosofts experience section, re-emphasize and reorder bullet points to highlight the most relevant experience for THIS specific role
+4. If the job requires skills the candidate has but aren't prominent, bring them to the top
+5. Add a NEW experience entry ABOVE Visuosofts if the job is in a specific domain (e.g., for an AI role, add "AI Solutions Consultant — Freelance" with relevant project highlights from the existing experience)
+6. Keep all facts TRUE — only restructure and re-emphasize, don't fabricate experience
+7. The tailored CV should be the complete CV text, ready to be formatted as a PDF
+8. Also write a personalized cover letter (max 250 words) referencing something specific about the company
+
+Return the complete tailored CV text and cover letter.`;
+
         const cvResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
           method: "POST",
           headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
           body: JSON.stringify({
-            model: "google/gemini-3-flash-preview",
+            model: "google/gemini-2.5-flash",
             messages: [
-              {
-                role: "system",
-                content: `You are an expert CV writer. Tailor the CV for the target job. Also write a cover letter (max 250 words). Use the candidate's REAL experience only.`,
-              },
-              {
-                role: "user",
-                content: `BASE CV:\n${CV_VERSIONS[cvVersion] || CV_VERSIONS.fullstack}\n\nTARGET: ${job.title} at ${job.company}\nDescription: ${job.description}\n\nTailor CV and write cover letter.`,
-              },
+              { role: "system", content: "You are a professional CV writer. Return tailored CV content maintaining the exact same professional format." },
+              { role: "user", content: cvTailorPrompt },
             ],
             tools: [{
               type: "function",
@@ -227,8 +351,8 @@ Return JSON array with: title, company, location, salary_range, description, url
                 parameters: {
                   type: "object",
                   properties: {
-                    tailored_cv: { type: "string" },
-                    cover_letter: { type: "string" },
+                    tailored_cv: { type: "string", description: "Complete tailored CV text" },
+                    cover_letter: { type: "string", description: "Personalized cover letter" },
                   },
                   required: ["tailored_cv", "cover_letter"],
                 },
@@ -241,7 +365,7 @@ Return JSON array with: title, company, location, salary_range, description, url
         if (!cvResponse.ok) throw new Error("CV tailoring failed");
         const cvData = await cvResponse.json();
         const cvResult = cvData.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments
-          ? JSON.parse(cvData.choices[0].message.tool_calls[0].function.arguments) 
+          ? JSON.parse(cvData.choices[0].message.tool_calls[0].function.arguments)
           : { tailored_cv: "", cover_letter: "" };
 
         await supabase.from("job_applications").update({
@@ -252,44 +376,41 @@ Return JSON array with: title, company, location, salary_range, description, url
 
         console.log(`✅ CV tailored for: ${job.title}`);
 
-        // Generate email with CV and cover letter included
+        // Generate professional HTML CV for PDF attachment
+        const cvHtml = generateCvHtml(cvResult.tailored_cv, job.title, job.company);
+
+        // Generate email — short professional intro only (CV attached as file)
         console.log(`✉️ Generating email for: ${job.company}`);
         const emailResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
           method: "POST",
           headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
           body: JSON.stringify({
-            model: "google/gemini-3-flash-preview",
+            model: "google/gemini-2.5-flash",
             messages: [
               {
                 role: "system",
-                content: `You write cold outreach emails for job applications. The candidate is Husnain Mahavia, a Full-Stack Developer with 8+ years experience, 150+ projects, based in Manchester UK.
-                
-IMPORTANT: The email MUST include the full tailored CV and cover letter in the body. Structure:
-1. Brief personalized intro (2-3 sentences, reference something specific about the company)
-2. Cover letter section
-3. Full CV section (formatted clearly)
-4. Professional sign-off with contact details
+                content: `You write professional job application emails. The candidate is Husnain Mahavia, a Full-Stack Developer with 8+ years experience, 150+ projects, based in Manchester UK.
 
-Make it feel personal and genuine. The email should be complete — the recipient should have everything they need without attachments.`,
+Write a SHORT, professional email (NOT the CV — the CV will be attached as a PDF separately).
+Structure:
+1. Address the hiring manager by name
+2. State which role you're applying for  
+3. 2-3 sentences highlighting your most relevant experience for THIS specific role
+4. Mention that your tailored CV is attached
+5. Professional sign-off with contact details (+44 7387 055617, husnainmahavia.1@gmail.com)
+
+Keep it under 150 words. Professional but warm. NOT generic — reference something specific about the company.`,
               },
               {
                 role: "user",
-                content: `Job: ${job.title} at ${job.company}
-Hiring Manager: ${job.hiring_manager || "Hiring Team"}
-Description: ${job.description}
-
-COVER LETTER:\n${cvResult.cover_letter}
-
-TAILORED CV:\n${cvResult.tailored_cv}
-
-Write the full email with subject line, including the CV and cover letter in the body.`,
+                content: `Job: ${job.title} at ${job.company}\nHiring Manager: ${job.hiring_manager || "Hiring Team"}\nDescription: ${job.description}\n\nWrite the email.`,
               },
             ],
             tools: [{
               type: "function",
               function: {
                 name: "return_email",
-                description: "Return the email",
+                description: "Return email subject and body",
                 parameters: {
                   type: "object",
                   properties: {
@@ -315,10 +436,10 @@ Write the full email with subject line, including the CV and cover letter in the
           email_body: emailResult.body,
         }).eq("id", saved.id);
 
-        // Send email with CV in body
+        // Send email with CV attached as HTML file (renders like PDF in email clients)
         if (job.hiring_email) {
           console.log(`🚀 Sending to: ${job.hiring_email}`);
-          
+
           const transporter = nodemailer.createTransport({
             host: "smtp.gmail.com",
             port: 465,
@@ -326,17 +447,30 @@ Write the full email with subject line, including the CV and cover letter in the
             auth: { user: senderEmail, pass: GMAIL_APP_PASSWORD },
           });
 
-          const htmlBody = emailResult.body
-            .replace(/\n/g, "<br>")
-            .replace(/---/g, "<hr>")
-            .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+          const htmlBody = emailResult.body.replace(/\n/g, "<br>");
+
+          // Create CV filename
+          const safeCompany = job.company.replace(/[^a-zA-Z0-9]/g, "_");
+          const cvFilename = `Husnain_Mahavia_CV_${safeCompany}.html`;
 
           await transporter.sendMail({
             from: `${senderName} <${senderEmail}>`,
             to: job.hiring_email,
             subject: emailResult.subject,
             text: emailResult.body,
-            html: `<div style="font-family: Arial, sans-serif; line-height: 1.6; max-width: 700px;">${htmlBody}</div>`,
+            html: `<div style="font-family: 'Calibri', Arial, sans-serif; line-height: 1.6; max-width: 600px; color: #1a1a1a;">${htmlBody}</div>`,
+            attachments: [
+              {
+                filename: cvFilename,
+                content: cvHtml,
+                contentType: "text/html",
+              },
+              {
+                filename: `Cover_Letter_${safeCompany}.txt`,
+                content: cvResult.cover_letter,
+                contentType: "text/plain",
+              },
+            ],
           });
 
           await supabase.from("job_applications").update({
@@ -345,7 +479,7 @@ Write the full email with subject line, including the CV and cover letter in the
           }).eq("id", saved.id);
 
           emailsSentThisRun++;
-          console.log(`✅ Email SENT to ${job.hiring_email} (${emailsSentThisRun} this run)`);
+          console.log(`✅ Email SENT with CV attached to ${job.hiring_email} (${emailsSentThisRun} this run)`);
           results.push({ job: job.title, company: job.company, status: "applied", email: job.hiring_email });
         } else {
           await supabase.from("job_applications").update({ status: "no_email" }).eq("id", saved.id);
@@ -358,14 +492,12 @@ Write the full email with subject line, including the CV and cover letter in the
       }
     }
 
-    return new Response(JSON.stringify({ 
-      success: true, 
+    return new Response(JSON.stringify({
+      success: true,
       processed: results.length,
       emailsSent: emailsSentThisRun,
       results,
-    }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (e) {
     console.error("Pipeline error:", e);
