@@ -273,8 +273,8 @@ REQUIREMENTS:
 
     // === ACTION: SEND BULK ===
     if (action === "send") {
-      if (!RESEND_API_KEY) {
-        return new Response(JSON.stringify({ error: "RESEND_API_KEY not configured" }), {
+      if (!VISUOSOFTS_EMAIL_PASSWORD) {
+        return new Response(JSON.stringify({ error: "VISUOSOFTS_EMAIL_PASSWORD not configured" }), {
           status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -298,7 +298,18 @@ REQUIREMENTS:
         });
       }
 
-      console.log(`📧 Sending ${leads.length} emails via Resend`);
+      console.log(`📧 Sending ${leads.length} emails via SMTP (mail.visuosofts.com)`);
+
+      const transporter = nodemailer.createTransport({
+        host: "mail.visuosofts.com",
+        port: 465,
+        secure: true,
+        auth: {
+          user: "info@visuosofts.com",
+          pass: VISUOSOFTS_EMAIL_PASSWORD,
+        },
+      });
+
       let sent = 0;
       let errors = 0;
 
@@ -306,47 +317,31 @@ REQUIREMENTS:
         try {
           const htmlBody = lead.email_body!.replace(/\n/g, "<br>");
 
-          const res = await fetch("https://api.resend.com/emails", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${RESEND_API_KEY}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              from: "Visuosofts <info@visuosofts.com>",
-              to: [lead.contact_email],
-              subject: lead.email_subject,
-              html: htmlBody,
-            }),
+          const info = await transporter.sendMail({
+            from: "Visuosofts <info@visuosofts.com>",
+            to: lead.contact_email,
+            subject: lead.email_subject,
+            text: lead.email_body,
+            html: htmlBody,
           });
 
-          const result = await res.json();
-
-          if (res.ok && result.id) {
-            await supabase.from("email_engine_leads").update({
-              sent: true,
-              sent_at: new Date().toISOString(),
-              resend_message_id: result.id,
-              send_error: null,
-            }).eq("id", lead.id);
-            sent++;
-            console.log(`  ✅ Sent to: ${lead.contact_email}`);
-          } else {
-            const errMsg = result.message || JSON.stringify(result);
-            await supabase.from("email_engine_leads").update({
-              send_error: errMsg,
-            }).eq("id", lead.id);
-            errors++;
-            console.error(`  ❌ Failed: ${lead.contact_email} — ${errMsg}`);
-          }
+          await supabase.from("email_engine_leads").update({
+            sent: true,
+            sent_at: new Date().toISOString(),
+            resend_message_id: info.messageId,
+            send_error: null,
+          }).eq("id", lead.id);
+          sent++;
+          console.log(`  ✅ Sent to: ${lead.contact_email} — MessageId: ${info.messageId}`);
 
           // Rate limit: 1.2s between sends
           await new Promise(r => setTimeout(r, 1200));
         } catch (e) {
           errors++;
-          console.error(`  ❌ Send error for ${lead.company_name}:`, e);
+          const errMsg = e instanceof Error ? e.message : String(e);
+          console.error(`  ❌ Send error for ${lead.company_name}:`, errMsg);
           await supabase.from("email_engine_leads").update({
-            send_error: String(e),
+            send_error: errMsg,
           }).eq("id", lead.id);
         }
       }
