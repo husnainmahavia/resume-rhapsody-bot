@@ -459,9 +459,20 @@ Keep it under 150 words. Professional but warm. NOT generic — reference someth
           email_body: emailResult.body,
         }).eq("id", saved.id);
 
-        // Send email with CV attached as HTML file (renders like PDF in email clients)
+        // Send email with CV attached and tracking pixel
         if (job.hiring_email) {
           console.log(`🚀 Sending to: ${job.hiring_email}`);
+
+          // Create tracking record with pixel
+          const { data: trackingRecord } = await supabase
+            .from("email_tracking")
+            .insert({ application_id: saved.id })
+            .select()
+            .single();
+
+          const trackingPixelUrl = trackingRecord
+            ? `${SUPABASE_URL}/functions/v1/email-track?id=${trackingRecord.tracking_pixel_id}`
+            : "";
 
           const transporter = nodemailer.createTransport({
             host: "smtp.gmail.com",
@@ -471,8 +482,8 @@ Keep it under 150 words. Professional but warm. NOT generic — reference someth
           });
 
           const htmlBody = emailResult.body.replace(/\n/g, "<br>");
+          const trackingPixel = trackingPixelUrl ? `<img src="${trackingPixelUrl}" width="1" height="1" style="display:none" alt="" />` : "";
 
-          // Create CV filename
           const safeCompany = job.company.replace(/[^a-zA-Z0-9]/g, "_");
           const cvFilename = `Husnain_Mahavia_CV_${safeCompany}.html`;
 
@@ -481,7 +492,7 @@ Keep it under 150 words. Professional but warm. NOT generic — reference someth
             to: job.hiring_email,
             subject: emailResult.subject,
             text: emailResult.body,
-            html: `<div style="font-family: 'Calibri', Arial, sans-serif; line-height: 1.6; max-width: 600px; color: #1a1a1a;">${htmlBody}</div>`,
+            html: `<div style="font-family: 'Calibri', Arial, sans-serif; line-height: 1.6; max-width: 600px; color: #1a1a1a;">${htmlBody}${trackingPixel}</div>`,
             attachments: [
               {
                 filename: cvFilename,
@@ -499,10 +510,11 @@ Keep it under 150 words. Professional but warm. NOT generic — reference someth
           await supabase.from("job_applications").update({
             status: "applied",
             applied_at: new Date().toISOString(),
+            follow_up_scheduled_at: new Date(Date.now() + 3 * 86400000).toISOString(),
           }).eq("id", saved.id);
 
           emailsSentThisRun++;
-          console.log(`✅ Email SENT with CV attached to ${job.hiring_email} (${emailsSentThisRun} this run)`);
+          console.log(`✅ Email SENT with CV + tracking to ${job.hiring_email} (${emailsSentThisRun} this run)`);
           results.push({ job: job.title, company: job.company, status: "applied", email: job.hiring_email });
         } else {
           await supabase.from("job_applications").update({ status: "no_email" }).eq("id", saved.id);
