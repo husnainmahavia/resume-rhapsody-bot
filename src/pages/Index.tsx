@@ -160,6 +160,19 @@ const Index = () => {
                 </motion.div>
               </TabsContent>
 
+              <TabsContent value="review">
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass rounded-lg p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <ShieldCheck className="h-4 w-4 text-primary" />
+                    <h2 className="font-semibold">Email Review Queue & Bounce Analytics</h2>
+                    <span className="text-xs text-muted-foreground ml-auto font-mono">pre-send review</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Review pending emails before they're sent. Approve verified domains in bulk or reject suspicious ones. Auto-blacklists domains with 3+ bounces.
+                  </p>
+                  <ReviewQueue />
+                </motion.div>
+              </TabsContent>
               <TabsContent value="search">
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass rounded-lg p-5">
                   <div className="flex items-center gap-2 mb-4">
