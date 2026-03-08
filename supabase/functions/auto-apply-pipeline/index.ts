@@ -428,6 +428,40 @@ Return JSON with: title, company, location, salary_range, description, url, hiri
 
       job.hiring_email = emailValidation.normalized;
 
+      // Step: SMTP deliverability verification before proceeding
+      let deliverabilityScore = 50; // default if verification unavailable
+      try {
+        console.log(`🔬 Verifying deliverability: ${job.hiring_email}`);
+        const verifyRes = await fetch(`${SUPABASE_URL}/functions/v1/email-verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+          body: JSON.stringify({ email: job.hiring_email }),
+        });
+        if (verifyRes.ok) {
+          const verifyData = await verifyRes.json();
+          const result = verifyData.results?.[0];
+          if (result) {
+            deliverabilityScore = result.score;
+            console.log(`  📊 Score: ${result.score}/100 (${result.reason}) SMTP: ${result.checks?.smtpRcptTo}`);
+            if (result.score < 30) {
+              await supabase.from("job_applications").insert({
+                job_title: job.title, company: job.company, location: job.location,
+                salary_range: job.salary_range, job_description: job.description,
+                job_url: job.url, hiring_manager_name: job.hiring_manager,
+                hiring_manager_email: job.hiring_email, source: "auto_apply",
+                status: "no_email", sponsorship_available: job.sponsorship || false,
+                careers_page_url: job.careers_page_url || null,
+                notes: `Email failed deliverability check: score ${result.score}/100 (${result.reason})`,
+              });
+              results.push({ job: job.title, company: job.company, status: "undeliverable", score: result.score });
+              continue;
+            }
+          }
+        }
+      } catch (verifyErr) {
+        console.error("  Verify error (continuing):", verifyErr);
+      }
+
       if (i > 0) {
         console.log("⏳ Human-like delay...");
         await humanDelay();
