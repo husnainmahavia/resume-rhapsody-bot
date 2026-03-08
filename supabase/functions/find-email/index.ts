@@ -193,7 +193,7 @@ serve(async (req) => {
     // 1) Hunter domain search (primary)
     if (HUNTER_KEY) {
       const hunterRes = await fetch(
-        `https://api.hunter.io/v2/domain-search?domain=${encodeURIComponent(domain)}&api_key=${HUNTER_KEY}&limit=15`,
+        `https://api.hunter.io/v2/domain-search?domain=${encodeURIComponent(domain)}&api_key=${HUNTER_KEY}&limit=10`,
         { signal: AbortSignal.timeout(10000) },
       );
 
