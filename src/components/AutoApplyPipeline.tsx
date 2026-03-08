@@ -117,7 +117,18 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
         const jobProgress = 10 + ((i + 1) / jobs.length) * 85;
 
         try {
-          // 2a: Save to database
+          // 2a: Check for duplicates first
+          setCurrentAction(`🔍 Checking duplicates: ${job.title} at ${job.company}`);
+          const isDuplicate = await checkDuplicateApplication(job.title, job.company);
+          if (isDuplicate) {
+            updateLogStep(i, "saved", "error");
+            updateLog(i, { error: "Already applied — skipped" });
+            setProcessedJobs(i + 1);
+            setProgress(jobProgress);
+            continue;
+          }
+
+          // 2b: Save to database
           setCurrentAction(`💾 Saving: ${job.title} at ${job.company}`);
           updateLogStep(i, "saved", "processing");
 
