@@ -13,7 +13,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { to, subject, body, hiringManagerName, attachments } = await req.json();
+    const { to, subject, body, hiringManagerName, attachments, applicationId } = await req.json();
 
     if (!to || !subject || !body) {
       return new Response(JSON.stringify({ error: "Missing required fields: to, subject, body" }), {
@@ -53,13 +53,32 @@ serve(async (req) => {
       if (blocked && blocked.length > 0) {
         console.log(`🚫 Domain blacklisted: ${recipientDomain} (${blocked[0].bounce_count} bounces)`);
         return new Response(JSON.stringify({
-          success: false,
-          sent: false,
+          success: false, sent: false,
           error: `Domain ${recipientDomain} is blacklisted (${blocked[0].bounce_count} bounces)`,
           blacklisted: true,
         }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
     }
+
+    // Find or create application_id for tracking
+    let appId = applicationId;
+    if (!appId) {
+      // Try to find application by email
+      const { data: matchApp } = await supabase
+        .from("job_applications")
+        .select("id")
+        .eq("hiring_manager_email", to)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (matchApp && matchApp.length > 0) {
+        appId = matchApp[0].id;
+      }
+    }
+
+    // Generate tracking pixel ID
+    const trackingPixelId = crypto.randomUUID();
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+    const trackingPixelUrl = `${SUPABASE_URL}/functions/v1/email-track?id=${trackingPixelId}`;
 
     const senderEmail = "husnainmahavia.1@gmail.com";
     const senderName = "Husnain Mahavia";
@@ -71,7 +90,10 @@ serve(async (req) => {
       auth: { user: senderEmail, pass: GMAIL_APP_PASSWORD },
     });
 
-    const htmlBody = body.replace(/\n/g, "<br>");
+    // Embed tracking pixel in HTML
+    let htmlBody = body.replace(/\n/g, "<br>");
+    htmlBody += `<img src="${trackingPixelUrl}" width="1" height="1" style="display:none;border:0;" alt="" />`;
+
     const mailOptions: any = {
       from: `${senderName} <${senderEmail}>`,
       to,
@@ -89,13 +111,44 @@ serve(async (req) => {
     }
 
     const info = await transporter.sendMail(mailOptions);
-    console.log(`Email SENT to ${to} - Subject: ${subject} - MessageId: ${info.messageId}`);
+    console.log(`📧 Email SENT to ${to} - Subject: ${subject} - MessageId: ${info.messageId} - Tracking: ${trackingPixelId}`);
+
+    // Create tracking record if we have an application_id
+    if (appId) {
+      try {
+        // Check if tracking already exists for this application
+        const { data: existingTrack } = await supabase
+          .from("email_tracking")
+          .select("id")
+          .eq("application_id", appId)
+          .limit(1);
+
+        if (!existingTrack || existingTrack.length === 0) {
+          await supabase.from("email_tracking").insert({
+            application_id: appId,
+            tracking_pixel_id: trackingPixelId,
+            open_count: 0,
+            bounced: false,
+          });
+          console.log(`📊 Tracking record created for ${to} (pixel: ${trackingPixelId})`);
+        } else {
+          // Update existing tracking with new pixel
+          await supabase.from("email_tracking").update({
+            tracking_pixel_id: trackingPixelId,
+          }).eq("id", existingTrack[0].id);
+          console.log(`📊 Tracking record updated for ${to}`);
+        }
+      } catch (trackErr) {
+        console.error("Tracking creation error:", trackErr);
+      }
+    }
 
     return new Response(JSON.stringify({
       success: true,
       message: `Email sent to ${hiringManagerName || to}`,
       sent: true,
       messageId: info.messageId,
+      trackingPixelId,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (e) {
@@ -106,7 +159,6 @@ serve(async (req) => {
                      errorMsg.includes("mailbox not found") || errorMsg.includes("User unknown") ||
                      errorMsg.includes("does not exist") || errorMsg.includes("invalid recipient");
 
-    // Track bounce in domain_blacklist
     if (isBounce) {
       try {
         const { to } = await req.clone().json().catch(() => ({ to: "" }));
@@ -148,9 +200,7 @@ serve(async (req) => {
     }
 
     return new Response(JSON.stringify({
-      error: errorMsg,
-      sent: false,
-      bounce: isBounce,
+      error: errorMsg, sent: false, bounce: isBounce,
     }), {
       status: isBounce ? 200 : 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
