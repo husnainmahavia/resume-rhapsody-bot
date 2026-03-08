@@ -349,13 +349,13 @@ Return JSON with: title, company, location, salary_range, description, url, hiri
       const expectedDomains = getExpectedDomains({ url: job.url, careers_page_url: job.careers_page_url });
       let emailValidation = validateHiringEmail(job.hiring_email, expectedDomains);
       
-      // Fallback 1: If AI didn't find a valid email, try Hunter.io
+      // Fallback 1: If AI didn't find a valid email, try self-sustaining email finder
       if (!emailValidation.valid && (job.url || job.careers_page_url)) {
         const jobDomain = extractDomainFromUrl(job.url) || extractDomainFromUrl(job.careers_page_url);
         if (jobDomain) {
-          console.log(`🔍 Hunter.io fallback for ${jobDomain}...`);
+          console.log(`🔍 Email finder fallback for ${jobDomain}...`);
           try {
-            const hunterRes = await fetch(`${SUPABASE_URL}/functions/v1/find-email`, {
+            const finderRes = await fetch(`${SUPABASE_URL}/functions/v1/find-email`, {
               method: "POST",
               headers: { "Content-Type": "application/json", Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
               body: JSON.stringify({
@@ -364,18 +364,18 @@ Return JSON with: title, company, location, salary_range, description, url, hiri
                 hiringManagerName: job.hiring_manager,
               }),
             });
-            if (hunterRes.ok) {
-              const hunterData = await hunterRes.json();
-              if (hunterData.emails?.length > 0) {
-                const bestEmail = hunterData.emails[0];
-                console.log(`  ✅ Hunter.io found: ${bestEmail.email} (confidence: ${bestEmail.confidence})`);
+            if (finderRes.ok) {
+              const finderData = await finderRes.json();
+              if (finderData.emails?.length > 0) {
+                const bestEmail = finderData.emails[0];
+                console.log(`  ✅ Found: ${bestEmail.email} (confidence: ${bestEmail.confidence})`);
                 job.hiring_email = bestEmail.email;
                 job.hiring_manager = bestEmail.name || job.hiring_manager;
                 emailValidation = validateHiringEmail(job.hiring_email, expectedDomains);
               }
             }
-          } catch (hunterErr) {
-            console.error("  Hunter.io error:", hunterErr);
+          } catch (finderErr) {
+            console.error("  Email finder error:", finderErr);
           }
         }
       }
