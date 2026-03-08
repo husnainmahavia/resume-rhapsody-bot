@@ -78,6 +78,7 @@ export default function EmailEngineDashboard() {
   const [discovering, setDiscovering] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [sending, setSending] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
   const [expandedLead, setExpandedLead] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<StatusFilter>("all");
