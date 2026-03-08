@@ -14,6 +14,99 @@ export type Database = {
   }
   public: {
     Tables: {
+      domain_blacklist: {
+        Row: {
+          blacklisted_at: string | null
+          bounce_count: number
+          created_at: string
+          domain: string
+          id: string
+          is_blacklisted: boolean
+          last_bounced_at: string
+          reason: string | null
+        }
+        Insert: {
+          blacklisted_at?: string | null
+          bounce_count?: number
+          created_at?: string
+          domain: string
+          id?: string
+          is_blacklisted?: boolean
+          last_bounced_at?: string
+          reason?: string | null
+        }
+        Update: {
+          blacklisted_at?: string | null
+          bounce_count?: number
+          created_at?: string
+          domain?: string
+          id?: string
+          is_blacklisted?: boolean
+          last_bounced_at?: string
+          reason?: string | null
+        }
+        Relationships: []
+      }
+      email_review_queue: {
+        Row: {
+          application_id: string | null
+          approved: boolean | null
+          approved_at: string | null
+          company: string
+          created_at: string
+          domain_match: boolean | null
+          email_body: string | null
+          email_subject: string | null
+          id: string
+          recipient_email: string
+          recipient_name: string | null
+          rejected_reason: string | null
+          scraped_company_id: string | null
+          source: string
+          updated_at: string
+          validation_reason: string | null
+          validation_status: string
+        }
+        Insert: {
+          application_id?: string | null
+          approved?: boolean | null
+          approved_at?: string | null
+          company: string
+          created_at?: string
+          domain_match?: boolean | null
+          email_body?: string | null
+          email_subject?: string | null
+          id?: string
+          recipient_email: string
+          recipient_name?: string | null
+          rejected_reason?: string | null
+          scraped_company_id?: string | null
+          source?: string
+          updated_at?: string
+          validation_reason?: string | null
+          validation_status?: string
+        }
+        Update: {
+          application_id?: string | null
+          approved?: boolean | null
+          approved_at?: string | null
+          company?: string
+          created_at?: string
+          domain_match?: boolean | null
+          email_body?: string | null
+          email_subject?: string | null
+          id?: string
+          recipient_email?: string
+          recipient_name?: string | null
+          rejected_reason?: string | null
+          scraped_company_id?: string | null
+          source?: string
+          updated_at?: string
+          validation_reason?: string | null
+          validation_status?: string
+        }
+        Relationships: []
+      }
       email_tracking: {
         Row: {
           application_id: string
