@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
+import nodemailer from "npm:nodemailer@6.9.8";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,50 +28,39 @@ serve(async (req) => {
     const senderEmail = "husnainmahavia.1@gmail.com";
     const senderName = "Husnain Mahavia";
 
-    // Build RFC 2822 email message
-    const emailLines = [
-      `From: ${senderName} <${senderEmail}>`,
-      `To: ${to}`,
-      `Subject: ${subject}`,
-      `MIME-Version: 1.0`,
-      `Content-Type: text/html; charset=utf-8`,
-      ``,
-      body.replace(/\n/g, "<br>"),
-    ];
-    const rawEmail = emailLines.join("\r\n");
+    const transporter = nodemailer.createTransport({
+      host: "smtp.gmail.com",
+      port: 465,
+      secure: true,
+      auth: {
+        user: senderEmail,
+        pass: GMAIL_APP_PASSWORD,
+      },
+    });
 
-    // Base64url encode the email for Gmail API
-    const rawBase64 = base64Encode(new TextEncoder().encode(rawEmail))
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/, "");
+    const htmlBody = body.replace(/\n/g, "<br>");
 
-    // Use Gmail SMTP relay via Google's API with basic auth
-    // Actually, Gmail API requires OAuth. Let's use the SMTP relay approach via a fetch-based workaround.
-    // The most reliable approach in edge functions is to use Google's SMTP relay via an HTTP bridge.
-    
-    // Alternative: Use Gmail API with service account or app password
-    // Since we can't do raw SMTP in edge functions, we'll construct a mailto-compatible response
-    // and track it as "ready to send"
+    await transporter.sendMail({
+      from: `${senderName} <${senderEmail}>`,
+      to: to,
+      subject: subject,
+      text: body,
+      html: htmlBody,
+    });
 
-    // For now, construct the email and provide it ready-to-send
-    // We'll open the user's default email client with the pre-filled email
-    const mailtoUrl = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-
-    console.log(`Email prepared for ${to} - Subject: ${subject}`);
+    console.log(`Email SENT to ${to} - Subject: ${subject}`);
 
     return new Response(JSON.stringify({ 
       success: true,
-      message: `Email prepared for ${hiringManagerName || to}`,
-      mailto_url: mailtoUrl,
-      email_data: { to, subject, body, from: senderEmail },
+      message: `Email sent to ${hiringManagerName || to}`,
+      sent: true,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
-    console.error("Email error:", e);
+    console.error("Email send error:", e);
     return new Response(JSON.stringify({ 
-      error: e instanceof Error ? e.message : "Failed to prepare email" 
+      error: e instanceof Error ? e.message : "Failed to send email" 
     }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
