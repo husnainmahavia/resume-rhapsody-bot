@@ -1,1 +1,10 @@
 project_id = "icpthxksstcojunjqmrp"
+
+[functions.ai-job-search]
+verify_jwt = false
+
+[functions.ai-tailor-cv]
+verify_jwt = false
+
+[functions.ai-generate-email]
+verify_jwt = false
