@@ -12,9 +12,88 @@ const MIN_DELAY_MS = 45000;
 const MAX_DELAY_MS = 120000;
 const BATCH_PAUSE_MS = 300000;
 
+const PUBLIC_EMAIL_DOMAINS = new Set([
+  "gmail.com", "googlemail.com", "yahoo.com", "yahoo.co.uk", "hotmail.com", "outlook.com",
+  "live.com", "icloud.com", "aol.com", "proton.me", "protonmail.com", "gmx.com",
+]);
+
 function humanDelay(): Promise<void> {
   const ms = MIN_DELAY_MS + Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS);
   return new Promise((r) => setTimeout(r, ms));
+}
+
+function normalizeDomain(domain: string): string {
+  return domain.toLowerCase().trim().replace(/^www\./, "");
+}
+
+function extractDomainFromUrl(url?: string | null): string | null {
+  if (!url) return null;
+  try {
+    const withProtocol = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+    return normalizeDomain(new URL(withProtocol).hostname);
+  } catch {
+    return null;
+  }
+}
+
+function extractDomainFromEmail(email?: string | null): string | null {
+  if (!email || !email.includes("@")) return null;
+  const parts = email.toLowerCase().trim().split("@");
+  if (parts.length !== 2) return null;
+  return normalizeDomain(parts[1]);
+}
+
+function getExpectedDomains(job: {
+  url?: string | null;
+  careers_page_url?: string | null;
+}): string[] {
+  return [...new Set([
+    extractDomainFromUrl(job.url),
+    extractDomainFromUrl(job.careers_page_url),
+  ].filter((d): d is string => Boolean(d)))];
+}
+
+function validateHiringEmail(
+  email?: string | null,
+  expectedDomains: string[] = [],
+): { valid: boolean; normalized: string | null; reason?: string } {
+  if (!email) return { valid: false, normalized: null, reason: "missing_email" };
+
+  const normalizedEmail = email.toLowerCase().trim();
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(normalizedEmail)) {
+    return { valid: false, normalized: null, reason: "invalid_format" };
+  }
+
+  const localPart = normalizedEmail.split("@")[0];
+  const emailDomain = extractDomainFromEmail(normalizedEmail);
+  if (!emailDomain) {
+    return { valid: false, normalized: null, reason: "invalid_domain" };
+  }
+
+  if (PUBLIC_EMAIL_DOMAINS.has(emailDomain)) {
+    return { valid: false, normalized: null, reason: "public_mailbox_not_allowed" };
+  }
+
+  if (
+    /^no-?reply/.test(localPart) ||
+    /(test|fake|sample|example|demo)/i.test(localPart) ||
+    /example\./i.test(emailDomain)
+  ) {
+    return { valid: false, normalized: null, reason: "placeholder_or_no_reply" };
+  }
+
+  if (expectedDomains.length > 0) {
+    const matchesExpected = expectedDomains.some(
+      (expected) => emailDomain === expected || emailDomain.endsWith(`.${expected}`),
+    );
+
+    if (!matchesExpected) {
+      return { valid: false, normalized: null, reason: "domain_mismatch_with_job_url" };
+    }
+  }
+
+  return { valid: true, normalized: normalizedEmail };
 }
 
 // Full CV content from the uploaded DOCX — used as base for tailoring
@@ -217,18 +296,13 @@ ${modeInstructions}
 
 ABSOLUTE REQUIREMENTS - FOLLOW STRICTLY:
 1. ONLY use companies that ACTUALLY EXIST and are KNOWN UK employers (e.g., BBC, NHS Digital, Booking.com, AO.com, THG/The Hut Group, Autotrader, Boohoo, On The Beach, Peak AI, Manchester Airport Group, Kellogg's, Brother International, Missguided, N Brown Group, Co-op, JD Sports, Bet365, Apadmi, MediaCityUK companies, etc.)
-2. The hiring_email MUST be a REAL, VERIFIED email format that the company actually uses. Research the company's actual careers/recruitment email. Common REAL patterns:
-   - careers@companyname.com (most common)
-   - recruitment@companyname.co.uk
-   - jobs@companyname.com
-   - hr@companyname.com
-   - talent@companyname.com
-   - For large companies, check their actual careers page domain
-3. DO NOT invent or guess email addresses. If you're not confident about the email, use the company's main website domain with careers@ prefix
-4. The job URL must point to a real careers page (careers.company.com or company.com/careers)
-5. DO NOT use fictional companies, startups you made up, or domains that don't exist
-6. Include whether the company offers visa sponsorship (sponsorship field: true/false)
-7. Include the company's careers page URL if known
+2. The hiring_email MUST be a REAL, VERIFIED company email address tied to that company domain.
+3. DO NOT invent, guess, or synthesize email addresses.
+4. If a verified hiring email is not publicly known, set hiring_email to an empty string "".
+5. The job URL must point to a real careers page (careers.company.com or company.com/careers)
+6. DO NOT use fictional companies, startups you made up, or domains that don't exist
+7. Include whether the company offers visa sponsorship (sponsorship field: true/false)
+8. Include the company's careers page URL if known
 
 VERIFICATION: Before returning each job, mentally verify:
 - Is this company real? (Google it)
@@ -307,6 +381,31 @@ Return JSON with: title, company, location, salary_range, description, url, hiri
         results.push({ job: job.title, company: job.company, status: "duplicate_skipped" });
         continue;
       }
+
+      const expectedDomains = getExpectedDomains({ url: job.url, careers_page_url: job.careers_page_url });
+      const emailValidation = validateHiringEmail(job.hiring_email, expectedDomains);
+      if (!emailValidation.valid) {
+        await supabase.from("job_applications").insert({
+          job_title: job.title,
+          company: job.company,
+          location: job.location,
+          salary_range: job.salary_range,
+          job_description: job.description,
+          job_url: job.url,
+          hiring_manager_name: job.hiring_manager,
+          hiring_manager_email: null,
+          source: "auto_apply",
+          status: "no_email",
+          sponsorship_available: job.sponsorship || false,
+          careers_page_url: job.careers_page_url || null,
+          notes: `Skipped unverified email (${emailValidation.reason || "unknown_reason"})`,
+        });
+
+        results.push({ job: job.title, company: job.company, status: "no_email" });
+        continue;
+      }
+
+      job.hiring_email = emailValidation.normalized;
 
       if (i > 0) {
         console.log("⏳ Human-like delay...");
@@ -461,6 +560,19 @@ Keep it under 150 words. Professional but warm. NOT generic — reference someth
 
         // Send email with CV attached and tracking pixel
         if (job.hiring_email) {
+          const expectedDomains = getExpectedDomains({ url: job.url, careers_page_url: job.careers_page_url });
+          const finalEmailValidation = validateHiringEmail(job.hiring_email, expectedDomains);
+          if (!finalEmailValidation.valid || !finalEmailValidation.normalized) {
+            await supabase.from("job_applications").update({
+              status: "no_email",
+              hiring_manager_email: null,
+              notes: `Skipped before send: unverified email (${finalEmailValidation.reason || "unknown_reason"})`,
+            }).eq("id", saved.id);
+            results.push({ job: job.title, company: job.company, status: "no_email" });
+            continue;
+          }
+
+          job.hiring_email = finalEmailValidation.normalized;
           console.log(`🚀 Sending to: ${job.hiring_email}`);
 
           // Create tracking record with pixel

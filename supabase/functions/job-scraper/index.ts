@@ -39,6 +39,73 @@ p{font-size:13px;margin-bottom:12px}</style></head>
 <body>${text.replace(/\n/g,"<br>")}</body></html>`;
 }
 
+const PUBLIC_EMAIL_DOMAINS = new Set([
+  "gmail.com", "googlemail.com", "yahoo.com", "yahoo.co.uk", "hotmail.com", "outlook.com",
+  "live.com", "icloud.com", "aol.com", "proton.me", "protonmail.com", "gmx.com",
+]);
+
+function normalizeDomain(domain: string): string {
+  return domain.toLowerCase().trim().replace(/^www\./, "");
+}
+
+function extractDomainFromUrl(url?: string | null): string | null {
+  if (!url) return null;
+  try {
+    const withProtocol = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+    return normalizeDomain(new URL(withProtocol).hostname);
+  } catch {
+    return null;
+  }
+}
+
+function extractDomainFromEmail(email?: string | null): string | null {
+  if (!email || !email.includes("@")) return null;
+  const parts = email.toLowerCase().trim().split("@");
+  if (parts.length !== 2) return null;
+  return normalizeDomain(parts[1]);
+}
+
+function validateBusinessEmail(
+  email?: string | null,
+  website?: string | null,
+): { valid: boolean; normalized: string | null; reason?: string } {
+  if (!email) return { valid: false, normalized: null, reason: "missing_email" };
+
+  const normalized = email.toLowerCase().trim();
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(normalized)) {
+    return { valid: false, normalized: null, reason: "invalid_format" };
+  }
+
+  const localPart = normalized.split("@")[0];
+  const emailDomain = extractDomainFromEmail(normalized);
+  if (!emailDomain) {
+    return { valid: false, normalized: null, reason: "invalid_domain" };
+  }
+
+  if (PUBLIC_EMAIL_DOMAINS.has(emailDomain)) {
+    return { valid: false, normalized: null, reason: "public_mailbox_not_allowed" };
+  }
+
+  if (
+    /^no-?reply/.test(localPart) ||
+    /(test|fake|sample|example|demo)/i.test(localPart) ||
+    /example\./i.test(emailDomain)
+  ) {
+    return { valid: false, normalized: null, reason: "placeholder_or_no_reply" };
+  }
+
+  const websiteDomain = extractDomainFromUrl(website);
+  if (websiteDomain) {
+    const matchesWebsite = emailDomain === websiteDomain || emailDomain.endsWith(`.${websiteDomain}`);
+    if (!matchesWebsite) {
+      return { valid: false, normalized: null, reason: "domain_mismatch_with_website" };
+    }
+  }
+
+  return { valid: true, normalized };
+}
+
 async function generateCvAndCoverLetter(company: string, category: string, description: string, apiKey: string) {
   try {
     const categoryLabel = category.replace(/_/g, " ");
@@ -91,13 +158,13 @@ async function aiSearchEmails(query: string, apiKey: string): Promise<Array<{ co
 
 Return ONLY a JSON array of objects. Each object must have:
 - "company": company name (real companies only)
-- "email": real contact/hiring/info email (must be a real domain, NOT gmail/yahoo/hotmail)
+- "email": VERIFIED business contact email tied to the same company domain (never guess)
 - "website": company website URL
 - "description": what the company does (1 sentence)
 - "location": company location
 
-Find 5-8 REAL companies with REAL email addresses. Focus on UK companies but include international ones too.
-Use common email patterns like info@, hello@, careers@, hr@, jobs@, recruitment@ with the company's actual domain.
+Find 5-8 REAL companies with VERIFIED business email addresses.
+If verified email is not publicly available, skip that company (do not fabricate).
 
 CRITICAL: Only return companies you are confident are real. Return valid JSON array only, no markdown, no code fences.`
         }],
@@ -172,13 +239,15 @@ serve(async (req) => {
       const locationFilter = location || "UK";
       let totalScraped = 0;
       let totalNew = 0;
-      const results: Array<{ category: string; found: number; new: number }> = [];
+      let totalRejected = 0;
+      const results: Array<{ category: string; found: number; new: number; rejected: number }> = [];
 
       for (const cat of CATEGORIES) {
         if (!targetCategories.includes(cat.name)) continue;
 
         let catFound = 0;
         let catNew = 0;
+        let catRejected = 0;
 
         for (const query of cat.queries) {
           const fullQuery = `${query} ${locationFilter}`;
@@ -189,9 +258,15 @@ serve(async (req) => {
 
           for (const company of companies) {
             try {
+              const validation = validateBusinessEmail(company.email, company.website);
+              if (!validation.valid || !validation.normalized) {
+                catRejected++;
+                continue;
+              }
+
               const { error } = await supabase.from("scraped_companies").upsert({
                 company_name: company.company,
-                email: company.email.toLowerCase().trim(),
+                email: validation.normalized,
                 website: company.website,
                 category: cat.name,
                 source: "ai_search",
@@ -211,15 +286,17 @@ serve(async (req) => {
           await new Promise(r => setTimeout(r, 2000 + Math.random() * 3000));
         }
 
-        results.push({ category: cat.name, found: catFound, new: catNew });
+        results.push({ category: cat.name, found: catFound, new: catNew, rejected: catRejected });
         totalScraped += catFound;
         totalNew += catNew;
+        totalRejected += catRejected;
       }
 
       return new Response(JSON.stringify({
         success: true,
         totalScraped,
         totalNew,
+        totalRejected,
         results,
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
@@ -250,6 +327,14 @@ serve(async (req) => {
 
       for (const company of companies) {
         try {
+          const validation = validateBusinessEmail(company.email, company.website);
+          if (!validation.valid || !validation.normalized) {
+            await supabase.from("scraped_companies").update({ status: "invalid_email" }).eq("id", company.id);
+            sendResults.push({ company: company.company_name, email: company.email, status: "invalid_email" });
+            continue;
+          }
+
+          const recipientEmail = validation.normalized;
           const categoryLabel = company.category.replace(/_/g, " ");
           const emailResponse = await fetch(AI_URL, {
             method: "POST",
@@ -279,7 +364,7 @@ Return ONLY a JSON object with "subject" and "body" fields. No markdown, no code
           const emailRaw = await emailResponse.text();
           let emailData;
           try { emailData = JSON.parse(emailRaw); } catch { 
-            sendResults.push({ company: company.company_name, email: company.email, status: "email_gen_parse_failed" });
+            sendResults.push({ company: company.company_name, email: recipientEmail, status: "email_gen_parse_failed" });
             continue;
           }
           
@@ -288,7 +373,7 @@ Return ONLY a JSON object with "subject" and "body" fields. No markdown, no code
           const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
           
           if (!jsonMatch) {
-            sendResults.push({ company: company.company_name, email: company.email, status: "email_gen_failed" });
+            sendResults.push({ company: company.company_name, email: recipientEmail, status: "email_gen_failed" });
             continue;
           }
 
@@ -322,7 +407,7 @@ Return ONLY a JSON object with "subject" and "body" fields. No markdown, no code
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              to: company.email,
+              to: recipientEmail,
               subject,
               body: emailBody,
               attachments,
@@ -339,9 +424,9 @@ Return ONLY a JSON object with "subject" and "body" fields. No markdown, no code
             }).eq("id", company.id);
 
             sent++;
-            sendResults.push({ company: company.company_name, email: company.email, status: "sent" });
+            sendResults.push({ company: company.company_name, email: recipientEmail, status: "sent" });
           } else {
-            sendResults.push({ company: company.company_name, email: company.email, status: sendResult.bounce ? "bounced" : "failed" });
+            sendResults.push({ company: company.company_name, email: recipientEmail, status: sendResult.bounce ? "bounced" : "failed" });
             if (sendResult.bounce) {
               await supabase.from("scraped_companies").update({ status: "bounced" }).eq("id", company.id);
             }
