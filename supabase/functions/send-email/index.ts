@@ -10,7 +10,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { to, subject, body, hiringManagerName } = await req.json();
+    const { to, subject, body, hiringManagerName, attachments } = await req.json();
 
     if (!to || !subject || !body) {
       return new Response(JSON.stringify({ error: "Missing required fields: to, subject, body" }), {
