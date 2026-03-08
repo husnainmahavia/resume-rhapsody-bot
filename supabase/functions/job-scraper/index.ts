@@ -327,6 +327,14 @@ serve(async (req) => {
 
       for (const company of companies) {
         try {
+          const validation = validateBusinessEmail(company.email, company.website);
+          if (!validation.valid || !validation.normalized) {
+            await supabase.from("scraped_companies").update({ status: "invalid_email" }).eq("id", company.id);
+            sendResults.push({ company: company.company_name, email: company.email, status: "invalid_email" });
+            continue;
+          }
+
+          const recipientEmail = validation.normalized;
           const categoryLabel = company.category.replace(/_/g, " ");
           const emailResponse = await fetch(AI_URL, {
             method: "POST",
