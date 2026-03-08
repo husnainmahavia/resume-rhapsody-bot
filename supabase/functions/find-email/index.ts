@@ -7,13 +7,20 @@ const corsHeaders = {
 
 const HR_KEYWORDS = ["hr", "recruit", "talent", "hiring", "people", "careers", "jobs"];
 
+const USER_AGENTS = [
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15",
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0",
+];
+
 type FoundEmail = {
   email: string;
   name: string;
   title: string;
   confidence: number;
   isHR: boolean;
-  source: "hunter" | "scrape" | "ai_verified" | "ai_pattern";
+  source: "scrape" | "ai_pattern" | "mx_verified" | "common_pattern";
   verifiedStatus?: string;
 };
 
@@ -24,8 +31,6 @@ function normalizeDomain(input: string): string {
     .replace(/^(https?:\/\/)?(www\.)?/, "")
     .split("/")[0]
     .replace(/\s+/g, "");
-
-  // Strip common career/jobs subdomains to get the root company domain
   d = d.replace(/^(careers|jobs|careerssearch|apply|talent|recruiting|hire|join|work)\./i, "");
   return d;
 }
@@ -35,7 +40,8 @@ function deobfuscateEmails(text: string): string {
     .replace(/\[at\]|\(at\)|\sat\s/gi, "@")
     .replace(/\[dot\]|\(dot\)|\sdot\s/gi, ".")
     .replace(/&#64;/g, "@")
-    .replace(/&#46;/g, ".");
+    .replace(/&#46;/g, ".")
+    .replace(/[\u200B\u200C\u200D\uFEFF]/g, "");
 }
 
 function extractEmailsFromText(text: string, domain: string): string[] {
@@ -46,17 +52,42 @@ function extractEmailsFromText(text: string, domain: string): string[] {
 
   return [...new Set(matches
     .map((e) => e.toLowerCase().trim())
-    .filter((email) => email.endsWith(`@${normalizedDomain}`) || email.endsWith(`.${normalizedDomain}`)))];
+    .filter((email) => {
+      const emailDomain = email.split("@")[1];
+      if (!emailDomain) return false;
+      // Match exact domain or subdomain
+      if (emailDomain === normalizedDomain || emailDomain.endsWith(`.${normalizedDomain}`)) return true;
+      return false;
+    })
+    .filter((email) => {
+      // Filter out noreply, test, image files etc.
+      const local = email.split("@")[0];
+      if (/^no-?reply/.test(local)) return false;
+      if (/\.(png|jpg|gif|svg|css|js)$/i.test(email)) return false;
+      if (/(example|test|fake|placeholder)/i.test(email)) return false;
+      return true;
+    }))];
+}
+
+function randomUA(): string {
+  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
 }
 
 async function fetchPage(url: string): Promise<string> {
   try {
     const res = await fetch(url, {
       method: "GET",
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; LovableEmailFinder/1.0)" },
-      signal: AbortSignal.timeout(8000),
+      headers: {
+        "User-Agent": randomUA(),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+      },
+      redirect: "follow",
+      signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) return "";
+    const contentType = res.headers.get("content-type") || "";
+    if (!contentType.includes("text/html") && !contentType.includes("text/plain")) return "";
     return await res.text();
   } catch {
     return "";
@@ -67,45 +98,73 @@ async function scrapeDomainEmails(domain: string): Promise<string[]> {
   const urls = [
     `https://${domain}`,
     `https://${domain}/contact`,
+    `https://${domain}/contact-us`,
+    `https://${domain}/about`,
+    `https://${domain}/about-us`,
     `https://${domain}/careers`,
     `https://${domain}/jobs`,
-    `https://${domain}/about`,
+    `https://${domain}/team`,
+    `https://www.${domain}/contact`,
+    `https://www.${domain}/careers`,
   ];
 
-  const pages = await Promise.all(urls.map((url) => fetchPage(url)));
+  // Fetch in parallel batches of 4
   const found = new Set<string>();
-
-  for (const html of pages) {
-    if (!html) continue;
-    const emails = extractEmailsFromText(html, domain);
-    emails.forEach((e) => found.add(e));
+  for (let i = 0; i < urls.length; i += 4) {
+    const batch = urls.slice(i, i + 4);
+    const pages = await Promise.all(batch.map((url) => fetchPage(url)));
+    for (const html of pages) {
+      if (!html) continue;
+      const emails = extractEmailsFromText(html, domain);
+      emails.forEach((e) => found.add(e));
+    }
+    if (found.size >= 5) break; // Early exit if we have enough
   }
-
   return [...found];
 }
 
-async function verifyEmailWithHunter(email: string, hunterKey: string): Promise<{ ok: boolean; score: number; status: string }> {
+/** Check if domain has valid MX records (proves the domain accepts email) */
+async function hasMxRecords(domain: string): Promise<boolean> {
   try {
-    const res = await fetch(
-      `https://api.hunter.io/v2/email-verifier?email=${encodeURIComponent(email)}&api_key=${hunterKey}`,
-      { signal: AbortSignal.timeout(8000) },
-    );
-
-    if (!res.ok) return { ok: false, score: 0, status: "verify_failed" };
-
-    const json = await res.json();
-    const data = json?.data;
-    const status = String(data?.status || "unknown");
-    const score = Number(data?.score || 0);
-    const acceptable = status === "valid" || status === "accept_all";
-
-    return { ok: acceptable, score, status };
+    const records = await Deno.resolveDns(domain, "MX");
+    return records.length > 0;
   } catch {
-    return { ok: false, score: 0, status: "verify_error" };
+    return false;
   }
 }
 
-async function generateAiLocalParts(params: {
+/** Generate common corporate email patterns for a domain */
+function generateCommonPatterns(domain: string, hiringManagerName?: string): string[] {
+  const patterns = [
+    "hr", "careers", "jobs", "recruitment", "talent", "hiring", "people",
+    "hello", "info", "contact", "enquiries", "team", "apply",
+    "admin", "office", "reception", "marketing",
+  ];
+
+  // Add name-based patterns if hiring manager name provided
+  if (hiringManagerName) {
+    const parts = hiringManagerName.toLowerCase().trim().split(/\s+/);
+    if (parts.length >= 2) {
+      const first = parts[0].replace(/[^a-z]/g, "");
+      const last = parts[parts.length - 1].replace(/[^a-z]/g, "");
+      if (first && last) {
+        patterns.push(
+          `${first}.${last}`,
+          `${first}${last}`,
+          `${first[0]}${last}`,
+          `${first}`,
+          `${last}`,
+          `${first[0]}.${last}`,
+        );
+      }
+    }
+  }
+
+  return [...new Set(patterns)].map((p) => `${p}@${domain}`);
+}
+
+/** Use AI to generate smart email pattern guesses */
+async function generateAiPatterns(params: {
   domain: string;
   companyName?: string;
   hiringManagerName?: string;
@@ -122,15 +181,15 @@ async function generateAiLocalParts(params: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "google/gemini-2.5-flash-lite",
         messages: [
           {
             role: "system",
-            content: "Generate likely corporate recruiting mailbox local-parts only. Never include domains. Prioritize role-based inboxes and realistic patterns.",
+            content: "Generate likely corporate email local-parts only (before the @). Focus on HR/recruiting/contact mailboxes and personal name patterns. Never include domains.",
           },
           {
             role: "user",
-            content: `Company: ${companyName}\nDomain: ${domain}\nHiring manager: ${hiringManagerName || "unknown"}\nReturn 8-12 local parts likely used for hiring contact addresses.`,
+            content: `Company: ${companyName}\nDomain: ${domain}\nHiring manager: ${hiringManagerName || "unknown"}\nReturn 8-15 local parts likely used for hiring contact addresses at this specific company.`,
           },
         ],
         tools: [{
@@ -141,10 +200,7 @@ async function generateAiLocalParts(params: {
             parameters: {
               type: "object",
               properties: {
-                local_parts: {
-                  type: "array",
-                  items: { type: "string" },
-                },
+                local_parts: { type: "array", items: { type: "string" } },
               },
               required: ["local_parts"],
             },
@@ -164,10 +220,33 @@ async function generateAiLocalParts(params: {
 
     return [...new Set(parts
       .map((p) => p.toLowerCase().trim())
-      .filter((p) => /^[a-z0-9._+-]{2,40}$/.test(p)))].slice(0, 12);
+      .filter((p) => /^[a-z0-9._+-]{2,40}$/.test(p)))].slice(0, 15);
   } catch {
     return [];
   }
+}
+
+/** Try to verify email exists by checking if domain has MX + applying heuristics */
+async function scoreEmail(email: string, domain: string, mxValid: boolean): Promise<number> {
+  if (!mxValid) return 10; // Domain doesn't even accept email
+
+  const local = email.split("@")[0];
+
+  // Higher confidence for role-based emails (these almost always exist)
+  const roleAddresses = ["info", "hello", "contact", "hr", "careers", "jobs", "admin", "office", "team", "enquiries", "reception"];
+  if (roleAddresses.includes(local)) return 80;
+
+  // HR-related keywords get good scores
+  if (HR_KEYWORDS.some((k) => local.includes(k))) return 75;
+
+  // Marketing/business dev
+  if (["marketing", "sales", "partnerships", "press"].includes(local)) return 65;
+
+  // Name-based patterns (likely real if domain has MX)
+  if (/^[a-z]+\.[a-z]+$/.test(local)) return 60; // firstname.lastname
+  if (/^[a-z][a-z]+$/.test(local) && local.length > 3) return 50; // single name
+
+  return 45;
 }
 
 serve(async (req) => {
@@ -183,110 +262,67 @@ serve(async (req) => {
     }
 
     const domain = normalizeDomain(companyDomain);
-    const HUNTER_KEY = Deno.env.get("HUNTER_API_KEY");
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
-    console.log(`🔍 Enhanced email lookup for domain: ${domain}`);
+    console.log(`🔍 Self-sustaining email lookup for domain: ${domain}`);
 
     const foundEmails = new Map<string, FoundEmail>();
 
-    // 1) Hunter domain search (primary)
-    if (HUNTER_KEY) {
-      const hunterRes = await fetch(
-        `https://api.hunter.io/v2/domain-search?domain=${encodeURIComponent(domain)}&api_key=${HUNTER_KEY}&limit=10`,
-        { signal: AbortSignal.timeout(10000) },
-      );
+    // Step 1: Check MX records (proves domain accepts email)
+    const mxValid = await hasMxRecords(domain);
+    console.log(`📬 MX records for ${domain}: ${mxValid ? "VALID" : "NONE"}`);
 
-      if (hunterRes.ok) {
-        const { data } = await hunterRes.json();
-        const hunterEmails = (data?.emails || []) as any[];
-
-        for (const e of hunterEmails) {
-          const email = String(e?.value || "").toLowerCase().trim();
-          if (!email) continue;
-          foundEmails.set(email, {
-            email,
-            name: `${e?.first_name || ""} ${e?.last_name || ""}`.trim(),
-            title: e?.position || "",
-            confidence: Number(e?.confidence || 0),
-            isHR: HR_KEYWORDS.some((k) => String(e?.position || "").toLowerCase().includes(k) || email.includes(k)),
-            source: "hunter",
-            verifiedStatus: "valid",
-          });
-        }
-      } else {
-        const err = await hunterRes.text();
-        console.error(`Hunter domain-search error: ${hunterRes.status}`, err);
-      }
-    }
-
-    // 2) Scrape public pages for direct emails
+    // Step 2: Scrape public pages for direct emails (FREE)
     const scrapedEmails = await scrapeDomainEmails(domain);
     for (const email of scrapedEmails) {
-      if (!foundEmails.has(email)) {
-        foundEmails.set(email, {
-          email,
-          name: "",
-          title: "",
-          confidence: 70,
-          isHR: HR_KEYWORDS.some((k) => email.includes(k)),
-          source: "scrape",
-        });
-      }
+      const confidence = await scoreEmail(email, domain, mxValid);
+      foundEmails.set(email, {
+        email,
+        name: "",
+        title: "",
+        confidence,
+        isHR: HR_KEYWORDS.some((k) => email.includes(k)),
+        source: "scrape",
+        verifiedStatus: mxValid ? "mx_valid" : "mx_unknown",
+      });
     }
 
-    // 3) AI-generated candidate patterns + Hunter verifier (only if we still have weak results)
-    const strongCount = [...foundEmails.values()].filter((e) => e.confidence >= 80).length;
+    console.log(`🌐 Scraped ${scrapedEmails.length} emails from public pages`);
+
+    // Step 3: Generate common patterns + AI patterns (FREE)
+    const strongCount = [...foundEmails.values()].filter((e) => e.confidence >= 70).length;
     if (strongCount < 2) {
-      const basePatterns = ["hr", "careers", "jobs", "recruitment", "talent", "hiring", "people", "hello", "info"];
-      const aiPatterns = await generateAiLocalParts({
+      const commonCandidates = generateCommonPatterns(domain, hiringManagerName);
+      const aiLocalParts = await generateAiPatterns({
         domain,
         companyName,
         hiringManagerName,
         lovableKey: LOVABLE_API_KEY,
       });
+      const aiCandidates = aiLocalParts.map((p) => `${p}@${domain}`);
 
-      const localParts = [...new Set([...basePatterns, ...aiPatterns])].slice(0, 16);
+      // Merge and deduplicate
+      const allCandidates = [...new Set([...commonCandidates, ...aiCandidates])];
 
-      if (localParts.length > 0) {
-        const candidates = localParts.map((local) => `${local}@${domain}`);
-
-        if (HUNTER_KEY) {
-          const verifications = await Promise.all(
-            candidates.map(async (candidate) => ({
-              candidate,
-              result: await verifyEmailWithHunter(candidate, HUNTER_KEY),
-            })),
-          );
-
-          for (const { candidate, result } of verifications) {
-            if (!result.ok || foundEmails.has(candidate)) continue;
-            foundEmails.set(candidate, {
-              email: candidate,
-              name: "",
-              title: "",
-              confidence: Math.max(50, Math.min(95, result.score)),
-              isHR: HR_KEYWORDS.some((k) => candidate.includes(k)),
-              source: "ai_verified",
-              verifiedStatus: result.status,
-            });
-          }
-        } else {
-          for (const candidate of candidates.slice(0, 5)) {
-            if (foundEmails.has(candidate)) continue;
-            foundEmails.set(candidate, {
-              email: candidate,
-              name: "",
-              title: "",
-              confidence: 45,
-              isHR: HR_KEYWORDS.some((k) => candidate.includes(k)),
-              source: "ai_pattern",
-            });
-          }
-        }
+      for (const candidate of allCandidates) {
+        if (foundEmails.has(candidate)) continue;
+        const confidence = await scoreEmail(candidate, domain, mxValid);
+        const source = aiCandidates.includes(candidate) ? "ai_pattern" : "common_pattern";
+        foundEmails.set(candidate, {
+          email: candidate,
+          name: "",
+          title: "",
+          confidence: mxValid ? confidence : Math.min(confidence, 30),
+          isHR: HR_KEYWORDS.some((k) => candidate.includes(k)),
+          source: source as "ai_pattern" | "common_pattern",
+          verifiedStatus: mxValid ? "mx_valid" : "mx_invalid",
+        });
       }
+
+      console.log(`🧠 Generated ${allCandidates.length} pattern candidates`);
     }
 
+    // Sort: HR first, then by confidence
     const emails = [...foundEmails.values()]
       .sort((a, b) => {
         const aHr = a.isHR ? 1 : 0;
@@ -296,14 +332,15 @@ serve(async (req) => {
       })
       .slice(0, 12);
 
-    console.log(`✅ Enhanced lookup found ${emails.length} emails for ${domain}`);
+    console.log(`✅ Found ${emails.length} emails for ${domain} (MX: ${mxValid})`);
 
     return new Response(JSON.stringify({
       domain,
       organization: companyName || domain,
       emails,
       totalFound: emails.length,
-      strategy: "hunter + scrape + ai-pattern + verification",
+      mxValid,
+      strategy: "scrape + ai-pattern + mx-validation (self-sustaining, no paid APIs)",
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

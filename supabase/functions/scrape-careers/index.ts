@@ -5,7 +5,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// RFC 5322-compliant email regex
 const EMAIL_REGEX = /[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}/g;
 
 const INVALID_EMAIL_PATTERNS = [
@@ -19,6 +18,14 @@ const PUBLIC_DOMAINS = new Set([
   "icloud.com", "aol.com", "protonmail.com", "proton.me", "gmx.com",
 ]);
 
+const USER_AGENTS = [
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15",
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+];
+
 function deobfuscateText(raw: string): string {
   return raw
     .replace(/&#64;/g, "@").replace(/&amp;/g, "&").replace(/&#46;/g, ".")
@@ -29,7 +36,6 @@ function deobfuscateText(raw: string): string {
 }
 
 function extractEmails(html: string): string[] {
-  // Strip HTML tags
   const text = deobfuscateText(html.replace(/<[^>]*>/g, " "));
   const matches = text.match(EMAIL_REGEX) || [];
 
@@ -40,6 +46,57 @@ function extractEmails(html: string): string[] {
     if (lower.startsWith("no-reply@") || lower.startsWith("noreply@")) return false;
     return true;
   });
+}
+
+function randomUA(): string {
+  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+}
+
+async function scrapeUrl(url: string): Promise<string[]> {
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": randomUA(),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate",
+      },
+      redirect: "follow",
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (res.ok) {
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("text/html") && !contentType.includes("text/plain")) return [];
+      const html = await res.text();
+      return extractEmails(html);
+    }
+  } catch {
+    // Silent fail — move to next URL
+  }
+
+  // Retry with www. prefix if bare domain failed
+  if (!url.includes("www.")) {
+    try {
+      const wwwUrl = url.replace("https://", "https://www.");
+      const res = await fetch(wwwUrl, {
+        headers: {
+          "User-Agent": randomUA(),
+          "Accept": "text/html,application/xhtml+xml",
+        },
+        redirect: "follow",
+        signal: AbortSignal.timeout(8000),
+      });
+      if (res.ok) {
+        const html = await res.text();
+        return extractEmails(html);
+      }
+    } catch {
+      // Silent fail
+    }
+  }
+
+  return [];
 }
 
 serve(async (req) => {
@@ -66,7 +123,6 @@ serve(async (req) => {
     const domain = companyDomain.toLowerCase().trim().replace(/^(https?:\/\/)?(www\.)?/, "").split("/")[0];
     console.log(`🌐 Discovering career pages for: ${domain}`);
 
-    // Candidate pages ordered by likelihood of containing HR emails
     const candidatePages = [
       `https://${domain}/contact`,
       `https://${domain}/contact-us`,
@@ -85,24 +141,33 @@ serve(async (req) => {
     const allEmails: string[] = [];
     const pagesScraped: string[] = [];
 
-    for (const pageUrl of candidatePages) {
-      if (allEmails.length >= 5) break; // Enough emails found
+    // Scrape in parallel batches of 4 for speed
+    for (let i = 0; i < candidatePages.length; i += 4) {
+      if (allEmails.length >= 5) break;
 
-      const emails = await scrapeUrl(pageUrl);
-      if (emails.length > 0) {
-        allEmails.push(...emails);
-        pagesScraped.push(pageUrl);
-        console.log(`  ✅ Found ${emails.length} emails on ${pageUrl}`);
+      const batch = candidatePages.slice(i, i + 4);
+      const results = await Promise.all(batch.map(async (pageUrl) => {
+        const emails = await scrapeUrl(pageUrl);
+        return { pageUrl, emails };
+      }));
+
+      for (const { pageUrl, emails } of results) {
+        if (emails.length > 0) {
+          allEmails.push(...emails);
+          pagesScraped.push(pageUrl);
+          console.log(`  ✅ Found ${emails.length} emails on ${pageUrl}`);
+        }
       }
     }
 
     const uniqueEmails = [...new Set(allEmails)];
-    console.log(`📧 Total unique emails found for ${domain}: ${uniqueEmails.length}`);
+    console.log(`📧 Total unique emails found for ${domain}: ${uniqueEmails.length} (no paid APIs used)`);
 
     return new Response(JSON.stringify({
       domain,
       emails: uniqueEmails,
       pagesScraped,
+      strategy: "self-sustaining (User-Agent rotation, parallel scraping, no paid APIs)",
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (e) {
@@ -112,58 +177,3 @@ serve(async (req) => {
     });
   }
 });
-
-async function scrapeUrl(url: string): Promise<string[]> {
-  // Step 1: Try basic fetch first (fast, free)
-  try {
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml",
-      },
-      signal: AbortSignal.timeout(8000),
-    });
-
-    if (res.ok) {
-      const html = await res.text();
-      const emails = extractEmails(html);
-      if (emails.length > 0) return emails;
-    }
-  } catch {
-    // Fall through to ScrapingBee
-  }
-
-  // Step 2: Fallback to ScrapingBee for JS-rendered content
-  return scrapeWithScrapingBee(url);
-}
-
-async function scrapeWithScrapingBee(url: string): Promise<string[]> {
-  const SCRAPINGBEE_KEY = Deno.env.get("SCRAPINGBEE_API_KEY");
-  if (!SCRAPINGBEE_KEY) {
-    console.log("⚠️ SCRAPINGBEE_API_KEY not set, skipping JS-rendered scrape");
-    return [];
-  }
-
-  try {
-    console.log(`🐝 ScrapingBee fallback for: ${url}`);
-    const res = await fetch(
-      `https://app.scrapingbee.com/api/v1/?api_key=${SCRAPINGBEE_KEY}&url=${encodeURIComponent(url)}&render_js=true&premium_proxy=false`,
-      { signal: AbortSignal.timeout(30000) }
-    );
-
-    if (!res.ok) {
-      console.error(`ScrapingBee error ${res.status}`);
-      return [];
-    }
-
-    const html = await res.text();
-    const emails = extractEmails(html);
-    if (emails.length > 0) {
-      console.log(`🐝 ScrapingBee found ${emails.length} emails on ${url}`);
-    }
-    return emails;
-  } catch (e) {
-    console.error("ScrapingBee fetch failed:", e);
-    return [];
-  }
-}
