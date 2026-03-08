@@ -51,8 +51,8 @@ const DEFAULT_INDUSTRIES = [
 ];
 
 const DEFAULT_REGIONS = [
-  "United Kingdom", "UAE & Kuwait", "Pakistan",
-  "Saudi Arabia", "USA & Canada", "Germany & Europe",
+  "United Kingdom", "United States", "Australia",
+  "Canada", "Ireland", "UAE", "Saudi Arabia", "Germany & Europe",
 ];
 
 function getLeadStatus(lead: Lead): StatusFilter {
