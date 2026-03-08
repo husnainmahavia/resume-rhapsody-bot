@@ -131,7 +131,7 @@ function generateCvHtml(cvText: string, jobTitle: string, company: string): stri
 
   html += `<div class="header">
     <p class="name">${APPLICANT_NAME.toUpperCase()}</p>
-    <p class="contact">${APPLICANT_PHONE} • ${APPLICANT_EMAIL} • ${profileData?.location || 'Manchester, United Kingdom'}</p>
+    <p class="contact">${APPLICANT_PHONE} • ${APPLICANT_EMAIL} • ${APPLICANT_LOCATION}</p>
     <p class="title">${APPLICANT_TITLE}</p>
   </div>`;
 
