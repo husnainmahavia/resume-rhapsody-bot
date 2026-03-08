@@ -114,6 +114,42 @@ export default function ReviewQueue() {
     }
   };
 
+  const handleSendApproved = async () => {
+    setProcessing("sending");
+    try {
+      const { data: toSend } = await supabase
+        .from("email_review_queue")
+        .select("*")
+        .eq("validation_status", "approved")
+        .limit(20);
+
+      let sent = 0;
+      for (const item of (toSend || []) as QueueItem[]) {
+        if (!item.email_subject || !item.email_body) continue;
+        try {
+          await sendEmail(item.recipient_email, item.email_subject, item.email_body, item.recipient_name || undefined);
+          if ((item as any).application_id) {
+            await supabase.from("job_applications").update({
+              status: "applied",
+              applied_at: new Date().toISOString(),
+              follow_up_scheduled_at: new Date(Date.now() + 3 * 86400000).toISOString(),
+            }).eq("id", (item as any).application_id);
+          }
+          await supabase.from("email_review_queue").delete().eq("id", item.id);
+          sent++;
+        } catch (e) {
+          console.error(`Failed to send to ${item.recipient_email}:`, e);
+        }
+      }
+      toast({ title: `📧 Sent ${sent} emails`, description: `${sent} approved emails dispatched.` });
+      await loadData();
+    } catch (e) {
+      toast({ title: "Error sending", description: String(e), variant: "destructive" });
+    } finally {
+      setProcessing(null);
+    }
+  };
+
   const handleUnblacklist = async (id: string) => {
     try {
       await supabase.from("domain_blacklist").update({
