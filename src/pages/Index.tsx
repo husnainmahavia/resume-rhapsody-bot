@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Bot, Search, FileText, Zap, Rocket } from "lucide-react";
+import { Bot, Search, FileText, Zap, Rocket, BarChart3 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import StatsBar from "@/components/StatsBar";
 import JobSearch from "@/components/JobSearch";
 import ApplicationList from "@/components/ApplicationList";
 import ProfileCard from "@/components/ProfileCard";
 import AutoApplyPipeline from "@/components/AutoApplyPipeline";
+import Dashboard from "@/components/Dashboard";
 import { fetchApplications, type JobApplication } from "@/lib/api";
 
 const Index = () => {
@@ -78,6 +79,9 @@ const Index = () => {
                 <TabsTrigger value="auto" className="gap-1.5 data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
                   <Rocket className="h-3.5 w-3.5" /> Auto-Apply
                 </TabsTrigger>
+                <TabsTrigger value="dashboard" className="gap-1.5 data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
+                  <BarChart3 className="h-3.5 w-3.5" /> Dashboard
+                </TabsTrigger>
                 <TabsTrigger value="search" className="gap-1.5 data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
                   <Search className="h-3.5 w-3.5" /> Manual Search
                 </TabsTrigger>
@@ -102,6 +106,17 @@ const Index = () => {
                     One click: AI searches jobs → tailors your CV → generates personalized emails → sends them from your Gmail. All automatic.
                   </p>
                   <AutoApplyPipeline onUpdate={loadApplications} />
+                </motion.div>
+              </TabsContent>
+
+              <TabsContent value="dashboard">
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass rounded-lg p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <BarChart3 className="h-4 w-4 text-primary" />
+                    <h2 className="font-semibold">Email Analytics & Tracking</h2>
+                    <span className="text-xs text-muted-foreground ml-auto font-mono">real-time</span>
+                  </div>
+                  <Dashboard applications={applications} />
                 </motion.div>
               </TabsContent>
 

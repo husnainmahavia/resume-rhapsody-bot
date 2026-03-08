@@ -14,66 +14,134 @@ export type Database = {
   }
   public: {
     Tables: {
+      email_tracking: {
+        Row: {
+          application_id: string
+          bounce_reason: string | null
+          bounced: boolean | null
+          created_at: string
+          follow_up_count: number | null
+          follow_up_sent_at: string | null
+          id: string
+          open_count: number | null
+          opened_at: string | null
+          replied_at: string | null
+          reply_snippet: string | null
+          tracking_pixel_id: string
+        }
+        Insert: {
+          application_id: string
+          bounce_reason?: string | null
+          bounced?: boolean | null
+          created_at?: string
+          follow_up_count?: number | null
+          follow_up_sent_at?: string | null
+          id?: string
+          open_count?: number | null
+          opened_at?: string | null
+          replied_at?: string | null
+          reply_snippet?: string | null
+          tracking_pixel_id?: string
+        }
+        Update: {
+          application_id?: string
+          bounce_reason?: string | null
+          bounced?: boolean | null
+          created_at?: string
+          follow_up_count?: number | null
+          follow_up_sent_at?: string | null
+          id?: string
+          open_count?: number | null
+          opened_at?: string | null
+          replied_at?: string | null
+          reply_snippet?: string | null
+          tracking_pixel_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_tracking_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "job_applications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       job_applications: {
         Row: {
           applied_at: string | null
+          careers_page_url: string | null
           company: string
           cover_letter: string | null
           created_at: string
           email_body: string | null
           email_subject: string | null
+          follow_up_scheduled_at: string | null
+          follow_up_sent: boolean | null
           hiring_manager_email: string | null
           hiring_manager_name: string | null
           id: string
           job_description: string | null
+          job_posted_at: string | null
           job_title: string
           job_url: string | null
           location: string | null
           notes: string | null
           salary_range: string | null
           source: string | null
+          sponsorship_available: boolean | null
           status: string
           tailored_cv: string | null
           updated_at: string
         }
         Insert: {
           applied_at?: string | null
+          careers_page_url?: string | null
           company: string
           cover_letter?: string | null
           created_at?: string
           email_body?: string | null
           email_subject?: string | null
+          follow_up_scheduled_at?: string | null
+          follow_up_sent?: boolean | null
           hiring_manager_email?: string | null
           hiring_manager_name?: string | null
           id?: string
           job_description?: string | null
+          job_posted_at?: string | null
           job_title: string
           job_url?: string | null
           location?: string | null
           notes?: string | null
           salary_range?: string | null
           source?: string | null
+          sponsorship_available?: boolean | null
           status?: string
           tailored_cv?: string | null
           updated_at?: string
         }
         Update: {
           applied_at?: string | null
+          careers_page_url?: string | null
           company?: string
           cover_letter?: string | null
           created_at?: string
           email_body?: string | null
           email_subject?: string | null
+          follow_up_scheduled_at?: string | null
+          follow_up_sent?: boolean | null
           hiring_manager_email?: string | null
           hiring_manager_name?: string | null
           id?: string
           job_description?: string | null
+          job_posted_at?: string | null
           job_title?: string
           job_url?: string | null
           location?: string | null
           notes?: string | null
           salary_range?: string | null
           source?: string | null
+          sponsorship_available?: boolean | null
           status?: string
           tailored_cv?: string | null
           updated_at?: string

@@ -12,7 +12,7 @@ import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { USER_PROFILE } from "@/lib/user-profile";
-import { runServerPipeline, getPipelineStatus } from "@/lib/api";
+import { runServerPipeline, getPipelineStatus, sendFollowUps } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 type PipelineStep = "idle" | "running" | "complete" | "error";
@@ -47,12 +47,20 @@ const JOB_TYPE_OPTIONS = [
   { value: "Hybrid", label: "Hybrid" },
 ];
 
+const SEARCH_MODE_OPTIONS = [
+  { value: "standard", label: "Standard Search" },
+  { value: "careers_page", label: "Careers Page Scraping" },
+  { value: "sponsorship", label: "Sponsorship Companies" },
+  { value: "recent_24h", label: "Last 24h Jobs Only" },
+];
+
 export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) {
   const [status, setStatus] = useState<PipelineStep>("idle");
   const [location, setLocation] = useState("Manchester, UK");
   const [selectedSkills, setSelectedSkills] = useState<string[]>(ALL_SKILLS.slice(0, 15));
   const [cvVersion, setCvVersion] = useState("auto");
   const [jobType, setJobType] = useState("Full-time");
+  const [searchMode, setSearchMode] = useState("standard");
   const [showConfig, setShowConfig] = useState(true);
   const [results, setResults] = useState<PipelineResult[]>([]);
   const [pipelineStats, setPipelineStats] = useState({ total: 0, applied: 0, today: 0, dailyLimit: 80 });
@@ -91,7 +99,8 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
         location,
         selectedSkills,
         cvVersion,
-        jobType
+        jobType,
+        searchMode
       );
 
       if (result.error) {
@@ -115,7 +124,7 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
       setStatus("error");
       toast({ title: "Pipeline Error", description: String(err), variant: "destructive" });
     }
-  }, [location, selectedSkills, cvVersion, jobType, onUpdate, toast]);
+  }, [location, selectedSkills, cvVersion, jobType, searchMode, onUpdate, toast]);
 
   const statusIcon = (s: string) => {
     switch (s) {
@@ -174,7 +183,7 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
             className="space-y-4 overflow-hidden"
           >
             {/* Row 1: Location + Job Type + CV Version */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">Location</label>
                 <Input
@@ -184,6 +193,19 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
                   className="bg-secondary border-border"
                   disabled={status === "running"}
                 />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Search Mode</label>
+                <Select value={searchMode} onValueChange={setSearchMode} disabled={status === "running"}>
+                  <SelectTrigger className="bg-secondary border-border">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SEARCH_MODE_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">Job Type</label>
@@ -270,8 +292,26 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
         {status === "running" ? (
           <><Loader2 className="h-4 w-4 animate-spin" /> Running Server-Side...</>
         ) : (
-          <><Rocket className="h-4 w-4" /> Auto-Apply ({selectedSkills.length} skills, {cvVersion === "auto" ? "Auto CV" : cvVersion})</>
+          <><Rocket className="h-4 w-4" /> Auto-Apply ({selectedSkills.length} skills, {searchMode !== "standard" ? searchMode.replace("_", " ") : cvVersion === "auto" ? "Auto CV" : cvVersion})</>
         )}
+      </Button>
+
+      {/* Follow-up button */}
+      <Button
+        variant="outline"
+        className="gap-2 w-full"
+        disabled={status === "running"}
+        onClick={async () => {
+          try {
+            const result = await sendFollowUps();
+            toast({ title: "Follow-ups sent", description: `${result.followUpsSent || 0} follow-up emails sent` });
+            onUpdate();
+          } catch (err) {
+            toast({ title: "Error", description: String(err), variant: "destructive" });
+          }
+        }}
+      >
+        <Mail className="h-4 w-4" /> Send Follow-ups (3+ days old)
       </Button>
 
       {/* Running indicator */}
