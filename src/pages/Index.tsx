@@ -9,6 +9,7 @@ import ProfileCard from "@/components/ProfileCard";
 import AutoApplyPipeline from "@/components/AutoApplyPipeline";
 import Dashboard from "@/components/Dashboard";
 import ScraperTool from "@/components/ScraperTool";
+import LinkedInTool from "@/components/LinkedInTool";
 import { fetchApplications, type JobApplication } from "@/lib/api";
 
 const Index = () => {
