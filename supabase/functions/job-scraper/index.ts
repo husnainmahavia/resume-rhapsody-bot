@@ -17,6 +17,67 @@ const CATEGORIES = [
 
 const AI_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
+const CV_BASE = `HUSNAIN MAHAVIA | Full-Stack Developer & AI Specialist
+8+ years in custom WordPress development, AI/ML integration, automation systems. 50+ WordPress sites, 15+ e-commerce platforms. ChatGPT, Gemini, MidJourney integration. Custom lead management, API integrations. Scaled team 1→10+, 50% YoY growth.
+Contact: +44 7387 055617 | husnainmahavia.1@gmail.com | Manchester, UK
+Education: BSc Software Engineering, COMSATS University (2016-2020)
+Experience: Lead at Visuosofts (Jan 2017-Aug 2025), Market Research at NatCen (Oct 2025-Present)
+Skills: HTML5/CSS3, JavaScript, PHP, Python, SQL, WordPress, React, AI/ML, REST APIs, Flutter, Unity AR/VR, SEO, Google Ads`;
+
+function generateCvHtml(cvText: string, company: string): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Husnain Mahavia - CV</title>
+<style>body{font-family:Georgia,serif;max-width:700px;margin:0 auto;padding:40px;color:#1a1a1a;line-height:1.6}
+h1{font-size:22px;margin-bottom:4px;color:#0d1b2a}h2{font-size:14px;color:#415a77;border-bottom:1px solid #ccc;padding-bottom:4px;margin-top:20px}
+p,li{font-size:13px}ul{padding-left:18px}</style></head>
+<body>${cvText.replace(/\n/g,"<br>")}</body></html>`;
+}
+
+function generateCoverLetterHtml(text: string, company: string): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Cover Letter - ${company}</title>
+<style>body{font-family:Georgia,serif;max-width:650px;margin:0 auto;padding:40px;color:#1a1a1a;line-height:1.7}
+p{font-size:13px;margin-bottom:12px}</style></head>
+<body>${text.replace(/\n/g,"<br>")}</body></html>`;
+}
+
+async function generateCvAndCoverLetter(company: string, category: string, description: string, apiKey: string) {
+  try {
+    const categoryLabel = category.replace(/_/g, " ");
+    const res = await fetch(AI_URL, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash-lite",
+        messages: [{
+          role: "user",
+          content: `Tailor this CV for a cold outreach to ${company} (a ${categoryLabel} company: ${description || ""}).
+
+BASE CV:
+${CV_BASE}
+
+Return ONLY a JSON object with:
+- "tailored_cv": full tailored CV text (well structured, 1-2 pages, highlight relevant skills for ${categoryLabel})
+- "cover_letter": a concise personalized cover letter (200 words max, mention ${company} by name, sound human)
+
+No markdown, no code fences. JSON only.`
+        }],
+        temperature: 0.5,
+        max_tokens: 2000,
+      }),
+    });
+    const raw = await res.text();
+    let data;
+    try { data = JSON.parse(raw); } catch { return null; }
+    const content = data.choices?.[0]?.message?.content || "";
+    const cleaned = content.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    return JSON.parse(match[0]);
+  } catch (e) {
+    console.error("CV generation error:", e);
+    return null;
+  }
+}
+
 async function aiSearchEmails(query: string, apiKey: string): Promise<Array<{ company: string; email: string; website: string; description: string; location: string }>> {
   try {
     const response = await fetch(AI_URL, {
@@ -233,6 +294,27 @@ Return ONLY a JSON object with "subject" and "body" fields. No markdown, no code
 
           const { subject, body } = JSON.parse(jsonMatch[0]);
 
+          // Generate tailored CV and cover letter
+          const cvData = await generateCvAndCoverLetter(company.company_name, company.category, company.description || "", lovableKey);
+          
+          const attachments: Array<{ filename: string; content: string; contentType: string }> = [];
+          if (cvData?.tailored_cv) {
+            attachments.push({
+              filename: `Husnain_Mahavia_CV_${company.company_name.replace(/[^a-zA-Z0-9]/g, "_")}.html`,
+              content: generateCvHtml(cvData.tailored_cv, company.company_name),
+              contentType: "text/html",
+            });
+          }
+          if (cvData?.cover_letter) {
+            attachments.push({
+              filename: `Cover_Letter_${company.company_name.replace(/[^a-zA-Z0-9]/g, "_")}.html`,
+              content: generateCoverLetterHtml(cvData.cover_letter, company.company_name),
+              contentType: "text/html",
+            });
+          }
+
+          const emailBody = body + "\n\nPlease find my CV and cover letter attached.\n\nBest regards,\nHusnain Mahavia\n+44 7387 055617\nhusnainmahavia.1@gmail.com";
+
           const sendResponse = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
             method: "POST",
             headers: {
@@ -242,7 +324,8 @@ Return ONLY a JSON object with "subject" and "body" fields. No markdown, no code
             body: JSON.stringify({
               to: company.email,
               subject,
-              body: body + "\n\nBest regards,\nHusnain Mahavia\n+44 7387 055617\nhusnainmahavia.1@gmail.com",
+              body: emailBody,
+              attachments,
             }),
           });
 
