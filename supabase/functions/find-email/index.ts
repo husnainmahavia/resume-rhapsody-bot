@@ -70,7 +70,7 @@ async function fetchPage(url: string): Promise<string> {
     const res = await fetch(url, {
       headers: { "User-Agent": randomUA(), "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" },
       redirect: "follow",
-      signal: AbortSignal.timeout(6000), // 6s max per page
+      signal: AbortSignal.timeout(3000), // 3s max per page
     });
     if (!res.ok) return "";
     const ct = res.headers.get("content-type") || "";
