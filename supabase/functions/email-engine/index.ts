@@ -301,7 +301,7 @@ REQUIREMENTS:
         query = query.in("id", targetLeadIds);
       }
 
-      const { data: leads, error } = await query.limit(50);
+      const { data: leads, error } = await query.limit(10);
       if (error) throw error;
       if (!leads || leads.length === 0) {
         return new Response(JSON.stringify({ success: true, sent: 0, message: "No emails ready to send" }), {
@@ -345,8 +345,10 @@ REQUIREMENTS:
           sent++;
           console.log(`  ✅ Sent to: ${lead.contact_email} — MessageId: ${info.messageId}`);
 
-          // Rate limit: 1.2s between sends
-          await new Promise(r => setTimeout(r, 1200));
+          // Human-like pacing: random 3-5 minute delay between sends
+          const delay = 180000 + Math.floor(Math.random() * 120000); // 180s-300s (3-5 min)
+          console.log(`  ⏱ Waiting ${Math.round(delay / 1000)}s before next send...`);
+          await new Promise(r => setTimeout(r, delay));
         } catch (e) {
           errors++;
           const errMsg = e instanceof Error ? e.message : String(e);
