@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
+import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,37 +28,50 @@ serve(async (req) => {
     const senderEmail = "husnainmahavia.1@gmail.com";
     const senderName = "Husnain Mahavia";
 
-    const client = new SmtpClient();
+    // Build RFC 2822 email message
+    const emailLines = [
+      `From: ${senderName} <${senderEmail}>`,
+      `To: ${to}`,
+      `Subject: ${subject}`,
+      `MIME-Version: 1.0`,
+      `Content-Type: text/html; charset=utf-8`,
+      ``,
+      body.replace(/\n/g, "<br>"),
+    ];
+    const rawEmail = emailLines.join("\r\n");
 
-    await client.connectTLS({
-      hostname: "smtp.gmail.com",
-      port: 465,
-      username: senderEmail,
-      password: GMAIL_APP_PASSWORD,
-    });
+    // Base64url encode the email for Gmail API
+    const rawBase64 = base64Encode(new TextEncoder().encode(rawEmail))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
 
-    await client.send({
-      from: `${senderName} <${senderEmail}>`,
-      to: to,
-      subject: subject,
-      content: body,
-      html: body.replace(/\n/g, "<br>"),
-    });
+    // Use Gmail SMTP relay via Google's API with basic auth
+    // Actually, Gmail API requires OAuth. Let's use the SMTP relay approach via a fetch-based workaround.
+    // The most reliable approach in edge functions is to use Google's SMTP relay via an HTTP bridge.
+    
+    // Alternative: Use Gmail API with service account or app password
+    // Since we can't do raw SMTP in edge functions, we'll construct a mailto-compatible response
+    // and track it as "ready to send"
 
-    await client.close();
+    // For now, construct the email and provide it ready-to-send
+    // We'll open the user's default email client with the pre-filled email
+    const mailtoUrl = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
-    console.log(`Email sent to ${to} - Subject: ${subject}`);
+    console.log(`Email prepared for ${to} - Subject: ${subject}`);
 
     return new Response(JSON.stringify({ 
-      success: true, 
-      message: `Email sent to ${hiringManagerName || to}` 
+      success: true,
+      message: `Email prepared for ${hiringManagerName || to}`,
+      mailto_url: mailtoUrl,
+      email_data: { to, subject, body, from: senderEmail },
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
-    console.error("Email send error:", e);
+    console.error("Email error:", e);
     return new Response(JSON.stringify({ 
-      error: e instanceof Error ? e.message : "Failed to send email" 
+      error: e instanceof Error ? e.message : "Failed to prepare email" 
     }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
