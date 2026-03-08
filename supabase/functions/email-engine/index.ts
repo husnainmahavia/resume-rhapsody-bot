@@ -45,6 +45,16 @@ const REGIONS = [
   "Germany & Europe",
 ];
 
+// Rotate through industry/region combos based on current hour
+function getRotatingTarget(): { industry: string; region: string } {
+  const now = new Date();
+  const hourOfYear = (now.getMonth() * 30 * 24) + (now.getDate() * 24) + now.getHours();
+  const combo = hourOfYear % (INDUSTRIES.length * REGIONS.length);
+  const industryIdx = Math.floor(combo / REGIONS.length) % INDUSTRIES.length;
+  const regionIdx = combo % REGIONS.length;
+  return { industry: INDUSTRIES[industryIdx], region: REGIONS[regionIdx] };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
