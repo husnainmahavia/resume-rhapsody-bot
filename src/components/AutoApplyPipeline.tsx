@@ -11,7 +11,7 @@ import { Progress } from "@/components/ui/progress";
 import { USER_PROFILE } from "@/lib/user-profile";
 import {
   searchJobs, createApplication, tailorCV, generateEmail,
-  sendEmail, updateApplication
+  sendEmail, updateApplication, checkDuplicateApplication
 } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
