@@ -364,7 +364,7 @@ Return ONLY a JSON object with "subject" and "body" fields. No markdown, no code
           const emailRaw = await emailResponse.text();
           let emailData;
           try { emailData = JSON.parse(emailRaw); } catch { 
-            sendResults.push({ company: company.company_name, email: company.email, status: "email_gen_parse_failed" });
+            sendResults.push({ company: company.company_name, email: recipientEmail, status: "email_gen_parse_failed" });
             continue;
           }
           
@@ -373,7 +373,7 @@ Return ONLY a JSON object with "subject" and "body" fields. No markdown, no code
           const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
           
           if (!jsonMatch) {
-            sendResults.push({ company: company.company_name, email: company.email, status: "email_gen_failed" });
+            sendResults.push({ company: company.company_name, email: recipientEmail, status: "email_gen_failed" });
             continue;
           }
 
