@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { checkInboxReplies, type JobApplication } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
 interface DashboardProps {
   applications: JobApplication[];
@@ -247,6 +248,10 @@ export default function Dashboard({ applications }: DashboardProps) {
       </div>
 
       {/* Recent Opens/Replies */}
+      {/* Bounce Rate Chart */}
+      <BounceChart />
+
+      {/* Recent Opens/Replies */}
       {recentActivity.length > 0 && (
         <Card className="bg-secondary/30 border-border">
           <CardHeader className="pb-2">
@@ -277,5 +282,77 @@ export default function Dashboard({ applications }: DashboardProps) {
         </Card>
       )}
     </div>
+  );
+}
+
+function BounceChart() {
+  const [bounceData, setBounceData] = useState<{ domain: string; bounces: number; blacklisted: boolean }[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from("domain_blacklist")
+        .select("domain, bounce_count, is_blacklisted")
+        .gt("bounce_count", 0)
+        .order("bounce_count", { ascending: false })
+        .limit(15);
+      setBounceData(
+        (data || []).map((d: any) => ({ domain: d.domain, bounces: d.bounce_count, blacklisted: d.is_blacklisted }))
+      );
+    })();
+  }, []);
+
+  if (bounceData.length === 0) return null;
+
+  return (
+    <Card className="bg-secondary/30 border-border">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 text-destructive" />
+          Bounce Rate by Domain
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="h-48">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={bounceData} margin={{ top: 5, right: 5, bottom: 40, left: 0 }}>
+              <XAxis
+                dataKey="domain"
+                tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }}
+                angle={-35}
+                textAnchor="end"
+                interval={0}
+              />
+              <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} allowDecimals={false} />
+              <Tooltip
+                contentStyle={{
+                  background: "hsl(var(--secondary))",
+                  border: "1px solid hsl(var(--border))",
+                  borderRadius: 8,
+                  fontSize: 11,
+                  color: "hsl(var(--foreground))",
+                }}
+                formatter={(value: number, _name: string, props: any) => [
+                  `${value} bounce${value !== 1 ? "s" : ""}${props.payload.blacklisted ? " 🚫 blacklisted" : ""}`,
+                  "Bounces",
+                ]}
+              />
+              <Bar dataKey="bounces" radius={[4, 4, 0, 0]}>
+                {bounceData.map((entry, i) => (
+                  <Cell
+                    key={i}
+                    fill={entry.blacklisted ? "hsl(var(--destructive))" : "hsl(var(--primary))"}
+                    opacity={entry.blacklisted ? 1 : 0.7}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <p className="text-[10px] text-muted-foreground text-center mt-1">
+          Red bars = auto-blacklisted (3+ bounces). These domains are excluded from future outreach.
+        </p>
+      </CardContent>
+    </Card>
   );
 }

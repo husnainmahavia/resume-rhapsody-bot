@@ -2,12 +2,13 @@ import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ShieldCheck, ShieldX, Mail, CheckCircle2, XCircle,
-  Loader2, RefreshCw, Eye, Ban, AlertTriangle
+  Loader2, RefreshCw, Eye, Ban, AlertTriangle, Send
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
+import { sendEmail } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 interface QueueItem {
@@ -113,6 +114,42 @@ export default function ReviewQueue() {
     }
   };
 
+  const handleSendApproved = async () => {
+    setProcessing("sending");
+    try {
+      const { data: toSend } = await supabase
+        .from("email_review_queue")
+        .select("*")
+        .eq("validation_status", "approved")
+        .limit(20);
+
+      let sent = 0;
+      for (const item of (toSend || []) as QueueItem[]) {
+        if (!item.email_subject || !item.email_body) continue;
+        try {
+          await sendEmail(item.recipient_email, item.email_subject, item.email_body, item.recipient_name || undefined);
+          if ((item as any).application_id) {
+            await supabase.from("job_applications").update({
+              status: "applied",
+              applied_at: new Date().toISOString(),
+              follow_up_scheduled_at: new Date(Date.now() + 3 * 86400000).toISOString(),
+            }).eq("id", (item as any).application_id);
+          }
+          await supabase.from("email_review_queue").delete().eq("id", item.id);
+          sent++;
+        } catch (e) {
+          console.error(`Failed to send to ${item.recipient_email}:`, e);
+        }
+      }
+      toast({ title: `📧 Sent ${sent} emails`, description: `${sent} approved emails dispatched.` });
+      await loadData();
+    } catch (e) {
+      toast({ title: "Error sending", description: String(e), variant: "destructive" });
+    } finally {
+      setProcessing(null);
+    }
+  };
+
   const handleUnblacklist = async (id: string) => {
     try {
       await supabase.from("domain_blacklist").update({
@@ -163,6 +200,15 @@ export default function ReviewQueue() {
               <CheckCircle2 className="h-3 w-3" /> Approve All Verified ({queue.filter(q => q.domain_match).length})
             </Button>
           )}
+          <Button
+            size="sm"
+            variant="default"
+            className="gap-1 text-xs"
+            onClick={handleSendApproved}
+            disabled={processing === "sending"}
+          >
+            <Send className="h-3 w-3" /> {processing === "sending" ? "Sending..." : "Send Approved"}
+          </Button>
           <Button size="sm" variant="ghost" onClick={loadData} className="gap-1 text-xs">
             <RefreshCw className="h-3 w-3" /> Refresh
           </Button>
