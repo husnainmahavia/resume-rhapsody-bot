@@ -110,6 +110,9 @@ const Index = () => {
                 <TabsTrigger value="profile" className="gap-1.5 data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
                   <UserCog className="h-3.5 w-3.5" /> Profile
                 </TabsTrigger>
+                <TabsTrigger value="cron" className="gap-1.5 data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
+                  <Timer className="h-3.5 w-3.5" /> Cron Monitor
+                </TabsTrigger>
                 <TabsTrigger value="applications" className="gap-1.5 data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
                   <FileText className="h-3.5 w-3.5" /> Pipeline
                   {applications.length > 0 && (
