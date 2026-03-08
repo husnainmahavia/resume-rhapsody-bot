@@ -296,18 +296,13 @@ ${modeInstructions}
 
 ABSOLUTE REQUIREMENTS - FOLLOW STRICTLY:
 1. ONLY use companies that ACTUALLY EXIST and are KNOWN UK employers (e.g., BBC, NHS Digital, Booking.com, AO.com, THG/The Hut Group, Autotrader, Boohoo, On The Beach, Peak AI, Manchester Airport Group, Kellogg's, Brother International, Missguided, N Brown Group, Co-op, JD Sports, Bet365, Apadmi, MediaCityUK companies, etc.)
-2. The hiring_email MUST be a REAL, VERIFIED email format that the company actually uses. Research the company's actual careers/recruitment email. Common REAL patterns:
-   - careers@companyname.com (most common)
-   - recruitment@companyname.co.uk
-   - jobs@companyname.com
-   - hr@companyname.com
-   - talent@companyname.com
-   - For large companies, check their actual careers page domain
-3. DO NOT invent or guess email addresses. If you're not confident about the email, use the company's main website domain with careers@ prefix
-4. The job URL must point to a real careers page (careers.company.com or company.com/careers)
-5. DO NOT use fictional companies, startups you made up, or domains that don't exist
-6. Include whether the company offers visa sponsorship (sponsorship field: true/false)
-7. Include the company's careers page URL if known
+2. The hiring_email MUST be a REAL, VERIFIED company email address tied to that company domain.
+3. DO NOT invent, guess, or synthesize email addresses.
+4. If a verified hiring email is not publicly known, set hiring_email to an empty string "".
+5. The job URL must point to a real careers page (careers.company.com or company.com/careers)
+6. DO NOT use fictional companies, startups you made up, or domains that don't exist
+7. Include whether the company offers visa sponsorship (sponsorship field: true/false)
+8. Include the company's careers page URL if known
 
 VERIFICATION: Before returning each job, mentally verify:
 - Is this company real? (Google it)
