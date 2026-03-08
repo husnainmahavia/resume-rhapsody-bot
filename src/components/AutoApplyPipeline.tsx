@@ -1,13 +1,16 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Rocket, Loader2, Search, FileText, Mail, Send, CheckCircle2,
-  XCircle, Clock, Zap, AlertTriangle, Shield, Timer
+  Rocket, Loader2, Mail, CheckCircle2,
+  XCircle, Clock, Zap, AlertTriangle, Shield, Timer,
+  Settings2, ChevronDown, ChevronUp
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { USER_PROFILE } from "@/lib/user-profile";
 import { runServerPipeline, getPipelineStatus } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -26,32 +29,69 @@ interface AutoApplyPipelineProps {
   onUpdate: () => void;
 }
 
+const ALL_SKILLS = USER_PROFILE.skills;
+
+const CV_OPTIONS = [
+  { value: "auto", label: "Auto (AI picks best)" },
+  { value: "fullstack", label: "Full-Stack AI Developer" },
+  { value: "aiSpecialist", label: "AI Specialist" },
+  { value: "digitalMarketing", label: "Digital Marketing Manager" },
+  { value: "webDeveloper", label: "Web Developer / WordPress" },
+];
+
+const JOB_TYPE_OPTIONS = [
+  { value: "Full-time", label: "Full-time" },
+  { value: "Part-time", label: "Part-time" },
+  { value: "Contract", label: "Contract" },
+  { value: "Remote", label: "Remote" },
+  { value: "Hybrid", label: "Hybrid" },
+];
+
 export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) {
   const [status, setStatus] = useState<PipelineStep>("idle");
   const [location, setLocation] = useState("Manchester, UK");
+  const [selectedSkills, setSelectedSkills] = useState<string[]>(ALL_SKILLS.slice(0, 15));
+  const [cvVersion, setCvVersion] = useState("auto");
+  const [jobType, setJobType] = useState("Full-time");
+  const [showConfig, setShowConfig] = useState(true);
   const [results, setResults] = useState<PipelineResult[]>([]);
   const [pipelineStats, setPipelineStats] = useState({ total: 0, applied: 0, today: 0, dailyLimit: 80 });
-  const [isPolling, setIsPolling] = useState(false);
   const { toast } = useToast();
 
-  // Fetch status on mount
   useEffect(() => {
     getPipelineStatus().then(setPipelineStats).catch(() => {});
   }, []);
 
+  const toggleSkill = (skill: string) => {
+    setSelectedSkills((prev) =>
+      prev.includes(skill) ? prev.filter((s) => s !== skill) : [...prev, skill]
+    );
+  };
+
+  const selectAllSkills = () => setSelectedSkills([...ALL_SKILLS]);
+  const clearAllSkills = () => setSelectedSkills([]);
+
   const runPipeline = useCallback(async () => {
+    if (selectedSkills.length === 0) {
+      toast({ title: "No skills selected", description: "Select at least one skill.", variant: "destructive" });
+      return;
+    }
+
     setStatus("running");
     setResults([]);
+    setShowConfig(false);
 
     try {
       toast({
         title: "🚀 Pipeline Started",
-        description: "Running server-side — safe to switch tabs. Human-like delays between emails.",
+        description: "Running server-side — safe to switch tabs.",
       });
 
       const result = await runServerPipeline(
         location,
-        USER_PROFILE.skills.slice(0, 15)
+        selectedSkills,
+        cvVersion,
+        jobType
       );
 
       if (result.error) {
@@ -64,7 +104,6 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
       setStatus("complete");
       onUpdate();
 
-      // Refresh stats
       const stats = await getPipelineStatus();
       setPipelineStats(stats);
 
@@ -73,15 +112,10 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
         description: `${result.emailsSent} emails sent, ${result.processed} jobs processed`,
       });
     } catch (err) {
-      console.error("Pipeline error:", err);
       setStatus("error");
-      toast({
-        title: "Pipeline Error",
-        description: String(err),
-        variant: "destructive",
-      });
+      toast({ title: "Pipeline Error", description: String(err), variant: "destructive" });
     }
-  }, [location, onUpdate, toast]);
+  }, [location, selectedSkills, cvVersion, jobType, onUpdate, toast]);
 
   const statusIcon = (s: string) => {
     switch (s) {
@@ -112,38 +146,133 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
         <Shield className="h-4 w-4 text-success mt-0.5 shrink-0" />
         <div className="text-xs text-muted-foreground">
           <span className="text-foreground font-medium">Gmail-safe mode:</span>{" "}
-          Human-like delays (45s–2min between emails), max {pipelineStats.dailyLimit}/day, 
-          5-min pause every 10 emails. Runs server-side — won't stop if you switch tabs.
-          <span className="text-muted-foreground block mt-1">
+          Human-like delays, max {pipelineStats.dailyLimit}/day, server-side execution.
+          <span className="block mt-1">
             📊 Today: {pipelineStats.today}/{pipelineStats.dailyLimit} emails sent
           </span>
         </div>
       </div>
 
-      {/* Controls */}
-      <div className="flex gap-2 items-end">
-        <div className="flex-1">
-          <label className="text-xs text-muted-foreground mb-1 block">Location</label>
-          <Input
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            placeholder="Manchester, UK"
-            className="bg-secondary border-border"
-            disabled={status === "running"}
-          />
-        </div>
-        <Button 
-          onClick={runPipeline} 
-          className="gap-2 glow-primary"
-          disabled={status === "running"}
-        >
-          {status === "running" ? (
-            <><Loader2 className="h-4 w-4 animate-spin" /> Running...</>
-          ) : (
-            <><Rocket className="h-4 w-4" /> Auto-Apply All</>
-          )}
-        </Button>
-      </div>
+      {/* Config toggle */}
+      <button
+        onClick={() => setShowConfig(!showConfig)}
+        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
+        disabled={status === "running"}
+      >
+        <Settings2 className="h-3.5 w-3.5" />
+        <span className="font-medium">Pre-Run Configuration</span>
+        {showConfig ? <ChevronUp className="h-3 w-3 ml-auto" /> : <ChevronDown className="h-3 w-3 ml-auto" />}
+      </button>
+
+      {/* Configuration panel */}
+      <AnimatePresence>
+        {showConfig && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="space-y-4 overflow-hidden"
+          >
+            {/* Row 1: Location + Job Type + CV Version */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Location</label>
+                <Input
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder="Manchester, UK"
+                  className="bg-secondary border-border"
+                  disabled={status === "running"}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Job Type</label>
+                <Select value={jobType} onValueChange={setJobType} disabled={status === "running"}>
+                  <SelectTrigger className="bg-secondary border-border">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {JOB_TYPE_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">CV Version</label>
+                <Select value={cvVersion} onValueChange={setCvVersion} disabled={status === "running"}>
+                  <SelectTrigger className="bg-secondary border-border">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CV_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Skills selection */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs text-muted-foreground">
+                  Target Skills ({selectedSkills.length}/{ALL_SKILLS.length})
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={selectAllSkills}
+                    className="text-[10px] text-primary hover:underline"
+                    disabled={status === "running"}
+                  >
+                    Select all
+                  </button>
+                  <button
+                    onClick={clearAllSkills}
+                    className="text-[10px] text-muted-foreground hover:underline"
+                    disabled={status === "running"}
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-1.5 max-h-[140px] overflow-y-auto p-2 rounded-lg bg-secondary/30 border border-border">
+                {ALL_SKILLS.map((skill) => {
+                  const isSelected = selectedSkills.includes(skill);
+                  return (
+                    <button
+                      key={skill}
+                      onClick={() => toggleSkill(skill)}
+                      disabled={status === "running"}
+                      className={`px-2 py-0.5 rounded-full text-[11px] font-medium transition-all border ${
+                        isSelected
+                          ? "bg-primary/20 text-primary border-primary/40"
+                          : "bg-secondary/50 text-muted-foreground border-border hover:border-primary/30"
+                      }`}
+                    >
+                      {skill}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Launch button */}
+      <Button
+        onClick={runPipeline}
+        className="gap-2 glow-primary w-full"
+        disabled={status === "running" || selectedSkills.length === 0}
+        size="lg"
+      >
+        {status === "running" ? (
+          <><Loader2 className="h-4 w-4 animate-spin" /> Running Server-Side...</>
+        ) : (
+          <><Rocket className="h-4 w-4" /> Auto-Apply ({selectedSkills.length} skills, {cvVersion === "auto" ? "Auto CV" : cvVersion})</>
+        )}
+      </Button>
 
       {/* Running indicator */}
       {status === "running" && (
@@ -160,7 +289,7 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
           </div>
           <Progress value={30} className="h-2 animate-pulse" />
           <p className="text-xs text-muted-foreground">
-            Safe to switch tabs or close this page. The pipeline continues on the server.
+            Safe to switch tabs. The pipeline continues on the server.
           </p>
         </motion.div>
       )}
@@ -207,16 +336,10 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
       </AnimatePresence>
 
       {/* Idle State */}
-      {status === "idle" && results.length === 0 && (
-        <div className="text-center py-8 text-muted-foreground">
-          <Zap className="h-10 w-10 mx-auto mb-3 opacity-30" />
-          <p className="text-sm">Click <span className="text-primary font-medium">"Auto-Apply All"</span> to start</p>
-          <p className="text-xs mt-1">
-            Searches jobs → tailors CV → writes email with CV included → sends via Gmail
-          </p>
-          <p className="text-xs mt-1 text-muted-foreground/60">
-            Runs entirely server-side with human-like delays to protect your Gmail account
-          </p>
+      {status === "idle" && results.length === 0 && !showConfig && (
+        <div className="text-center py-6 text-muted-foreground">
+          <Zap className="h-8 w-8 mx-auto mb-2 opacity-30" />
+          <p className="text-xs">Configure your preferences above, then launch</p>
         </div>
       )}
 
@@ -228,7 +351,7 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
             {results.filter(r => r.status === "applied").length} emails sent successfully
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            {results.filter(r => r.status === "duplicate_skipped").length} duplicates skipped • 
+            {results.filter(r => r.status === "duplicate_skipped").length} duplicates skipped •{" "}
             {results.filter(r => r.status === "no_email").length} no email found
           </p>
         </div>
