@@ -387,6 +387,31 @@ Return JSON with: title, company, location, salary_range, description, url, hiri
         continue;
       }
 
+      const expectedDomains = getExpectedDomains({ url: job.url, careers_page_url: job.careers_page_url });
+      const emailValidation = validateHiringEmail(job.hiring_email, expectedDomains);
+      if (!emailValidation.valid) {
+        await supabase.from("job_applications").insert({
+          job_title: job.title,
+          company: job.company,
+          location: job.location,
+          salary_range: job.salary_range,
+          job_description: job.description,
+          job_url: job.url,
+          hiring_manager_name: job.hiring_manager,
+          hiring_manager_email: null,
+          source: "auto_apply",
+          status: "no_email",
+          sponsorship_available: job.sponsorship || false,
+          careers_page_url: job.careers_page_url || null,
+          notes: `Skipped unverified email (${emailValidation.reason || "unknown_reason"})`,
+        });
+
+        results.push({ job: job.title, company: job.company, status: "no_email" });
+        continue;
+      }
+
+      job.hiring_email = emailValidation.normalized;
+
       if (i > 0) {
         console.log("⏳ Human-like delay...");
         await humanDelay();
