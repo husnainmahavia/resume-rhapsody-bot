@@ -178,29 +178,33 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
           updateLogStep(i, "email", "done");
           await delay(500);
 
-          // 2d: Send email
+          // 2d: Send email (opens mailto or tracks)
           if (job.hiring_email) {
-            setCurrentAction(`🚀 Sending email to: ${job.hiring_email}`);
+            setCurrentAction(`🚀 Preparing email to: ${job.hiring_email}`);
             updateLogStep(i, "sent", "processing");
 
-            const sendResult = await sendEmail(
-              job.hiring_email,
-              emailResult.subject,
-              emailResult.body,
-              job.hiring_manager
-            );
+            try {
+              const sendResult = await sendEmail(
+                job.hiring_email,
+                emailResult.subject,
+                emailResult.body,
+                job.hiring_manager
+              );
 
-            if (sendResult.error) {
-              updateLogStep(i, "sent", "error");
-              updateLog(i, { error: `Email failed: ${sendResult.error}` });
-              // Still mark as email_sent since we generated it
-              await updateApplication(saved.id, { status: "email_sent" });
-            } else {
+              if (sendResult.mailto_url) {
+                // Auto-open mailto link
+                window.open(sendResult.mailto_url, "_blank");
+              }
+
               updateLogStep(i, "sent", "done");
               await updateApplication(saved.id, {
                 status: "applied",
                 applied_at: new Date().toISOString(),
               });
+            } catch {
+              updateLogStep(i, "sent", "error");
+              updateLog(i, { error: "Email send failed" });
+              await updateApplication(saved.id, { status: "email_sent" });
             }
           } else {
             // No email available, skip sending
