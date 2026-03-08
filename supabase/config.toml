@@ -32,3 +32,9 @@ verify_jwt = false
 
 [functions.scrape-careers]
 verify_jwt = false
+
+[functions.daily-summary]
+verify_jwt = false
+
+[functions.alert-notifications]
+verify_jwt = false
