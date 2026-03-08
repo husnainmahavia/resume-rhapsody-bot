@@ -14,3 +14,9 @@ verify_jwt = false
 
 [functions.auto-apply-pipeline]
 verify_jwt = false
+
+[functions.email-track]
+verify_jwt = false
+
+[functions.follow-up]
+verify_jwt = false
