@@ -39,7 +39,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { location, skills, action } = await req.json();
+    const { location, skills, action, cvVersion, jobType } = await req.json();
     
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -87,8 +87,11 @@ serve(async (req) => {
 
     // Step 1: Search for jobs via AI
     console.log("🔍 Searching for jobs...");
-    const searchPrompt = `Find 5-8 REAL job listings from REAL companies actively hiring in ${location || "Manchester, UK"} for someone with these skills: ${(skills || ["JavaScript", "React", "Python", "WordPress", "AI"]).join(", ")}.
+    const targetSkills = (skills || ["JavaScript", "React", "Python", "WordPress", "AI"]).join(", ");
+    const targetJobType = jobType || "Full-time";
+    const searchPrompt = `Find 5-8 REAL job listings from REAL companies actively hiring in ${location || "Manchester, UK"} for someone with these skills: ${targetSkills}.
 
+Job type: ${targetJobType}
 CRITICAL: Only use REAL companies with REAL domains. Use actual recruitment email formats like careers@, jobs@, hr@, recruitment@ with the company's real domain.
 
 Return JSON array with: title, company, location, salary_range, description, url, hiring_manager, hiring_email`;
@@ -213,7 +216,7 @@ Return JSON array with: title, company, location, salary_range, description, url
               },
               {
                 role: "user",
-                content: `BASE CV:\n${CV_VERSIONS.fullstack}\n\nTARGET: ${job.title} at ${job.company}\nDescription: ${job.description}\n\nTailor CV and write cover letter.`,
+                content: `BASE CV:\n${CV_VERSIONS[cvVersion] || CV_VERSIONS.fullstack}\n\nTARGET: ${job.title} at ${job.company}\nDescription: ${job.description}\n\nTailor CV and write cover letter.`,
               },
             ],
             tools: [{
