@@ -340,7 +340,7 @@ Return JSON with: title, company, location, salary_range, description, url, hiri
       let emailValidation = validateHiringEmail(job.hiring_email, expectedDomains);
       
       // Fallback 1: If AI didn't find a valid email, try Hunter.io
-      if (!emailValidation.valid && job.url) {
+      if (!emailValidation.valid && (job.url || job.careers_page_url)) {
         const jobDomain = extractDomainFromUrl(job.url) || extractDomainFromUrl(job.careers_page_url);
         if (jobDomain) {
           console.log(`🔍 Hunter.io fallback for ${jobDomain}...`);
