@@ -96,80 +96,14 @@ function validateHiringEmail(
   return { valid: true, normalized: normalizedEmail };
 }
 
-// Full CV content from the uploaded DOCX — used as base for tailoring
-const FULL_CV_CONTENT = `HUSNAIN MAHAVIA
-+44 7387 055617 • husnainmahavia.1@gmail.com • Manchester, United Kingdom
-Full-Stack Developer | WordPress & AI Integration Specialist | Tech Lead
-
-PROFESSIONAL PROFILE
-Results-driven full-stack developer with 8+ years of hands-on expertise in custom WordPress development, AI/ML integration, and automation systems. Specialized in architecting and deploying AI-powered solutions alongside high-performance websites, with proven ability to integrate cutting-edge LLM technologies (ChatGPT, Gemini) into production environments. Expert in building sophisticated API integrations, custom lead management systems, and AI-driven automation pipelines for international clients across luxury hospitality, travel, and SaaS sectors. Experienced technical leader who has scaled operations from solo developer to managing cross-functional teams while maintaining code quality, security standards, and customer satisfaction.
-
-CORE TECHNICAL COMPETENCIES
-• WordPress & Web Development: Expert HTML5/CSS3, Custom WordPress theme development & customization, Landing page implementation, Responsive/mobile-first design, Cross-browser compatibility, 50+ custom WordPress sites
-• AI Automation & LLM Integration: ChatGPT, Gemini, MidJourney, Jasper integration, Machine learning model development & deployment, AI-powered content generation, Automated lead scoring, AI-driven campaign analysis, LLM-based automation workflows, Prompt engineering & optimization
-• API Integration & Custom Solutions: RESTful API design & integration, CRM integrations (HubSpot, Salesforce), Third-party API connectors, Webhook configuration, Custom backend development, Database optimization
-• Programming Languages: Advanced HTML5/CSS3, JavaScript (jQuery, ES6+), PHP (WordPress, custom functions), Python (ML, automation scripts), SQL (MySQL), JSON/AJAX
-• CRM & Marketing Automation: Lead management systems, Form builder implementation, CRM integration & automation, Lead scoring algorithms, Automated email workflows, Conversion tracking
-• Performance & Security: Core Web Vitals optimization (90+ scores), Page speed optimization, Security hardening, SSL certificates, GDPR compliance
-• Hosting & Infrastructure: cPanel/WHM administration, Linux server management, DNS configuration, Website migrations, Backup systems, CDN setup
-
-PROFESSIONAL EXPERIENCE
-
-Lead Full-Stack Developer & AI Integration Specialist
-Visuosofts — Remote (International Clients) | January 2017 – August 2025
-
-Led comprehensive web development and AI integration operations for digital agency serving international clients across luxury hospitality, travel, real estate, and SaaS sectors.
-
-WordPress Development & Custom Web Solutions:
-• Developed and maintained 50+ custom WordPress websites from scratch, including advanced theme customization, child theme development, and bespoke functionality
-• Built 15+ e-commerce platforms using WordPress/WooCommerce and Shopify, achieving 25% revenue growth
-• Created responsive, mobile-first designs with Core Web Vitals 90+ scores consistently
-• Developed custom WordPress plugins and integrated third-party APIs
-
-AI Automation & LLM Integration:
-• Coordinated integration of multiple AI/LLM technologies (ChatGPT, Gemini, MidJourney, Jasper, Veo 3) into production environments
-• Developed and deployed ML models for lead scoring, predictive analytics — 900%+ traffic growth, 50% average client growth
-• Built AI-powered automation pipelines reducing manual processing time by 60%
-• Implemented advanced prompt engineering strategies for business use cases
-
-API Integration & Custom Backend:
-• Designed sophisticated API integrations connecting WordPress with CRM platforms (HubSpot, Salesforce) using REST APIs and webhooks
-• Built custom lead management system improving lead-to-customer conversion by 15%
-• Configured Google Tag Manager with comprehensive tracking (UTM, GCLID, FBCLID)
-
-Technical Leadership:
-• Scaled technical operations from solo developer to leading team of 10+ engineers
-• Managed complete project lifecycle for 50+ international projects
-• Achieved 50% YoY revenue growth
-
-Market Research Interviewer (Part-time)
-NatCen Social Research — United Kingdom | October 2025 – Present
-• GDPR-certified data handling, Professional safeguarding training, Advanced fieldwork protocols
-
-TECHNICAL SKILLS SUMMARY
-• WordPress & CMS: WordPress (Expert), Custom Themes, WooCommerce, Elementor, ACF, Multisite, REST API
-• Web Technologies: HTML5/CSS3 (Flexbox, Grid), JavaScript (ES6+, jQuery), Responsive Design, Web Accessibility
-• Programming: PHP, Python (ML, automation), SQL (MySQL), JSON/AJAX, Node.js
-• AI/ML: ChatGPT API, Google Gemini, OpenAI, MidJourney, Jasper, ML models, Prompt engineering
-• API & Integrations: REST APIs, CRM (HubSpot, Salesforce), Webhooks, Custom data pipelines
-• Tracking: Google Tag Manager, GA4, UTM, Facebook Pixel, TikTok Pixel
-• Tools: VS Code, Git/GitHub, Chrome DevTools, npm/Node.js, cPanel/WHM
-
-EDUCATION
-BSc Software Engineering — COMSATS University, Islamabad (January 2016 – May 2020)
-
-CERTIFICATIONS
-• AI & LLM Integration (ChatGPT, Gemini, Prompt Engineering) — 2024-2025
-• Generative AI Content Creation & Automation — 2024
-• Advanced WordPress Development — 2017-2025
-• ML & Data Analysis for Business — 2023-2024
-• Google Analytics IQ — 2023
-• HubSpot Inbound Marketing — 2023
-• ISDP GDPR Compliance — 2025
-• Advanced AR Development Unity 3D — 2018
-
-LANGUAGES: English (Fluent), Urdu (Native), Italian (Basic)
-Work Authorization: UK citizen, eligible to work in UK and EU`;
+// CV content will be loaded from DB at runtime
+let FULL_CV_CONTENT = "";
+let APPLICANT_NAME = "Husnain Mahavia";
+let APPLICANT_EMAIL = "husnainmahavia.1@gmail.com";
+let APPLICANT_PHONE = "+44 7387 055617";
+let APPLICANT_TITLE = "Full-Stack Developer | AI Specialist | Tech Lead";
+let APPLICANT_SKILLS: string[] = [];
+let APPLICANT_SUMMARY = "";
 
 // Generate a professional PDF-like HTML CV
 function generateCvHtml(cvText: string, jobTitle: string, company: string): string {
