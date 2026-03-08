@@ -516,7 +516,7 @@ Return the complete tailored CV text and cover letter.`;
             messages: [
               {
                 role: "system",
-                content: `You write professional job application emails. The candidate is Husnain Mahavia, a Full-Stack Developer with 8+ years experience, 150+ projects, based in Manchester UK.
+                content: `You write professional job application emails. The candidate is ${APPLICANT_NAME}, ${APPLICANT_TITLE}${APPLICANT_SUMMARY ? `. ${APPLICANT_SUMMARY}` : ''}.
 
 Write a SHORT, professional email (NOT the CV — the CV will be attached as a PDF separately).
 Structure:
@@ -524,7 +524,7 @@ Structure:
 2. State which role you're applying for  
 3. 2-3 sentences highlighting your most relevant experience for THIS specific role
 4. Mention that your tailored CV is attached
-5. Professional sign-off with contact details (+44 7387 055617, husnainmahavia.1@gmail.com)
+5. Professional sign-off with contact details (${APPLICANT_PHONE}, ${APPLICANT_EMAIL})
 
 Keep it under 150 words. Professional but warm. NOT generic — reference something specific about the company.`,
               },
