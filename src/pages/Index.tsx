@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Bot, Search, FileText, Zap, Rocket, BarChart3, Globe, Linkedin, ShieldCheck, Upload, UserCog, Mail } from "lucide-react";
+import { Bot, Search, FileText, Zap, Rocket, BarChart3, Globe, Linkedin, ShieldCheck, Upload, UserCog, Mail, Timer } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import StatsBar from "@/components/StatsBar";
 import JobSearch from "@/components/JobSearch";
