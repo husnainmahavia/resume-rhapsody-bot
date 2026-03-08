@@ -26,3 +26,9 @@ verify_jwt = false
 
 [functions.job-scraper]
 verify_jwt = false
+
+[functions.find-email]
+verify_jwt = false
+
+[functions.scrape-careers]
+verify_jwt = false
