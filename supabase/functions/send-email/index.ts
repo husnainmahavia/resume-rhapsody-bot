@@ -18,6 +18,19 @@ serve(async (req) => {
       });
     }
 
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(to)) {
+      console.log(`Invalid email address skipped: ${to}`);
+      return new Response(JSON.stringify({ 
+        success: false,
+        error: `Invalid email address: ${to}`,
+        sent: false,
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const GMAIL_APP_PASSWORD = Deno.env.get("GMAIL_APP_PASSWORD");
     if (!GMAIL_APP_PASSWORD) {
       return new Response(JSON.stringify({ error: "GMAIL_APP_PASSWORD not configured" }), {
@@ -40,7 +53,7 @@ serve(async (req) => {
 
     const htmlBody = body.replace(/\n/g, "<br>");
 
-    await transporter.sendMail({
+    const info = await transporter.sendMail({
       from: `${senderName} <${senderEmail}>`,
       to: to,
       subject: subject,
@@ -48,21 +61,31 @@ serve(async (req) => {
       html: htmlBody,
     });
 
-    console.log(`Email SENT to ${to} - Subject: ${subject}`);
+    console.log(`Email SENT to ${to} - Subject: ${subject} - MessageId: ${info.messageId}`);
 
     return new Response(JSON.stringify({ 
       success: true,
       message: `Email sent to ${hiringManagerName || to}`,
       sent: true,
+      messageId: info.messageId,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
-    console.error("Email send error:", e);
+    const errorMsg = e instanceof Error ? e.message : "Failed to send email";
+    console.error("Email send error:", errorMsg);
+    
+    // Check if it's a bounce/recipient error vs auth error
+    const isBounce = errorMsg.includes("550") || errorMsg.includes("553") || 
+                     errorMsg.includes("mailbox not found") || errorMsg.includes("User unknown");
+    
     return new Response(JSON.stringify({ 
-      error: e instanceof Error ? e.message : "Failed to send email" 
+      error: errorMsg,
+      sent: false,
+      bounce: isBounce,
     }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: isBounce ? 200 : 500, 
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

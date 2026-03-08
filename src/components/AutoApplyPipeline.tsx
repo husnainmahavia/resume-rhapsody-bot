@@ -11,7 +11,7 @@ import { Progress } from "@/components/ui/progress";
 import { USER_PROFILE } from "@/lib/user-profile";
 import {
   searchJobs, createApplication, tailorCV, generateEmail,
-  sendEmail, updateApplication
+  sendEmail, updateApplication, checkDuplicateApplication
 } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
@@ -117,7 +117,18 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
         const jobProgress = 10 + ((i + 1) / jobs.length) * 85;
 
         try {
-          // 2a: Save to database
+          // 2a: Check for duplicates first
+          setCurrentAction(`🔍 Checking duplicates: ${job.title} at ${job.company}`);
+          const isDuplicate = await checkDuplicateApplication(job.title, job.company);
+          if (isDuplicate) {
+            updateLogStep(i, "saved", "error");
+            updateLog(i, { error: "Already applied — skipped" });
+            setProcessedJobs(i + 1);
+            setProgress(jobProgress);
+            continue;
+          }
+
+          // 2b: Save to database
           setCurrentAction(`💾 Saving: ${job.title} at ${job.company}`);
           updateLogStep(i, "saved", "processing");
 
@@ -180,7 +191,7 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
 
           // 2d: Send email (opens mailto or tracks)
           if (job.hiring_email) {
-            setCurrentAction(`🚀 Preparing email to: ${job.hiring_email}`);
+            setCurrentAction(`🚀 Sending email to: ${job.hiring_email}`);
             updateLogStep(i, "sent", "processing");
 
             try {
@@ -191,23 +202,23 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
                 job.hiring_manager
               );
 
-              if (sendResult.mailto_url) {
-                // Auto-open mailto link
-                window.open(sendResult.mailto_url, "_blank");
+              if (sendResult.sent) {
+                updateLogStep(i, "sent", "done");
+                await updateApplication(saved.id, {
+                  status: "applied",
+                  applied_at: new Date().toISOString(),
+                });
+              } else {
+                updateLogStep(i, "sent", "error");
+                updateLog(i, { error: sendResult.error || "Email delivery failed" });
+                await updateApplication(saved.id, { status: "email_failed" });
               }
-
-              updateLogStep(i, "sent", "done");
-              await updateApplication(saved.id, {
-                status: "applied",
-                applied_at: new Date().toISOString(),
-              });
             } catch {
               updateLogStep(i, "sent", "error");
               updateLog(i, { error: "Email send failed" });
-              await updateApplication(saved.id, { status: "email_sent" });
+              await updateApplication(saved.id, { status: "email_failed" });
             }
           } else {
-            // No email available, skip sending
             updateLogStep(i, "sent", "error");
             updateLog(i, { error: "No hiring email found" });
             await updateApplication(saved.id, { status: "email_sent" });
