@@ -14,6 +14,7 @@ import ReviewQueue from "@/components/ReviewQueue";
 import CSVUpload from "@/components/CSVUpload";
 import ApplicantProfileForm from "@/components/ApplicantProfileForm";
 import EmailEngineDashboard from "@/components/EmailEngineDashboard";
+import CronMonitorPanel from "@/components/CronMonitorPanel";
 import { fetchApplications, type JobApplication } from "@/lib/api";
 
 const Index = () => {
