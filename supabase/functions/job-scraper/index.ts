@@ -15,9 +15,11 @@ const CATEGORIES = [
   { name: "software_development", queries: ["software development company hiring email UK", "SaaS startup careers contact email", "tech company recruitment email Manchester", "software agency contact email"] },
 ];
 
+const AI_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
+
 async function aiSearchEmails(query: string, apiKey: string): Promise<Array<{ company: string; email: string; website: string; description: string; location: string }>> {
   try {
-    const response = await fetch("https://api.lovable.dev/v1/chat/completions", {
+    const response = await fetch(AI_URL, {
       method: "POST",
       headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -36,19 +38,33 @@ Return ONLY a JSON array of objects. Each object must have:
 Find 5-8 REAL companies with REAL email addresses. Focus on UK companies but include international ones too.
 Use common email patterns like info@, hello@, careers@, hr@, jobs@, recruitment@ with the company's actual domain.
 
-CRITICAL: Only return companies you are confident are real. Return valid JSON array only, no markdown.`
+CRITICAL: Only return companies you are confident are real. Return valid JSON array only, no markdown, no code fences.`
         }],
         temperature: 0.3,
         max_tokens: 2000,
       }),
     });
 
-    const data = await response.json();
+    const rawText = await response.text();
+    console.log("AI response status:", response.status, "length:", rawText.length);
+    
+    let data;
+    try {
+      data = JSON.parse(rawText);
+    } catch {
+      console.error("Failed to parse AI gateway response:", rawText.substring(0, 200));
+      return [];
+    }
+    
     const content = data.choices?.[0]?.message?.content || "[]";
     
-    // Extract JSON from response
-    const jsonMatch = content.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) return [];
+    // Extract JSON array from response (handles markdown code fences too)
+    const cleaned = content.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+    const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) {
+      console.error("No JSON array found in content:", content.substring(0, 200));
+      return [];
+    }
     
     const parsed = JSON.parse(jsonMatch[0]);
     return Array.isArray(parsed) ? parsed.filter((r: any) => r.email && r.company) : [];
@@ -75,7 +91,6 @@ serve(async (req) => {
       const { count: openedCount } = await supabase.from("scraped_companies").select("*", { count: "exact", head: true }).eq("email_opened", true);
       const { count: repliedCount } = await supabase.from("scraped_companies").select("*", { count: "exact", head: true }).eq("email_replied", true);
       
-      // Get counts per category
       const { data: catData } = await supabase.from("scraped_companies").select("category");
       const categoryCounts: Record<string, number> = {};
       (catData || []).forEach((r: any) => {
@@ -125,12 +140,13 @@ serve(async (req) => {
               }, { onConflict: "email,category" });
 
               if (!error) catNew++;
+              else console.error("Upsert error:", error.message);
             } catch (e) {
               console.error(`Insert error for ${company.email}:`, e);
             }
           }
 
-          // Human-like delay between searches
+          // Delay between searches
           await new Promise(r => setTimeout(r, 2000 + Math.random() * 3000));
         }
 
@@ -150,7 +166,6 @@ serve(async (req) => {
     if (action === "send_emails") {
       const targetCategories = categories || CATEGORIES.map(c => c.name);
       
-      // Get unsent scraped companies
       let query = supabase
         .from("scraped_companies")
         .select("*")
@@ -164,7 +179,7 @@ serve(async (req) => {
 
       const { data: companies } = await query;
       if (!companies || companies.length === 0) {
-        return new Response(JSON.stringify({ success: true, sent: 0, message: "No unsent companies found" }), {
+        return new Response(JSON.stringify({ success: true, sent: 0, total: 0, message: "No unsent companies found" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -174,9 +189,8 @@ serve(async (req) => {
 
       for (const company of companies) {
         try {
-          // Generate personalized email using AI
           const categoryLabel = company.category.replace(/_/g, " ");
-          const emailResponse = await fetch("https://api.lovable.dev/v1/chat/completions", {
+          const emailResponse = await fetch(AI_URL, {
             method: "POST",
             headers: { "Authorization": `Bearer ${lovableKey}`, "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -194,16 +208,23 @@ The email should:
 - Include a clear CTA for a call/meeting
 - Sound natural and human, NOT like AI
 
-Return ONLY a JSON object with "subject" and "body" fields. No markdown.`
+Return ONLY a JSON object with "subject" and "body" fields. No markdown, no code fences.`
               }],
               temperature: 0.7,
               max_tokens: 800,
             }),
           });
 
-          const emailData = await emailResponse.json();
+          const emailRaw = await emailResponse.text();
+          let emailData;
+          try { emailData = JSON.parse(emailRaw); } catch { 
+            sendResults.push({ company: company.company_name, email: company.email, status: "email_gen_parse_failed" });
+            continue;
+          }
+          
           const emailContent = emailData.choices?.[0]?.message?.content || "";
-          const jsonMatch = emailContent.match(/\{[\s\S]*\}/);
+          const cleaned = emailContent.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+          const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
           
           if (!jsonMatch) {
             sendResults.push({ company: company.company_name, email: company.email, status: "email_gen_failed" });
@@ -212,7 +233,6 @@ Return ONLY a JSON object with "subject" and "body" fields. No markdown.`
 
           const { subject, body } = JSON.parse(jsonMatch[0]);
 
-          // Send via existing send-email function
           const sendResponse = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
             method: "POST",
             headers: {
@@ -257,7 +277,6 @@ Return ONLY a JSON object with "subject" and "body" fields. No markdown.`
       });
     }
 
-    // Get scraped data
     if (action === "list") {
       const { data } = await supabase
         .from("scraped_companies")
