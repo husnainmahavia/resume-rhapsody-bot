@@ -10,6 +10,7 @@ import AutoApplyPipeline from "@/components/AutoApplyPipeline";
 import Dashboard from "@/components/Dashboard";
 import ScraperTool from "@/components/ScraperTool";
 import LinkedInTool from "@/components/LinkedInTool";
+import ReviewQueue from "@/components/ReviewQueue";
 import { fetchApplications, type JobApplication } from "@/lib/api";
 
 const Index = () => {
