@@ -87,6 +87,9 @@ const Index = () => {
                 <TabsTrigger value="search" className="gap-1.5 data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
                   <Search className="h-3.5 w-3.5" /> Manual Search
                 </TabsTrigger>
+                <TabsTrigger value="linkedin" className="gap-1.5 data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
+                  <Linkedin className="h-3.5 w-3.5" /> LinkedIn
+                </TabsTrigger>
                 <TabsTrigger value="scraper" className="gap-1.5 data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
                   <Globe className="h-3.5 w-3.5" /> Scraper
                 </TabsTrigger>
