@@ -143,6 +143,32 @@ serve(async (req) => {
       .gte("replied_at", yesterdayISO)
       .limit(10);
 
+    // Best-performing subject lines (opened emails)
+    const { data: openedApps } = await supabase
+      .from("email_tracking")
+      .select("application_id, open_count, opened_at")
+      .not("opened_at", "is", null)
+      .order("open_count", { ascending: false })
+      .limit(20);
+
+    // Fetch subject lines for opened apps
+    let subjectPerformance: { subject: string; opens: number; company: string }[] = [];
+    if (openedApps && openedApps.length > 0) {
+      const openedIds = openedApps.map((o: any) => o.application_id);
+      const openMap = new Map(openedApps.map((o: any) => [o.application_id, o.open_count]));
+      const { data: apps } = await supabase
+        .from("job_applications")
+        .select("id, email_subject, company")
+        .in("id", openedIds);
+      if (apps) {
+        subjectPerformance = apps
+          .filter((a: any) => a.email_subject)
+          .map((a: any) => ({ subject: a.email_subject, opens: openMap.get(a.id) || 0, company: a.company }))
+          .sort((a: any, b: any) => b.opens - a.opens)
+          .slice(0, 5);
+      }
+    }
+
     const dateStr = now.toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
     const errorRows = (recentErrors || []).map(e =>
@@ -207,6 +233,13 @@ serve(async (req) => {
         <table style="width:100%;border-collapse:collapse;margin:10px 0">
           <tr style="background:#1a1a2e;color:white"><th style="padding:8px;text-align:left">Company</th><th style="padding:8px;text-align:left">Email</th><th style="padding:8px;text-align:left">Error</th></tr>
           ${errorRows}
+        </table>` : ""}
+
+        ${subjectPerformance.length > 0 ? `
+        <h2 style="color:#f39c12;border-bottom:2px solid #f39c12;padding-bottom:8px;margin-top:25px">🏆 Best-Performing Subject Lines</h2>
+        <table style="width:100%;border-collapse:collapse;margin:10px 0">
+          <tr style="background:#1a1a2e;color:white"><th style="padding:8px;text-align:left">#</th><th style="padding:8px;text-align:left">Subject Line</th><th style="padding:8px;text-align:left">Company</th><th style="padding:8px;text-align:center">Opens</th></tr>
+          ${subjectPerformance.map((s, i) => `<tr${i % 2 ? ' style="background:#f8f9fa"' : ''}><td style="padding:6px;border:1px solid #ddd;font-weight:bold">${i + 1}</td><td style="padding:6px;border:1px solid #ddd">${s.subject}</td><td style="padding:6px;border:1px solid #ddd">${s.company}</td><td style="padding:6px;border:1px solid #ddd;text-align:center;font-weight:bold;color:#f39c12">${s.opens}x</td></tr>`).join("")}
         </table>` : ""}
 
         <div style="margin-top:25px;padding:15px;background:#f0f0f0;border-radius:8px;text-align:center;font-size:12px;color:#888">

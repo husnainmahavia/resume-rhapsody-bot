@@ -64,6 +64,30 @@ serve(async (req) => {
     // Review queue
     const { count: reviewPending } = await supabase.from("email_review_queue").select("*", { count: "exact", head: true }).is("approved", null);
 
+    // Best-performing subject lines
+    const { data: openedApps } = await supabase
+      .from("email_tracking")
+      .select("application_id, open_count")
+      .not("opened_at", "is", null)
+      .order("open_count", { ascending: false })
+      .limit(20);
+
+    let topSubjects: { subject: string; opens: number; company: string; replied: boolean }[] = [];
+    if (openedApps && openedApps.length > 0) {
+      const ids = openedApps.map((o: any) => o.application_id);
+      const openMap = new Map(openedApps.map((o: any) => [o.application_id, o.open_count]));
+      const { data: apps } = await supabase.from("job_applications").select("id, email_subject, company").in("id", ids);
+      const { data: replies } = await supabase.from("email_tracking").select("application_id").not("replied_at", "is", null).in("application_id", ids);
+      const repliedSet = new Set((replies || []).map((r: any) => r.application_id));
+      if (apps) {
+        topSubjects = apps
+          .filter((a: any) => a.email_subject)
+          .map((a: any) => ({ subject: a.email_subject, opens: openMap.get(a.id) || 0, company: a.company, replied: repliedSet.has(a.id) }))
+          .sort((a, b) => b.opens - a.opens)
+          .slice(0, 10);
+      }
+    }
+
     // Compute rates
     const t = (v: number | null) => v || 0;
     const jobOpenRate = pct(t(trackOpened), t(trackTotal));
@@ -136,6 +160,14 @@ serve(async (req) => {
           <tr><td style="padding:8px">Blacklisted Domains</td><td style="padding:8px;text-align:right;color:#e74c3c">${t(blacklisted)}</td></tr>
           <tr style="background:#f8f9fa"><td style="padding:8px">Email Coverage</td><td style="padding:8px;text-align:right">${pct(t(scrapedEmailed), t(scrapedTotal))}</td></tr>
         </table>
+
+        ${topSubjects.length > 0 ? `
+        <!-- BEST SUBJECT LINES -->
+        <h2 style="color:#f39c12;border-bottom:2px solid #f39c12;padding-bottom:8px;margin-top:25px">🏆 Best-Performing Subject Lines</h2>
+        <table style="width:100%;border-collapse:collapse;margin:10px 0 20px">
+          <tr style="background:#1a1a2e;color:white"><th style="padding:8px;text-align:left">#</th><th style="padding:8px;text-align:left">Subject</th><th style="padding:8px;text-align:left">Company</th><th style="padding:8px;text-align:center">Opens</th><th style="padding:8px;text-align:center">Reply</th></tr>
+          ${topSubjects.map((s, i) => `<tr${i % 2 ? ' style="background:#f8f9fa"' : ''}><td style="padding:6px;border:1px solid #ddd;font-weight:bold">${i + 1}</td><td style="padding:6px;border:1px solid #ddd;max-width:250px">${s.subject}</td><td style="padding:6px;border:1px solid #ddd">${s.company}</td><td style="padding:6px;border:1px solid #ddd;text-align:center;font-weight:bold;color:#f39c12">${s.opens}x</td><td style="padding:6px;border:1px solid #ddd;text-align:center">${s.replied ? '✅' : '—'}</td></tr>`).join("")}
+        </table>` : ""}
 
         <!-- HEALTH SCORE -->
         <div style="margin-top:20px;padding:20px;background:linear-gradient(135deg,#e8f8e8,#f0e6ff);border-radius:10px;text-align:center">
