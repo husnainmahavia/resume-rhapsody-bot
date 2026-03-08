@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Bot, Search, FileText, Zap, Rocket, BarChart3, Globe, Linkedin,
-  ShieldCheck, Upload, UserCog, Mail, Timer, ChevronRight
+  ShieldCheck, Upload, UserCog, Mail, Timer, ChevronRight, Eye
 } from "lucide-react";
 import StatsBar from "@/components/StatsBar";
 import JobSearch from "@/components/JobSearch";
