@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.check-inbox-replies]
 verify_jwt = false
+
+[functions.job-scraper]
+verify_jwt = false

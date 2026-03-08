@@ -117,3 +117,36 @@ export async function checkInboxReplies() {
   if (error) throw error;
   return data;
 }
+
+// Scraper Tool APIs
+export async function runScraper(categories: string[], location?: string) {
+  const { data, error } = await supabase.functions.invoke("job-scraper", {
+    body: { action: "scrape", categories, location },
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function getScraperStatus() {
+  const { data, error } = await supabase.functions.invoke("job-scraper", {
+    body: { action: "status" },
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function sendScraperEmails(categories?: string[]) {
+  const { data, error } = await supabase.functions.invoke("job-scraper", {
+    body: { action: "send_emails", categories },
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function listScrapedCompanies() {
+  const { data, error } = await supabase.functions.invoke("job-scraper", {
+    body: { action: "list" },
+  });
+  if (error) throw error;
+  return data;
+}

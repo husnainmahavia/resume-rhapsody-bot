@@ -148,6 +148,63 @@ export type Database = {
         }
         Relationships: []
       }
+      scraped_companies: {
+        Row: {
+          category: string
+          company_name: string
+          created_at: string
+          description: string | null
+          email: string
+          email_opened: boolean | null
+          email_replied: boolean | null
+          email_sent: boolean | null
+          email_sent_at: string | null
+          id: string
+          location: string | null
+          reply_snippet: string | null
+          source: string | null
+          status: string | null
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          category?: string
+          company_name: string
+          created_at?: string
+          description?: string | null
+          email: string
+          email_opened?: boolean | null
+          email_replied?: boolean | null
+          email_sent?: boolean | null
+          email_sent_at?: string | null
+          id?: string
+          location?: string | null
+          reply_snippet?: string | null
+          source?: string | null
+          status?: string | null
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          category?: string
+          company_name?: string
+          created_at?: string
+          description?: string | null
+          email?: string
+          email_opened?: boolean | null
+          email_replied?: boolean | null
+          email_sent?: boolean | null
+          email_sent_at?: string | null
+          id?: string
+          location?: string | null
+          reply_snippet?: string | null
+          source?: string | null
+          status?: string | null
+          updated_at?: string
+          website?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
