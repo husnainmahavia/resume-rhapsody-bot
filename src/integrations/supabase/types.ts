@@ -148,6 +148,75 @@ export type Database = {
         }
         Relationships: []
       }
+      linkedin_outreach: {
+        Row: {
+          company: string
+          connection_message: string | null
+          created_at: string
+          hiring_manager_linkedin: string | null
+          hiring_manager_name: string | null
+          id: string
+          inmail_message: string | null
+          job_description: string | null
+          job_title: string
+          job_url: string | null
+          location: string | null
+          message_sent: boolean | null
+          message_sent_at: string | null
+          post_comment: string | null
+          response_received: boolean | null
+          response_snippet: string | null
+          salary_range: string | null
+          source: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          company: string
+          connection_message?: string | null
+          created_at?: string
+          hiring_manager_linkedin?: string | null
+          hiring_manager_name?: string | null
+          id?: string
+          inmail_message?: string | null
+          job_description?: string | null
+          job_title: string
+          job_url?: string | null
+          location?: string | null
+          message_sent?: boolean | null
+          message_sent_at?: string | null
+          post_comment?: string | null
+          response_received?: boolean | null
+          response_snippet?: string | null
+          salary_range?: string | null
+          source?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          company?: string
+          connection_message?: string | null
+          created_at?: string
+          hiring_manager_linkedin?: string | null
+          hiring_manager_name?: string | null
+          id?: string
+          inmail_message?: string | null
+          job_description?: string | null
+          job_title?: string
+          job_url?: string | null
+          location?: string | null
+          message_sent?: boolean | null
+          message_sent_at?: string | null
+          post_comment?: string | null
+          response_received?: boolean | null
+          response_snippet?: string | null
+          salary_range?: string | null
+          source?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       scraped_companies: {
         Row: {
           category: string

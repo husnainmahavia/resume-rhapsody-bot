@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Bot, Search, FileText, Zap, Rocket, BarChart3, Globe } from "lucide-react";
+import { Bot, Search, FileText, Zap, Rocket, BarChart3, Globe, Linkedin } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import StatsBar from "@/components/StatsBar";
 import JobSearch from "@/components/JobSearch";
@@ -9,6 +9,7 @@ import ProfileCard from "@/components/ProfileCard";
 import AutoApplyPipeline from "@/components/AutoApplyPipeline";
 import Dashboard from "@/components/Dashboard";
 import ScraperTool from "@/components/ScraperTool";
+import LinkedInTool from "@/components/LinkedInTool";
 import { fetchApplications, type JobApplication } from "@/lib/api";
 
 const Index = () => {
@@ -86,6 +87,9 @@ const Index = () => {
                 <TabsTrigger value="search" className="gap-1.5 data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
                   <Search className="h-3.5 w-3.5" /> Manual Search
                 </TabsTrigger>
+                <TabsTrigger value="linkedin" className="gap-1.5 data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
+                  <Linkedin className="h-3.5 w-3.5" /> LinkedIn
+                </TabsTrigger>
                 <TabsTrigger value="scraper" className="gap-1.5 data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
                   <Globe className="h-3.5 w-3.5" /> Scraper
                 </TabsTrigger>
@@ -121,6 +125,20 @@ const Index = () => {
                     <span className="text-xs text-muted-foreground ml-auto font-mono">real-time</span>
                   </div>
                   <Dashboard applications={applications} />
+                </motion.div>
+              </TabsContent>
+
+              <TabsContent value="linkedin">
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass rounded-lg p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Linkedin className="h-4 w-4 text-primary" />
+                    <h2 className="font-semibold">LinkedIn Outreach</h2>
+                    <span className="text-xs text-muted-foreground ml-auto font-mono">AI-powered</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    AI finds LinkedIn jobs → generates personalized connection requests, InMails & post comments → copy-paste to LinkedIn.
+                  </p>
+                  <LinkedInTool />
                 </motion.div>
               </TabsContent>
 

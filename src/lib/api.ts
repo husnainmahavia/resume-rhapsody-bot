@@ -150,3 +150,44 @@ export async function listScrapedCompanies() {
   if (error) throw error;
   return data;
 }
+
+// LinkedIn Outreach APIs
+export async function searchLinkedInJobs(location?: string, jobType?: string) {
+  const { data, error } = await supabase.functions.invoke("linkedin-outreach", {
+    body: { action: "search", location, jobType },
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function generateLinkedInMessages(jobTitle: string, company: string, jobDescription: string, hiringManagerName: string) {
+  const { data, error } = await supabase.functions.invoke("linkedin-outreach", {
+    body: { action: "generate_messages", jobTitle, company, jobDescription, hiringManagerName },
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function getLinkedInStatus() {
+  const { data, error } = await supabase.functions.invoke("linkedin-outreach", {
+    body: { action: "status" },
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function listLinkedInOutreach() {
+  const { data, error } = await supabase.functions.invoke("linkedin-outreach", {
+    body: { action: "list" },
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function updateLinkedInOutreach(id: string, updates: Record<string, any>) {
+  const { data, error } = await supabase.functions.invoke("linkedin-outreach", {
+    body: { action: "update", id, updates },
+  });
+  if (error) throw error;
+  return data;
+}
