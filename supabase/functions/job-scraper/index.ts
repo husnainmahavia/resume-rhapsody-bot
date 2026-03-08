@@ -407,7 +407,7 @@ Return ONLY a JSON object with "subject" and "body" fields. No markdown, no code
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              to: company.email,
+              to: recipientEmail,
               subject,
               body: emailBody,
               attachments,
