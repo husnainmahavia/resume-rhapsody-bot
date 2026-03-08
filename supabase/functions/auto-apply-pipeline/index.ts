@@ -640,7 +640,7 @@ Keep it under 150 words. Professional but warm. NOT generic — reference someth
             application_id: saved.id,
             domain_match: finalEmailValidation.valid,
             validation_status: "pending",
-            validation_reason: finalEmailValidation.reason || "domain_verified",
+            validation_reason: `${finalEmailValidation.reason || "domain_verified"} | deliverability: ${deliverabilityScore}/100`,
           });
 
           await supabase.from("job_applications").update({
