@@ -158,13 +158,13 @@ async function aiSearchEmails(query: string, apiKey: string): Promise<Array<{ co
 
 Return ONLY a JSON array of objects. Each object must have:
 - "company": company name (real companies only)
-- "email": real contact/hiring/info email (must be a real domain, NOT gmail/yahoo/hotmail)
+- "email": VERIFIED business contact email tied to the same company domain (never guess)
 - "website": company website URL
 - "description": what the company does (1 sentence)
 - "location": company location
 
-Find 5-8 REAL companies with REAL email addresses. Focus on UK companies but include international ones too.
-Use common email patterns like info@, hello@, careers@, hr@, jobs@, recruitment@ with the company's actual domain.
+Find 5-8 REAL companies with VERIFIED business email addresses.
+If verified email is not publicly available, skip that company (do not fabricate).
 
 CRITICAL: Only return companies you are confident are real. Return valid JSON array only, no markdown, no code fences.`
         }],
