@@ -64,6 +64,30 @@ serve(async (req) => {
     // Review queue
     const { count: reviewPending } = await supabase.from("email_review_queue").select("*", { count: "exact", head: true }).is("approved", null);
 
+    // Best-performing subject lines
+    const { data: openedApps } = await supabase
+      .from("email_tracking")
+      .select("application_id, open_count")
+      .not("opened_at", "is", null)
+      .order("open_count", { ascending: false })
+      .limit(20);
+
+    let topSubjects: { subject: string; opens: number; company: string; replied: boolean }[] = [];
+    if (openedApps && openedApps.length > 0) {
+      const ids = openedApps.map((o: any) => o.application_id);
+      const openMap = new Map(openedApps.map((o: any) => [o.application_id, o.open_count]));
+      const { data: apps } = await supabase.from("job_applications").select("id, email_subject, company").in("id", ids);
+      const { data: replies } = await supabase.from("email_tracking").select("application_id").not("replied_at", "is", null).in("application_id", ids);
+      const repliedSet = new Set((replies || []).map((r: any) => r.application_id));
+      if (apps) {
+        topSubjects = apps
+          .filter((a: any) => a.email_subject)
+          .map((a: any) => ({ subject: a.email_subject, opens: openMap.get(a.id) || 0, company: a.company, replied: repliedSet.has(a.id) }))
+          .sort((a, b) => b.opens - a.opens)
+          .slice(0, 10);
+      }
+    }
+
     // Compute rates
     const t = (v: number | null) => v || 0;
     const jobOpenRate = pct(t(trackOpened), t(trackTotal));
