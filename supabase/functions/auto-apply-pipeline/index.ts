@@ -149,7 +149,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { location, skills, action, cvVersion, jobType } = await req.json();
+    const { location, skills, action, cvVersion, jobType, searchMode } = await req.json();
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -193,12 +193,30 @@ serve(async (req) => {
     console.log("🔍 Searching for jobs...");
     const targetSkills = (skills || ["JavaScript", "React", "Python", "WordPress", "AI"]).join(", ");
     const targetJobType = jobType || "Full-time";
+    const mode = searchMode || "standard";
+
+    // Build search prompt based on mode
+    let modeInstructions = "";
+    if (mode === "recent_24h") {
+      modeInstructions = `CRITICAL: Only return jobs that have been POSTED WITHIN THE LAST 24 HOURS. These must be fresh listings from job boards, company career pages, or LinkedIn. Prioritize jobs with recent posting dates.`;
+    } else if (mode === "sponsorship") {
+      modeInstructions = `CRITICAL: Only return companies that are KNOWN TO PROVIDE VISA SPONSORSHIP in the UK. These must be companies on the UK Home Office sponsor register or companies known to sponsor Skilled Worker visas. Include companies like: Accenture, Amazon, Google, Microsoft, Deloitte, PwC, KPMG, EY, TCS, Infosys, Wipro, CGI, Capgemini, and other UK-licensed sponsors.`;
+    } else if (mode === "careers_page") {
+      modeInstructions = `CRITICAL: Focus on companies that have ACTIVE CAREERS PAGES with current job listings. For each company:
+1. Find their actual careers page URL (e.g., careers.company.com or company.com/careers)
+2. Look for ANY open position that matches the candidate's skills (${targetSkills})
+3. Include the careers page URL in your response
+4. Target companies in AR, AI, tech, and digital sectors that are actively hiring
+5. The candidate can apply for ANY role that matches their skills, not just exact title matches`;
+    }
 
     const searchPrompt = `You are a UK job market expert. Find 5-8 REAL job openings at REAL companies in ${location || "Manchester, UK"} for: ${targetSkills}.
 Job type: ${targetJobType}
 
+${modeInstructions}
+
 ABSOLUTE REQUIREMENTS - FOLLOW STRICTLY:
-1. ONLY use companies that ACTUALLY EXIST and are KNOWN UK employers (e.g., BBC, NHS Digital, Booking.com, AO.com, THG/The Hut Group, Autotrader, Boohoo, On The Beach, Peak AI, Manchester Airport Group, Kellogg's, Brother International, Missguided, N Brown Group, Co-op, JD Sports, Bet365, etc.)
+1. ONLY use companies that ACTUALLY EXIST and are KNOWN UK employers (e.g., BBC, NHS Digital, Booking.com, AO.com, THG/The Hut Group, Autotrader, Boohoo, On The Beach, Peak AI, Manchester Airport Group, Kellogg's, Brother International, Missguided, N Brown Group, Co-op, JD Sports, Bet365, Apadmi, MediaCityUK companies, etc.)
 2. The hiring_email MUST be a REAL, VERIFIED email format that the company actually uses. Research the company's actual careers/recruitment email. Common REAL patterns:
    - careers@companyname.com (most common)
    - recruitment@companyname.co.uk
@@ -209,13 +227,15 @@ ABSOLUTE REQUIREMENTS - FOLLOW STRICTLY:
 3. DO NOT invent or guess email addresses. If you're not confident about the email, use the company's main website domain with careers@ prefix
 4. The job URL must point to a real careers page (careers.company.com or company.com/careers)
 5. DO NOT use fictional companies, startups you made up, or domains that don't exist
+6. Include whether the company offers visa sponsorship (sponsorship field: true/false)
+7. Include the company's careers page URL if known
 
 VERIFICATION: Before returning each job, mentally verify:
 - Is this company real? (Google it)
 - Does this domain actually exist? (company website)
 - Is this email format what they actually use?
 
-Return JSON with: title, company, location, salary_range, description, url, hiring_manager, hiring_email`;
+Return JSON with: title, company, location, salary_range, description, url, hiring_manager, hiring_email, sponsorship (boolean), careers_page_url`;
 
     const searchResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -243,6 +263,7 @@ Return JSON with: title, company, location, salary_range, description, url, hiri
                       location: { type: "string" }, salary_range: { type: "string" },
                       description: { type: "string" }, url: { type: "string" },
                       hiring_manager: { type: "string" }, hiring_email: { type: "string" },
+                      sponsorship: { type: "boolean" }, careers_page_url: { type: "string" },
                     },
                     required: ["title", "company", "location", "description", "hiring_email"],
                   },
