@@ -239,13 +239,15 @@ serve(async (req) => {
       const locationFilter = location || "UK";
       let totalScraped = 0;
       let totalNew = 0;
-      const results: Array<{ category: string; found: number; new: number }> = [];
+      let totalRejected = 0;
+      const results: Array<{ category: string; found: number; new: number; rejected: number }> = [];
 
       for (const cat of CATEGORIES) {
         if (!targetCategories.includes(cat.name)) continue;
 
         let catFound = 0;
         let catNew = 0;
+        let catRejected = 0;
 
         for (const query of cat.queries) {
           const fullQuery = `${query} ${locationFilter}`;
@@ -256,9 +258,15 @@ serve(async (req) => {
 
           for (const company of companies) {
             try {
+              const validation = validateBusinessEmail(company.email, company.website);
+              if (!validation.valid || !validation.normalized) {
+                catRejected++;
+                continue;
+              }
+
               const { error } = await supabase.from("scraped_companies").upsert({
                 company_name: company.company,
-                email: company.email.toLowerCase().trim(),
+                email: validation.normalized,
                 website: company.website,
                 category: cat.name,
                 source: "ai_search",
@@ -278,9 +286,10 @@ serve(async (req) => {
           await new Promise(r => setTimeout(r, 2000 + Math.random() * 3000));
         }
 
-        results.push({ category: cat.name, found: catFound, new: catNew });
+        results.push({ category: cat.name, found: catFound, new: catNew, rejected: catRejected });
         totalScraped += catFound;
         totalNew += catNew;
+        totalRejected += catRejected;
       }
 
       return new Response(JSON.stringify({
