@@ -238,57 +238,46 @@ serve(async (req) => {
       });
     }
 
-    // Step 2: If no high-confidence scraped emails, generate patterns + SMTP verify top 3
+    // Step 2: If no scraped emails, try patterns + quick single SMTP check
     const strongCount = [...foundEmails.values()].filter(e => e.confidence >= 70).length;
     if (strongCount < 1 && mxValid) {
       const patterns = generatePatterns(domain, hiringManagerName);
       const mxHost = await getMxHost(domain);
 
       if (mxHost) {
-        // SMTP verify only top 3 most likely (info, contact, enquiries)
-        const top3 = patterns.slice(0, 3);
-        console.log(`🔬 SMTP-verifying top 3: ${top3.map(e => e.split("@")[0]).join(", ")} via ${mxHost}`);
+        // Quick single SMTP check on info@domain (most universal)
+        console.log(`🔬 Quick SMTP: info@${domain} via ${mxHost}`);
+        const infoResult = await smtpVerify(`info@${domain}`, mxHost);
 
-        const smtpResults = await Promise.all(top3.map(async (candidate) => {
-          const result = await smtpVerify(candidate, mxHost);
-          return { candidate, result };
-        }));
-
-        for (const { candidate, result } of smtpResults) {
-          const local = candidate.split("@")[0];
-          let confidence: number, verifiedStatus: string;
-          if (result === "accepted") {
-            confidence = 92; verifiedStatus = "smtp_verified";
-            console.log(`  ✅ VERIFIED: ${candidate}`);
-          } else if (result === "catch_all") {
-            confidence = 70; verifiedStatus = "catch_all";
-            console.log(`  🔄 Catch-all: ${candidate}`);
-          } else if (result === "rejected") {
-            confidence = 0; verifiedStatus = "smtp_rejected";
-            console.log(`  ❌ REJECTED: ${candidate}`);
-            continue; // Don't add rejected emails
-          } else {
-            confidence = Math.min(LOCAL_PART_PRIORITY[local] || 10, 55);
-            verifiedStatus = "smtp_timeout";
-          }
-          foundEmails.set(candidate, {
-            email: candidate, name: "", title: "", confidence,
-            isHR: HR_KEYWORDS.some(k => candidate.includes(k)),
-            source: result === "accepted" ? "smtp_verified" : "common_pattern",
-            verifiedStatus,
+        if (infoResult === "accepted") {
+          console.log(`  ✅ VERIFIED: info@${domain}`);
+          foundEmails.set(`info@${domain}`, {
+            email: `info@${domain}`, name: "", title: "", confidence: 92,
+            isHR: false, source: "smtp_verified", verifiedStatus: "smtp_verified",
           });
+        } else if (infoResult === "catch_all") {
+          console.log(`  🔄 Catch-all domain`);
+          for (const local of ["info", "contact", "hello"]) {
+            foundEmails.set(`${local}@${domain}`, {
+              email: `${local}@${domain}`, name: "", title: "",
+              confidence: 75, isHR: false, source: "common_pattern", verifiedStatus: "catch_all",
+            });
+          }
+        } else {
+          console.log(`  ⏱ SMTP ${infoResult} — using pattern heuristics`);
         }
 
-        // Add remaining patterns (not SMTP tested) with lower confidence
-        for (const candidate of patterns.slice(3)) {
+        // Add remaining patterns with appropriate confidence
+        const smtpBonus = infoResult === "catch_all" ? 15 : 0;
+        for (const candidate of patterns) {
           if (foundEmails.has(candidate)) continue;
           const local = candidate.split("@")[0];
           foundEmails.set(candidate, {
             email: candidate, name: "", title: "",
-            confidence: Math.min(LOCAL_PART_PRIORITY[local] || 10, 50),
+            confidence: Math.min((LOCAL_PART_PRIORITY[local] || 10) + smtpBonus, 60),
             isHR: HR_KEYWORDS.some(k => candidate.includes(k)),
             source: "common_pattern",
-            verifiedStatus: "mx_valid_unverified",
+            verifiedStatus: infoResult === "catch_all" ? "catch_all" : "mx_valid_unverified",
           });
         }
       } else {
