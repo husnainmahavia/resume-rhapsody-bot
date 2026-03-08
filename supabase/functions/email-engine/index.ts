@@ -70,8 +70,9 @@ serve(async (req) => {
 
     // === ACTION: DISCOVER ===
     if (action === "discover") {
-      const targetIndustry = industry || "Retail & E-commerce";
-      const targetRegion = region || "United Kingdom";
+      const rotating = getRotatingTarget();
+      const targetIndustry = industry || rotating.industry;
+      const targetRegion = region || rotating.region;
       const campaignBatch = batchId || `${targetIndustry.slice(0, 10)}_${Date.now()}`;
 
       console.log(`🔍 Discovering companies: ${targetIndustry} in ${targetRegion}`);
