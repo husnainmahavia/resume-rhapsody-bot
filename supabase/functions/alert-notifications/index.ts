@@ -8,6 +8,57 @@ const corsHeaders = {
 };
 
 const ALERT_EMAIL = "h.mahavia@gmail.com";
+const GATEWAY_URL = "https://connector-gateway.lovable.dev/slack/api";
+
+async function sendSlackMessage(text: string, blocks?: any[]) {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  const SLACK_API_KEY = Deno.env.get("SLACK_API_KEY");
+  if (!LOVABLE_API_KEY || !SLACK_API_KEY) {
+    console.log("⚠️ Slack not configured, skipping");
+    return;
+  }
+
+  try {
+    // Find a channel to post to - try #general
+    const channelRes = await fetch(`${GATEWAY_URL}/conversations.list?types=public_channel&limit=100`, {
+      headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "X-Connection-Api-Key": SLACK_API_KEY,
+      },
+    });
+    const channelData = await channelRes.json();
+    const channel = channelData.channels?.find((c: any) => c.name === "general") || channelData.channels?.[0];
+    
+    if (!channel) {
+      console.log("⚠️ No Slack channel found");
+      return;
+    }
+
+    const body: any = {
+      channel: channel.id,
+      text,
+      username: "Resume Rhapsody Bot",
+      icon_emoji: ":robot_face:",
+    };
+    if (blocks) body.blocks = blocks;
+
+    const res = await fetch(`${GATEWAY_URL}/chat.postMessage`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "X-Connection-Api-Key": SLACK_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    const data = await res.json();
+    if (!data.ok) console.error("Slack error:", data.error);
+    else console.log("✅ Slack message sent");
+  } catch (e) {
+    console.error("Slack send error:", e);
+  }
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -20,6 +71,7 @@ serve(async (req) => {
     );
 
     const alerts: string[] = [];
+    const slackAlerts: string[] = [];
     const now = new Date();
     const thirtyMinAgo = new Date(now.getTime() - 30 * 60 * 1000).toISOString();
 
@@ -32,7 +84,6 @@ serve(async (req) => {
 
     if (newReplies && newReplies.length > 0) {
       for (const reply of newReplies) {
-        // Get application details
         const { data: app } = await supabase
           .from("job_applications")
           .select("company, job_title, hiring_manager_name")
@@ -42,20 +93,10 @@ serve(async (req) => {
 
         alerts.push(`✅ <b>REPLY RECEIVED</b> from ${app?.company || "Unknown"} (${app?.job_title || ""})<br>
           ${app?.hiring_manager_name ? `Manager: ${app.hiring_manager_name}<br>` : ""}
-          Snippet: <i>"${reply.reply_snippet || "No preview"}"</i><br>
-          Time: ${new Date(reply.replied_at!).toLocaleString()}`);
+          Snippet: <i>"${reply.reply_snippet || "No preview"}"</i>`);
+
+        slackAlerts.push(`✅ *REPLY RECEIVED* from *${app?.company || "Unknown"}* (${app?.job_title || ""})\n> _"${reply.reply_snippet || "No preview"}"_`);
       }
-    }
-
-    // Check for recent send errors (last 30 min) - Job applications
-    const { data: recentAppErrors } = await supabase
-      .from("email_review_queue")
-      .select("company, recipient_email, rejected_reason")
-      .eq("approved", false)
-      .gte("updated_at", thirtyMinAgo);
-
-    if (recentAppErrors && recentAppErrors.length > 0) {
-      alerts.push(`⚠️ <b>${recentAppErrors.length} application(s) rejected</b> in review queue in last 30 min`);
     }
 
     // Check for email engine errors (last 30 min)
@@ -68,6 +109,7 @@ serve(async (req) => {
     if (engineErrors && engineErrors.length > 0) {
       for (const err of engineErrors) {
         alerts.push(`❌ <b>SEND ERROR</b> — ${err.company_name} (${err.contact_email})<br>Error: ${err.send_error}`);
+        slackAlerts.push(`❌ *SEND ERROR* — ${err.company_name} (${err.contact_email})\nError: ${err.send_error}`);
       }
     }
 
@@ -80,6 +122,7 @@ serve(async (req) => {
 
     if (newBounces && newBounces.length > 0) {
       alerts.push(`🔴 <b>${newBounces.length} email(s) bounced</b> in last 30 min`);
+      slackAlerts.push(`🔴 *${newBounces.length} email(s) bounced* in last 30 min`);
     }
 
     // Check for newly blacklisted domains
@@ -92,7 +135,20 @@ serve(async (req) => {
     if (newBlacklisted && newBlacklisted.length > 0) {
       for (const d of newBlacklisted) {
         alerts.push(`🚫 <b>DOMAIN BLACKLISTED</b>: ${d.domain} (${d.bounce_count} bounces)`);
+        slackAlerts.push(`🚫 *DOMAIN BLACKLISTED*: ${d.domain} (${d.bounce_count} bounces)`);
       }
+    }
+
+    // Check for rejected review queue items
+    const { data: recentRejected } = await supabase
+      .from("email_review_queue")
+      .select("company, recipient_email, rejected_reason")
+      .eq("approved", false)
+      .gte("updated_at", thirtyMinAgo);
+
+    if (recentRejected && recentRejected.length > 0) {
+      alerts.push(`⚠️ <b>${recentRejected.length} application(s) rejected</b> in review queue`);
+      slackAlerts.push(`⚠️ *${recentRejected.length} application(s) rejected* in review queue`);
     }
 
     if (alerts.length === 0) {
@@ -102,7 +158,11 @@ serve(async (req) => {
       });
     }
 
-    // Send alert email
+    // Send Slack notification
+    const slackText = `🔔 *${slackAlerts.length} Alert(s)* — ${now.toLocaleString()}\n\n${slackAlerts.join("\n\n")}`;
+    await sendSlackMessage(slackText);
+
+    // Send email notification
     const html = `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
       <div style="background:#e74c3c;color:white;padding:15px;border-radius:10px 10px 0 0">
@@ -128,9 +188,9 @@ serve(async (req) => {
       html,
     });
 
-    console.log(`🔔 Alert sent: ${alerts.length} alerts — MessageId: ${info.messageId}`);
+    console.log(`🔔 Alert sent: ${alerts.length} alerts — Email: ${info.messageId}`);
 
-    return new Response(JSON.stringify({ success: true, alerts: alerts.length, messageId: info.messageId }), {
+    return new Response(JSON.stringify({ success: true, alerts: alerts.length, messageId: info.messageId, slackSent: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
