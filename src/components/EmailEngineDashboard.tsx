@@ -306,7 +306,6 @@ export default function EmailEngineDashboard() {
                 Retry Errors ({filterCounts.error})
               </Button>
             )}
-            </Button>
             <Button variant="ghost" size="sm" onClick={() => { loadStats(); loadLeads(); }} className="gap-1.5">
               <RefreshCw className="h-3 w-3" /> Refresh
             </Button>
