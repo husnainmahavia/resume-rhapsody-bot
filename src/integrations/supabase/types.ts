@@ -92,6 +92,78 @@ export type Database = {
         }
         Relationships: []
       }
+      email_engine_leads: {
+        Row: {
+          bounced: boolean
+          campaign_batch: string | null
+          clicked: boolean
+          company_name: string
+          contact_email: string | null
+          created_at: string
+          description: string | null
+          email_body: string | null
+          email_generated: boolean
+          email_subject: string | null
+          id: string
+          industry: string
+          opened: boolean
+          opportunity: string | null
+          region: string
+          resend_message_id: string | null
+          send_error: string | null
+          sent: boolean
+          sent_at: string | null
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          bounced?: boolean
+          campaign_batch?: string | null
+          clicked?: boolean
+          company_name: string
+          contact_email?: string | null
+          created_at?: string
+          description?: string | null
+          email_body?: string | null
+          email_generated?: boolean
+          email_subject?: string | null
+          id?: string
+          industry?: string
+          opened?: boolean
+          opportunity?: string | null
+          region?: string
+          resend_message_id?: string | null
+          send_error?: string | null
+          sent?: boolean
+          sent_at?: string | null
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          bounced?: boolean
+          campaign_batch?: string | null
+          clicked?: boolean
+          company_name?: string
+          contact_email?: string | null
+          created_at?: string
+          description?: string | null
+          email_body?: string | null
+          email_generated?: boolean
+          email_subject?: string | null
+          id?: string
+          industry?: string
+          opened?: boolean
+          opportunity?: string | null
+          region?: string
+          resend_message_id?: string | null
+          send_error?: string | null
+          sent?: boolean
+          sent_at?: string | null
+          updated_at?: string
+          website?: string | null
+        }
+        Relationships: []
+      }
       email_review_queue: {
         Row: {
           application_id: string | null
