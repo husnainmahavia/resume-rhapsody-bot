@@ -327,6 +327,8 @@ Return JSON with: title, company, location, salary_range, description, url, hiri
             salary_range: job.salary_range, job_description: job.description,
             job_url: job.url, hiring_manager_name: job.hiring_manager,
             hiring_manager_email: job.hiring_email, source: "auto_apply", status: "discovered",
+            sponsorship_available: job.sponsorship || false,
+            careers_page_url: job.careers_page_url || null,
           })
           .select().single();
 
