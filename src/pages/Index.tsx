@@ -211,7 +211,7 @@ const Index = () => {
                     <span className="text-xs text-muted-foreground ml-auto font-mono">bulk outreach</span>
                   </div>
                   <p className="text-sm text-muted-foreground mb-4">
-                    AI discovers companies by industry → generates personalized cold outreach emails → sends from info@visuosofts.com via Resend. Fully automated B2B lead generation.
+                    AI discovers companies by industry → generates personalized cold outreach emails → sends from info@visuosofts.com via SMTP. Fully automated B2B lead generation.
                   </p>
                   <EmailEngineDashboard />
                 </motion.div>
