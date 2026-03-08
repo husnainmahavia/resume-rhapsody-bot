@@ -45,6 +45,16 @@ const REGIONS = [
   "Germany & Europe",
 ];
 
+// Rotate through industry/region combos based on current hour
+function getRotatingTarget(): { industry: string; region: string } {
+  const now = new Date();
+  const hourOfYear = (now.getMonth() * 30 * 24) + (now.getDate() * 24) + now.getHours();
+  const combo = hourOfYear % (INDUSTRIES.length * REGIONS.length);
+  const industryIdx = Math.floor(combo / REGIONS.length) % INDUSTRIES.length;
+  const regionIdx = combo % REGIONS.length;
+  return { industry: INDUSTRIES[industryIdx], region: REGIONS[regionIdx] };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -60,8 +70,9 @@ serve(async (req) => {
 
     // === ACTION: DISCOVER ===
     if (action === "discover") {
-      const targetIndustry = industry || "Retail & E-commerce";
-      const targetRegion = region || "United Kingdom";
+      const rotating = getRotatingTarget();
+      const targetIndustry = industry || rotating.industry;
+      const targetRegion = region || rotating.region;
       const campaignBatch = batchId || `${targetIndustry.slice(0, 10)}_${Date.now()}`;
 
       console.log(`🔍 Discovering companies: ${targetIndustry} in ${targetRegion}`);

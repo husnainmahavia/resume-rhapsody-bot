@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Bot, Search, FileText, Zap, Rocket, BarChart3, Globe, Linkedin, ShieldCheck, Upload, UserCog, Mail } from "lucide-react";
+import { Bot, Search, FileText, Zap, Rocket, BarChart3, Globe, Linkedin, ShieldCheck, Upload, UserCog, Mail, Timer } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import StatsBar from "@/components/StatsBar";
 import JobSearch from "@/components/JobSearch";
@@ -14,6 +14,7 @@ import ReviewQueue from "@/components/ReviewQueue";
 import CSVUpload from "@/components/CSVUpload";
 import ApplicantProfileForm from "@/components/ApplicantProfileForm";
 import EmailEngineDashboard from "@/components/EmailEngineDashboard";
+import CronMonitorPanel from "@/components/CronMonitorPanel";
 import { fetchApplications, type JobApplication } from "@/lib/api";
 
 const Index = () => {
@@ -108,6 +109,9 @@ const Index = () => {
                 </TabsTrigger>
                 <TabsTrigger value="profile" className="gap-1.5 data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
                   <UserCog className="h-3.5 w-3.5" /> Profile
+                </TabsTrigger>
+                <TabsTrigger value="cron" className="gap-1.5 data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
+                  <Timer className="h-3.5 w-3.5" /> Cron Monitor
                 </TabsTrigger>
                 <TabsTrigger value="applications" className="gap-1.5 data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
                   <FileText className="h-3.5 w-3.5" /> Pipeline
@@ -207,7 +211,7 @@ const Index = () => {
                     <span className="text-xs text-muted-foreground ml-auto font-mono">bulk outreach</span>
                   </div>
                   <p className="text-sm text-muted-foreground mb-4">
-                    AI discovers companies by industry → generates personalized cold outreach emails → sends from info@visuosofts.com via Resend. Fully automated B2B lead generation.
+                    AI discovers companies by industry → generates personalized cold outreach emails → sends from info@visuosofts.com via SMTP. Fully automated B2B lead generation.
                   </p>
                   <EmailEngineDashboard />
                 </motion.div>
@@ -224,6 +228,20 @@ const Index = () => {
                     Edit your name, skills, experience, and CV content. The auto-apply pipeline uses this profile for personalized emails and CV tailoring.
                   </p>
                   <ApplicantProfileForm />
+                </motion.div>
+              </TabsContent>
+
+              <TabsContent value="cron">
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass rounded-lg p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Timer className="h-4 w-4 text-primary" />
+                    <h2 className="font-semibold">Cron Job Monitor</h2>
+                    <span className="text-xs text-muted-foreground ml-auto font-mono">24/7 automation</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Real-time view of all 8 hourly cron jobs — job applications, email engine, scraper, follow-ups, and inbox checks.
+                  </p>
+                  <CronMonitorPanel />
                 </motion.div>
               </TabsContent>
 
