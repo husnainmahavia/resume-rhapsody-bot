@@ -1,0 +1,282 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+};
+
+const CATEGORIES = [
+  { name: "web_development", queries: ["web development company hiring email contact", "WordPress agency careers email", "React developer agency contact email", "web design company UK email"] },
+  { name: "digital_marketing", queries: ["digital marketing agency hiring email contact", "SEO company careers email UK", "performance marketing agency contact email", "social media marketing company email"] },
+  { name: "ai_ml", queries: ["AI company hiring email contact UK", "machine learning startup careers email", "artificial intelligence company recruitment email", "AI automation company email"] },
+  { name: "ar_vr", queries: ["augmented reality company hiring email UK", "AR VR studio careers contact email", "immersive technology company email", "XR development company recruitment email"] },
+  { name: "ecommerce", queries: ["ecommerce agency hiring email contact UK", "Shopify development company careers email", "online retail technology company email"] },
+  { name: "software_development", queries: ["software development company hiring email UK", "SaaS startup careers contact email", "tech company recruitment email Manchester", "software agency contact email"] },
+];
+
+async function aiSearchEmails(query: string, apiKey: string): Promise<Array<{ company: string; email: string; website: string; description: string; location: string }>> {
+  try {
+    const response = await fetch("https://api.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [{
+          role: "user",
+          content: `You are a job research assistant. Search for real companies matching: "${query}"
+
+Return ONLY a JSON array of objects. Each object must have:
+- "company": company name (real companies only)
+- "email": real contact/hiring/info email (must be a real domain, NOT gmail/yahoo/hotmail)
+- "website": company website URL
+- "description": what the company does (1 sentence)
+- "location": company location
+
+Find 5-8 REAL companies with REAL email addresses. Focus on UK companies but include international ones too.
+Use common email patterns like info@, hello@, careers@, hr@, jobs@, recruitment@ with the company's actual domain.
+
+CRITICAL: Only return companies you are confident are real. Return valid JSON array only, no markdown.`
+        }],
+        temperature: 0.3,
+        max_tokens: 2000,
+      }),
+    });
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content || "[]";
+    
+    // Extract JSON from response
+    const jsonMatch = content.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) return [];
+    
+    const parsed = JSON.parse(jsonMatch[0]);
+    return Array.isArray(parsed) ? parsed.filter((r: any) => r.email && r.company) : [];
+  } catch (e) {
+    console.error("AI search error:", e);
+    return [];
+  }
+}
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  try {
+    const { action, categories, location } = await req.json();
+    
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const lovableKey = Deno.env.get("LOVABLE_API_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    if (action === "status") {
+      const { count: totalCount } = await supabase.from("scraped_companies").select("*", { count: "exact", head: true });
+      const { count: sentCount } = await supabase.from("scraped_companies").select("*", { count: "exact", head: true }).eq("email_sent", true);
+      const { count: openedCount } = await supabase.from("scraped_companies").select("*", { count: "exact", head: true }).eq("email_opened", true);
+      const { count: repliedCount } = await supabase.from("scraped_companies").select("*", { count: "exact", head: true }).eq("email_replied", true);
+      
+      // Get counts per category
+      const { data: catData } = await supabase.from("scraped_companies").select("category");
+      const categoryCounts: Record<string, number> = {};
+      (catData || []).forEach((r: any) => {
+        categoryCounts[r.category] = (categoryCounts[r.category] || 0) + 1;
+      });
+
+      return new Response(JSON.stringify({
+        total: totalCount || 0,
+        sent: sentCount || 0,
+        opened: openedCount || 0,
+        replied: repliedCount || 0,
+        categories: categoryCounts,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (action === "scrape") {
+      const targetCategories = categories || CATEGORIES.map(c => c.name);
+      const locationFilter = location || "UK";
+      let totalScraped = 0;
+      let totalNew = 0;
+      const results: Array<{ category: string; found: number; new: number }> = [];
+
+      for (const cat of CATEGORIES) {
+        if (!targetCategories.includes(cat.name)) continue;
+
+        let catFound = 0;
+        let catNew = 0;
+
+        for (const query of cat.queries) {
+          const fullQuery = `${query} ${locationFilter}`;
+          console.log(`Scraping: ${fullQuery}`);
+          
+          const companies = await aiSearchEmails(fullQuery, lovableKey);
+          catFound += companies.length;
+
+          for (const company of companies) {
+            try {
+              const { error } = await supabase.from("scraped_companies").upsert({
+                company_name: company.company,
+                email: company.email.toLowerCase().trim(),
+                website: company.website,
+                category: cat.name,
+                source: "ai_search",
+                location: company.location || locationFilter,
+                description: company.description,
+                status: "scraped",
+              }, { onConflict: "email,category" });
+
+              if (!error) catNew++;
+            } catch (e) {
+              console.error(`Insert error for ${company.email}:`, e);
+            }
+          }
+
+          // Human-like delay between searches
+          await new Promise(r => setTimeout(r, 2000 + Math.random() * 3000));
+        }
+
+        results.push({ category: cat.name, found: catFound, new: catNew });
+        totalScraped += catFound;
+        totalNew += catNew;
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        totalScraped,
+        totalNew,
+        results,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (action === "send_emails") {
+      const targetCategories = categories || CATEGORIES.map(c => c.name);
+      
+      // Get unsent scraped companies
+      let query = supabase
+        .from("scraped_companies")
+        .select("*")
+        .eq("email_sent", false)
+        .eq("status", "scraped")
+        .limit(20);
+
+      if (targetCategories.length > 0) {
+        query = query.in("category", targetCategories);
+      }
+
+      const { data: companies } = await query;
+      if (!companies || companies.length === 0) {
+        return new Response(JSON.stringify({ success: true, sent: 0, message: "No unsent companies found" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      let sent = 0;
+      const sendResults: Array<{ company: string; email: string; status: string }> = [];
+
+      for (const company of companies) {
+        try {
+          // Generate personalized email using AI
+          const categoryLabel = company.category.replace(/_/g, " ");
+          const emailResponse = await fetch("https://api.lovable.dev/v1/chat/completions", {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${lovableKey}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              model: "google/gemini-2.5-flash-lite",
+              messages: [{
+                role: "user",
+                content: `Write a professional cold outreach email from Husnain Mahavia (Full-Stack Developer & AI Specialist, 8+ years experience) to ${company.company_name} (${categoryLabel} company).
+
+Company info: ${company.description || ""}
+
+The email should:
+- Be concise (3-4 paragraphs max)
+- Mention relevant skills for their industry (${categoryLabel})
+- Highlight value I can bring
+- Include a clear CTA for a call/meeting
+- Sound natural and human, NOT like AI
+
+Return ONLY a JSON object with "subject" and "body" fields. No markdown.`
+              }],
+              temperature: 0.7,
+              max_tokens: 800,
+            }),
+          });
+
+          const emailData = await emailResponse.json();
+          const emailContent = emailData.choices?.[0]?.message?.content || "";
+          const jsonMatch = emailContent.match(/\{[\s\S]*\}/);
+          
+          if (!jsonMatch) {
+            sendResults.push({ company: company.company_name, email: company.email, status: "email_gen_failed" });
+            continue;
+          }
+
+          const { subject, body } = JSON.parse(jsonMatch[0]);
+
+          // Send via existing send-email function
+          const sendResponse = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${supabaseKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              to: company.email,
+              subject,
+              body: body + "\n\nBest regards,\nHusnain Mahavia\n+44 7387 055617\nhusnainmahavia.1@gmail.com",
+            }),
+          });
+
+          const sendResult = await sendResponse.json();
+
+          if (sendResult.success || sendResult.sent) {
+            await supabase.from("scraped_companies").update({
+              email_sent: true,
+              email_sent_at: new Date().toISOString(),
+              status: "emailed",
+            }).eq("id", company.id);
+
+            sent++;
+            sendResults.push({ company: company.company_name, email: company.email, status: "sent" });
+          } else {
+            sendResults.push({ company: company.company_name, email: company.email, status: sendResult.bounce ? "bounced" : "failed" });
+            if (sendResult.bounce) {
+              await supabase.from("scraped_companies").update({ status: "bounced" }).eq("id", company.id);
+            }
+          }
+
+          // Human-like delay between emails
+          await new Promise(r => setTimeout(r, 45000 + Math.random() * 75000));
+        } catch (e) {
+          console.error(`Email error for ${company.email}:`, e);
+          sendResults.push({ company: company.company_name, email: company.email, status: "error" });
+        }
+      }
+
+      return new Response(JSON.stringify({ success: true, sent, total: companies.length, results: sendResults }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Get scraped data
+    if (action === "list") {
+      const { data } = await supabase
+        .from("scraped_companies")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(200);
+
+      return new Response(JSON.stringify({ data: data || [] }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({ error: "Invalid action" }), {
+      status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (e) {
+    console.error("Scraper error:", e);
+    return new Response(JSON.stringify({ error: String(e) }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});
