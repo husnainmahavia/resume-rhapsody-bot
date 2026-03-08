@@ -296,6 +296,7 @@ serve(async (req) => {
         success: true,
         totalScraped,
         totalNew,
+        totalRejected,
         results,
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
