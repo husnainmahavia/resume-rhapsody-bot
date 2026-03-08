@@ -199,6 +199,20 @@ const Index = () => {
                 </motion.div>
               </TabsContent>
 
+              <TabsContent value="email-engine">
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass rounded-lg p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Mail className="h-4 w-4 text-primary" />
+                    <h2 className="font-semibold">Visuosofts Email Engine</h2>
+                    <span className="text-xs text-muted-foreground ml-auto font-mono">bulk outreach</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    AI discovers companies by industry → generates personalized cold outreach emails → sends from info@visuosofts.com via Resend. Fully automated B2B lead generation.
+                  </p>
+                  <EmailEngineDashboard />
+                </motion.div>
+              </TabsContent>
+
               <TabsContent value="profile">
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass rounded-lg p-5">
                   <div className="flex items-center gap-2 mb-4">
