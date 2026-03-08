@@ -183,7 +183,7 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
             className="space-y-4 overflow-hidden"
           >
             {/* Row 1: Location + Job Type + CV Version */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">Location</label>
                 <Input
@@ -193,6 +193,19 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
                   className="bg-secondary border-border"
                   disabled={status === "running"}
                 />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Search Mode</label>
+                <Select value={searchMode} onValueChange={setSearchMode} disabled={status === "running"}>
+                  <SelectTrigger className="bg-secondary border-border">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SEARCH_MODE_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">Job Type</label>
