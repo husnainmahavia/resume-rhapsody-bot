@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import type { JobApplication } from "@/lib/api";
+import { checkInboxReplies, type JobApplication } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 
 interface DashboardProps {
   applications: JobApplication[];
@@ -34,6 +35,8 @@ export default function Dashboard({ applications }: DashboardProps) {
   });
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [checkingInbox, setCheckingInbox] = useState(false);
+  const { toast } = useToast();
 
   const loadStats = async () => {
     try {
@@ -104,6 +107,22 @@ export default function Dashboard({ applications }: DashboardProps) {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
+  const handleCheckInbox = async () => {
+    setCheckingInbox(true);
+    try {
+      const result = await checkInboxReplies();
+      toast({
+        title: `📬 Inbox Check Complete`,
+        description: `${result.repliesFound || 0} new replies found out of ${result.checkedApplications || 0} checked.`,
+      });
+      loadStats();
+    } catch (err) {
+      toast({ title: "Inbox check failed", description: String(err), variant: "destructive" });
+    } finally {
+      setCheckingInbox(false);
+    }
+  };
+
   const statCards = [
     { label: "Emails Sent", value: stats.totalSent, icon: Send, color: "text-primary" },
     { label: "Opened", value: stats.totalOpened, icon: Eye, sub: `${stats.openRate}%`, color: "text-accent" },
@@ -121,6 +140,25 @@ export default function Dashboard({ applications }: DashboardProps) {
 
   return (
     <div className="space-y-4">
+      {/* Check Inbox Button */}
+      <div className="flex gap-2">
+        <Button
+          onClick={handleCheckInbox}
+          disabled={checkingInbox}
+          variant="outline"
+          className="gap-2"
+        >
+          {checkingInbox ? (
+            <><RefreshCw className="h-4 w-4 animate-spin" /> Checking Inbox...</>
+          ) : (
+            <><Mail className="h-4 w-4" /> Check Inbox for Replies</>
+          )}
+        </Button>
+        <span className="text-xs text-muted-foreground self-center">
+          Scans Gmail for hiring manager replies
+        </span>
+      </div>
+
       {/* Top Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {statCards.map((stat) => (
