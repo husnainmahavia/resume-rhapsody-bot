@@ -143,6 +143,32 @@ serve(async (req) => {
       .gte("replied_at", yesterdayISO)
       .limit(10);
 
+    // Best-performing subject lines (opened emails)
+    const { data: openedApps } = await supabase
+      .from("email_tracking")
+      .select("application_id, open_count, opened_at")
+      .not("opened_at", "is", null)
+      .order("open_count", { ascending: false })
+      .limit(20);
+
+    // Fetch subject lines for opened apps
+    let subjectPerformance: { subject: string; opens: number; company: string }[] = [];
+    if (openedApps && openedApps.length > 0) {
+      const openedIds = openedApps.map((o: any) => o.application_id);
+      const openMap = new Map(openedApps.map((o: any) => [o.application_id, o.open_count]));
+      const { data: apps } = await supabase
+        .from("job_applications")
+        .select("id, email_subject, company")
+        .in("id", openedIds);
+      if (apps) {
+        subjectPerformance = apps
+          .filter((a: any) => a.email_subject)
+          .map((a: any) => ({ subject: a.email_subject, opens: openMap.get(a.id) || 0, company: a.company }))
+          .sort((a: any, b: any) => b.opens - a.opens)
+          .slice(0, 5);
+      }
+    }
+
     const dateStr = now.toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
     const errorRows = (recentErrors || []).map(e =>
