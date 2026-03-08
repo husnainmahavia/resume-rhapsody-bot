@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      applicant_profile: {
+        Row: {
+          created_at: string
+          cv_content: string | null
+          email: string
+          id: string
+          location: string | null
+          name: string
+          phone: string | null
+          skills: string[] | null
+          summary: string | null
+          title: string | null
+          updated_at: string
+          years_experience: string | null
+        }
+        Insert: {
+          created_at?: string
+          cv_content?: string | null
+          email?: string
+          id?: string
+          location?: string | null
+          name?: string
+          phone?: string | null
+          skills?: string[] | null
+          summary?: string | null
+          title?: string | null
+          updated_at?: string
+          years_experience?: string | null
+        }
+        Update: {
+          created_at?: string
+          cv_content?: string | null
+          email?: string
+          id?: string
+          location?: string | null
+          name?: string
+          phone?: string | null
+          skills?: string[] | null
+          summary?: string | null
+          title?: string | null
+          updated_at?: string
+          years_experience?: string | null
+        }
+        Relationships: []
+      }
       domain_blacklist: {
         Row: {
           blacklisted_at: string | null
