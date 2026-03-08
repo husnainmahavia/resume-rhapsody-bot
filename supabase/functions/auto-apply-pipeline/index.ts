@@ -12,9 +12,88 @@ const MIN_DELAY_MS = 45000;
 const MAX_DELAY_MS = 120000;
 const BATCH_PAUSE_MS = 300000;
 
+const PUBLIC_EMAIL_DOMAINS = new Set([
+  "gmail.com", "googlemail.com", "yahoo.com", "yahoo.co.uk", "hotmail.com", "outlook.com",
+  "live.com", "icloud.com", "aol.com", "proton.me", "protonmail.com", "gmx.com",
+]);
+
 function humanDelay(): Promise<void> {
   const ms = MIN_DELAY_MS + Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS);
   return new Promise((r) => setTimeout(r, ms));
+}
+
+function normalizeDomain(domain: string): string {
+  return domain.toLowerCase().trim().replace(/^www\./, "");
+}
+
+function extractDomainFromUrl(url?: string | null): string | null {
+  if (!url) return null;
+  try {
+    const withProtocol = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+    return normalizeDomain(new URL(withProtocol).hostname);
+  } catch {
+    return null;
+  }
+}
+
+function extractDomainFromEmail(email?: string | null): string | null {
+  if (!email || !email.includes("@")) return null;
+  const parts = email.toLowerCase().trim().split("@");
+  if (parts.length !== 2) return null;
+  return normalizeDomain(parts[1]);
+}
+
+function getExpectedDomains(job: {
+  url?: string | null;
+  careers_page_url?: string | null;
+}): string[] {
+  return [...new Set([
+    extractDomainFromUrl(job.url),
+    extractDomainFromUrl(job.careers_page_url),
+  ].filter((d): d is string => Boolean(d)))];
+}
+
+function validateHiringEmail(
+  email?: string | null,
+  expectedDomains: string[] = [],
+): { valid: boolean; normalized: string | null; reason?: string } {
+  if (!email) return { valid: false, normalized: null, reason: "missing_email" };
+
+  const normalizedEmail = email.toLowerCase().trim();
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(normalizedEmail)) {
+    return { valid: false, normalized: null, reason: "invalid_format" };
+  }
+
+  const localPart = normalizedEmail.split("@")[0];
+  const emailDomain = extractDomainFromEmail(normalizedEmail);
+  if (!emailDomain) {
+    return { valid: false, normalized: null, reason: "invalid_domain" };
+  }
+
+  if (PUBLIC_EMAIL_DOMAINS.has(emailDomain)) {
+    return { valid: false, normalized: null, reason: "public_mailbox_not_allowed" };
+  }
+
+  if (
+    /^no-?reply/.test(localPart) ||
+    /(test|fake|sample|example|demo)/i.test(localPart) ||
+    /example\./i.test(emailDomain)
+  ) {
+    return { valid: false, normalized: null, reason: "placeholder_or_no_reply" };
+  }
+
+  if (expectedDomains.length > 0) {
+    const matchesExpected = expectedDomains.some(
+      (expected) => emailDomain === expected || emailDomain.endsWith(`.${expected}`),
+    );
+
+    if (!matchesExpected) {
+      return { valid: false, normalized: null, reason: "domain_mismatch_with_job_url" };
+    }
+  }
+
+  return { valid: true, normalized: normalizedEmail };
 }
 
 // Full CV content from the uploaded DOCX — used as base for tailoring
