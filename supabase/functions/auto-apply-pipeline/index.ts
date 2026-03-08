@@ -129,9 +129,9 @@ function generateCvHtml(cvText: string, jobTitle: string, company: string): stri
   </style></head><body>`;
 
   html += `<div class="header">
-    <p class="name">HUSNAIN MAHAVIA</p>
-    <p class="contact">+44 7387 055617 • husnainmahavia.1@gmail.com • Manchester, United Kingdom</p>
-    <p class="title">Full-Stack Developer | WordPress & AI Integration Specialist | Tech Lead</p>
+    <p class="name">${APPLICANT_NAME.toUpperCase()}</p>
+    <p class="contact">${APPLICANT_PHONE} • ${APPLICANT_EMAIL} • ${profileData?.location || 'Manchester, United Kingdom'}</p>
+    <p class="title">${APPLICANT_TITLE}</p>
   </div>`;
 
   // Convert CV text to HTML sections
