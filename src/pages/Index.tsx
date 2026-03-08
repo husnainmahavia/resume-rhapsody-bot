@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Bot, Search, FileText, Zap, Rocket, BarChart3 } from "lucide-react";
+import { Bot, Search, FileText, Zap, Rocket, BarChart3, Globe } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import StatsBar from "@/components/StatsBar";
 import JobSearch from "@/components/JobSearch";
@@ -8,6 +8,7 @@ import ApplicationList from "@/components/ApplicationList";
 import ProfileCard from "@/components/ProfileCard";
 import AutoApplyPipeline from "@/components/AutoApplyPipeline";
 import Dashboard from "@/components/Dashboard";
+import ScraperTool from "@/components/ScraperTool";
 import { fetchApplications, type JobApplication } from "@/lib/api";
 
 const Index = () => {
@@ -84,6 +85,9 @@ const Index = () => {
                 </TabsTrigger>
                 <TabsTrigger value="search" className="gap-1.5 data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
                   <Search className="h-3.5 w-3.5" /> Manual Search
+                </TabsTrigger>
+                <TabsTrigger value="scraper" className="gap-1.5 data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
+                  <Globe className="h-3.5 w-3.5" /> Scraper
                 </TabsTrigger>
                 <TabsTrigger value="applications" className="gap-1.5 data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
                   <FileText className="h-3.5 w-3.5" /> Pipeline
