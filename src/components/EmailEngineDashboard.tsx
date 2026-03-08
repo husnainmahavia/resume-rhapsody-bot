@@ -189,6 +189,38 @@ export default function EmailEngineDashboard() {
     }
   };
 
+  const handleRetryErrors = async () => {
+    const errorLeads = leads.filter(l => !!l.send_error);
+    if (errorLeads.length === 0) {
+      toast({ title: "No errors to retry", variant: "destructive" });
+      return;
+    }
+    setRetrying(true);
+    try {
+      // Clear errors first, then re-send
+      for (const lead of errorLeads) {
+        await supabase.from("email_engine_leads").update({
+          send_error: null,
+          sent: false,
+        }).eq("id", lead.id);
+      }
+      // Now send them
+      const { data } = await supabase.functions.invoke("email-engine", {
+        body: { action: "send", leadIds: errorLeads.map(l => l.id) },
+      });
+      toast({
+        title: `🔄 Retried ${data?.sent || 0} emails`,
+        description: data?.errors ? `${data.errors} still failing` : "All retried successfully",
+      });
+      loadStats();
+      loadLeads();
+    } catch (e) {
+      toast({ title: "Retry failed", description: String(e), variant: "destructive" });
+    } finally {
+      setRetrying(false);
+    }
+  };
+
   const toggleLead = (id: string) => {
     const next = new Set(selectedLeads);
     next.has(id) ? next.delete(id) : next.add(id);
