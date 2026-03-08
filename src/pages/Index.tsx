@@ -128,6 +128,20 @@ const Index = () => {
                 </motion.div>
               </TabsContent>
 
+              <TabsContent value="linkedin">
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass rounded-lg p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Linkedin className="h-4 w-4 text-primary" />
+                    <h2 className="font-semibold">LinkedIn Outreach</h2>
+                    <span className="text-xs text-muted-foreground ml-auto font-mono">AI-powered</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    AI finds LinkedIn jobs → generates personalized connection requests, InMails & post comments → copy-paste to LinkedIn.
+                  </p>
+                  <LinkedInTool />
+                </motion.div>
+              </TabsContent>
+
               <TabsContent value="scraper">
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass rounded-lg p-5">
                   <div className="flex items-center gap-2 mb-4">
