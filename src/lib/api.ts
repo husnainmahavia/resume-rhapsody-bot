@@ -109,3 +109,11 @@ export async function getPipelineStatus() {
   if (error) throw error;
   return data;
 }
+
+export async function checkInboxReplies() {
+  const { data, error } = await supabase.functions.invoke("check-inbox-replies", {
+    body: {},
+  });
+  if (error) throw error;
+  return data;
+}

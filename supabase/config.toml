@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.follow-up]
 verify_jwt = false
+
+[functions.check-inbox-replies]
+verify_jwt = false
