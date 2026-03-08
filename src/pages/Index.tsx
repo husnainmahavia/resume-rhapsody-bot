@@ -231,6 +231,20 @@ const Index = () => {
                 </motion.div>
               </TabsContent>
 
+              <TabsContent value="cron">
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass rounded-lg p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Timer className="h-4 w-4 text-primary" />
+                    <h2 className="font-semibold">Cron Job Monitor</h2>
+                    <span className="text-xs text-muted-foreground ml-auto font-mono">24/7 automation</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Real-time view of all 8 hourly cron jobs — job applications, email engine, scraper, follow-ups, and inbox checks.
+                  </p>
+                  <CronMonitorPanel />
+                </motion.div>
+              </TabsContent>
+
               <TabsContent value="search">
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass rounded-lg p-5">
                   <div className="flex items-center gap-2 mb-4">
