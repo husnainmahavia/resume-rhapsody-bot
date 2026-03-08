@@ -161,6 +161,14 @@ serve(async (req) => {
           <tr style="background:#f8f9fa"><td style="padding:8px">Email Coverage</td><td style="padding:8px;text-align:right">${pct(t(scrapedEmailed), t(scrapedTotal))}</td></tr>
         </table>
 
+        ${topSubjects.length > 0 ? `
+        <!-- BEST SUBJECT LINES -->
+        <h2 style="color:#f39c12;border-bottom:2px solid #f39c12;padding-bottom:8px;margin-top:25px">🏆 Best-Performing Subject Lines</h2>
+        <table style="width:100%;border-collapse:collapse;margin:10px 0 20px">
+          <tr style="background:#1a1a2e;color:white"><th style="padding:8px;text-align:left">#</th><th style="padding:8px;text-align:left">Subject</th><th style="padding:8px;text-align:left">Company</th><th style="padding:8px;text-align:center">Opens</th><th style="padding:8px;text-align:center">Reply</th></tr>
+          ${topSubjects.map((s, i) => `<tr${i % 2 ? ' style="background:#f8f9fa"' : ''}><td style="padding:6px;border:1px solid #ddd;font-weight:bold">${i + 1}</td><td style="padding:6px;border:1px solid #ddd;max-width:250px">${s.subject}</td><td style="padding:6px;border:1px solid #ddd">${s.company}</td><td style="padding:6px;border:1px solid #ddd;text-align:center;font-weight:bold;color:#f39c12">${s.opens}x</td><td style="padding:6px;border:1px solid #ddd;text-align:center">${s.replied ? '✅' : '—'}</td></tr>`).join("")}
+        </table>` : ""}
+
         <!-- HEALTH SCORE -->
         <div style="margin-top:20px;padding:20px;background:linear-gradient(135deg,#e8f8e8,#f0e6ff);border-radius:10px;text-align:center">
           <h3 style="margin:0 0 10px;color:#1a1a2e">🏥 System Health</h3>
