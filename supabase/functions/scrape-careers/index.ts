@@ -114,6 +114,7 @@ serve(async (req) => {
 });
 
 async function scrapeUrl(url: string): Promise<string[]> {
+  // Step 1: Try basic fetch first (fast, free)
   try {
     const res = await fetch(url, {
       headers: {
@@ -123,10 +124,46 @@ async function scrapeUrl(url: string): Promise<string[]> {
       signal: AbortSignal.timeout(8000),
     });
 
-    if (!res.ok) return [];
-    const html = await res.text();
-    return extractEmails(html);
+    if (res.ok) {
+      const html = await res.text();
+      const emails = extractEmails(html);
+      if (emails.length > 0) return emails;
+    }
   } catch {
+    // Fall through to ScrapingBee
+  }
+
+  // Step 2: Fallback to ScrapingBee for JS-rendered content
+  return scrapeWithScrapingBee(url);
+}
+
+async function scrapeWithScrapingBee(url: string): Promise<string[]> {
+  const SCRAPINGBEE_KEY = Deno.env.get("SCRAPINGBEE_API_KEY");
+  if (!SCRAPINGBEE_KEY) {
+    console.log("⚠️ SCRAPINGBEE_API_KEY not set, skipping JS-rendered scrape");
+    return [];
+  }
+
+  try {
+    console.log(`🐝 ScrapingBee fallback for: ${url}`);
+    const res = await fetch(
+      `https://app.scrapingbee.com/api/v1/?api_key=${SCRAPINGBEE_KEY}&url=${encodeURIComponent(url)}&render_js=true&premium_proxy=false`,
+      { signal: AbortSignal.timeout(30000) }
+    );
+
+    if (!res.ok) {
+      console.error(`ScrapingBee error ${res.status}`);
+      return [];
+    }
+
+    const html = await res.text();
+    const emails = extractEmails(html);
+    if (emails.length > 0) {
+      console.log(`🐝 ScrapingBee found ${emails.length} emails on ${url}`);
+    }
+    return emails;
+  } catch (e) {
+    console.error("ScrapingBee fetch failed:", e);
     return [];
   }
 }
