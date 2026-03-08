@@ -186,6 +186,7 @@ serve(async (req) => {
       APPLICANT_TITLE = (profileData as any).title || APPLICANT_TITLE;
       APPLICANT_SKILLS = (profileData as any).skills || APPLICANT_SKILLS;
       APPLICANT_SUMMARY = (profileData as any).summary || APPLICANT_SUMMARY;
+      APPLICANT_LOCATION = (profileData as any).location || APPLICANT_LOCATION;
       FULL_CV_CONTENT = (profileData as any).cv_content || FULL_CV_CONTENT;
     }
 
