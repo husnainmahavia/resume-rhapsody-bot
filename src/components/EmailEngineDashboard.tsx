@@ -300,6 +300,13 @@ export default function EmailEngineDashboard() {
               {sending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
               Send Bulk {selectedLeads.size > 0 && `(${selectedLeads.size})`}
             </Button>
+            {filterCounts.error > 0 && (
+              <Button variant="outline" size="sm" onClick={handleRetryErrors} disabled={retrying} className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10">
+                {retrying ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+                Retry Errors ({filterCounts.error})
+              </Button>
+            )}
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => { loadStats(); loadLeads(); }} className="gap-1.5">
               <RefreshCw className="h-3 w-3" /> Refresh
             </Button>
