@@ -348,7 +348,11 @@ Return JSON with: title, company, location, salary_range, description, url, hiri
             const hunterRes = await fetch(`${SUPABASE_URL}/functions/v1/find-email`, {
               method: "POST",
               headers: { "Content-Type": "application/json", Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
-              body: JSON.stringify({ companyDomain: jobDomain }),
+              body: JSON.stringify({
+                companyDomain: jobDomain,
+                companyName: job.company,
+                hiringManagerName: job.hiring_manager,
+              }),
             });
             if (hunterRes.ok) {
               const hunterData = await hunterRes.json();
