@@ -195,6 +195,20 @@ const Index = () => {
                 </motion.div>
               </TabsContent>
 
+              <TabsContent value="profile">
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass rounded-lg p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <UserCog className="h-4 w-4 text-primary" />
+                    <h2 className="font-semibold">Applicant Profile</h2>
+                    <span className="text-xs text-muted-foreground ml-auto font-mono">editable</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Edit your name, skills, experience, and CV content. The auto-apply pipeline uses this profile for personalized emails and CV tailoring.
+                  </p>
+                  <ApplicantProfileForm />
+                </motion.div>
+              </TabsContent>
+
               <TabsContent value="search">
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass rounded-lg p-5">
                   <div className="flex items-center gap-2 mb-4">
