@@ -23,7 +23,9 @@ function humanDelay(): Promise<void> {
 }
 
 function normalizeDomain(domain: string): string {
-  return domain.toLowerCase().trim().replace(/^www\./, "");
+  let d = domain.toLowerCase().trim().replace(/^www\./, "");
+  d = d.replace(/^(careers|jobs|careerssearch|apply|talent|recruiting|hire|join|work)\./i, "");
+  return d;
 }
 
 function extractDomainFromUrl(url?: string | null): string | null {
