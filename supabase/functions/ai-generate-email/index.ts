@@ -26,8 +26,10 @@ serve(async (req) => {
             role: "system",
             content: `You are an expert at writing cold outreach emails to hiring managers. 
 Write personalized, concise, compelling emails that get responses. 
-The candidate is Husnain Mahavia, an AR Developer with 5+ years experience, 100+ AR projects, based in Manchester UK.
-Make the email feel personal and genuine, not templated. Keep it under 200 words.`,
+The candidate is Husnain Mahavia, a Full-Stack Developer with 8+ years experience, 150+ projects, based in Manchester UK.
+
+IMPORTANT: Include the tailored CV summary and cover letter highlights in the email body so the recipient has everything they need without attachments.
+Make the email feel personal and genuine, not templated.`,
           },
           {
             role: "user",
