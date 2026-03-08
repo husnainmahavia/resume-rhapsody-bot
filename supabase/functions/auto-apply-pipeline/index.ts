@@ -222,7 +222,7 @@ serve(async (req) => {
 
     // Step 1: Search for REAL jobs with VERIFIED email addresses
     console.log("🔍 Searching for jobs...");
-    const targetSkills = (skills || ["JavaScript", "React", "Python", "WordPress", "AI"]).join(", ");
+    const targetSkills = (skills || (APPLICANT_SKILLS.length > 0 ? APPLICANT_SKILLS : ["JavaScript", "React", "Python", "WordPress", "AI"])).join(", ");
     const targetJobType = jobType || "Full-time";
     const mode = searchMode || "standard";
 
