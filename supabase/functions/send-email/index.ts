@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
+import nodemailer from "npm:nodemailer@6.9.8";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,27 +28,25 @@ serve(async (req) => {
     const senderEmail = "husnainmahavia.1@gmail.com";
     const senderName = "Husnain Mahavia";
 
-    // Convert plain text body to HTML
-    const htmlBody = body.replace(/\n/g, "<br>");
-
-    const client = new SmtpClient();
-
-    await client.connectTLS({
-      hostname: "smtp.gmail.com",
+    const transporter = nodemailer.createTransport({
+      host: "smtp.gmail.com",
       port: 465,
-      username: senderEmail,
-      password: GMAIL_APP_PASSWORD,
+      secure: true,
+      auth: {
+        user: senderEmail,
+        pass: GMAIL_APP_PASSWORD,
+      },
     });
 
-    await client.send({
+    const htmlBody = body.replace(/\n/g, "<br>");
+
+    await transporter.sendMail({
       from: `${senderName} <${senderEmail}>`,
       to: to,
       subject: subject,
-      content: htmlBody,
+      text: body,
       html: htmlBody,
     });
-
-    await client.close();
 
     console.log(`Email SENT to ${to} - Subject: ${subject}`);
 
