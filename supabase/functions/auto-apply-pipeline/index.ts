@@ -324,16 +324,24 @@ Return JSON with: title, company, location, salary_range, description, url, hiri
         continue;
       }
 
-      // Check duplicate
-      const { data: existing } = await supabase
+      // Check duplicate - limit max 2 applications per company to avoid spam
+      const { data: existingByCompany } = await supabase
         .from("job_applications")
-        .select("id")
-        .ilike("job_title", job.title)
-        .ilike("company", job.company)
-        .limit(1);
+        .select("id, job_title")
+        .ilike("company", job.company);
 
-      if (existing && existing.length > 0) {
-        console.log(`⏭ Skipping duplicate: ${job.title} at ${job.company}`);
+      if (existingByCompany && existingByCompany.length >= 2) {
+        console.log(`⏭ Skipping ${job.company} — already ${existingByCompany.length} applications`);
+        results.push({ job: job.title, company: job.company, status: "company_limit_reached" });
+        continue;
+      }
+
+      // Also check exact title duplicate
+      const exactDupe = existingByCompany?.some(e => 
+        e.job_title.toLowerCase().replace(/[^a-z]/g, "") === job.title.toLowerCase().replace(/[^a-z]/g, "")
+      );
+      if (exactDupe) {
+        console.log(`⏭ Skipping exact duplicate: ${job.title} at ${job.company}`);
         results.push({ job: job.title, company: job.company, status: "duplicate_skipped" });
         continue;
       }
