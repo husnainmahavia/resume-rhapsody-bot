@@ -5,42 +5,34 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const BASE_CV = `Husnain Mahavia
-Manchester, UK | +44 7387 055617 | husnainmahavia.1@gmail.com
+const CV_VERSIONS: Record<string, string> = {
+  fullstack: `HUSNAIN MAHAVIA | Full-Stack Developer | WordPress & AI Integration Specialist | Tech Lead
+8+ years in custom WordPress development, AI/ML integration, automation systems. 50+ WordPress sites, 15+ e-commerce platforms. ChatGPT, Gemini, MidJourney integration. Custom lead management, API integrations. Scaled team 1→10+, 50% YoY growth.
+Skills: HTML5/CSS3, JavaScript, PHP, Python, SQL, WordPress, React, AI/ML, REST APIs, CRM (HubSpot, Salesforce)`,
 
-PROFILE
-Dynamic and innovative Augmented Reality (AR) Developer with a Bachelor of Science in Software Engineering and over 5 years of dedicated hands-on experience leading AR projects at Visuosofts. Specializing in Unity-based AR/VR solutions, successfully delivered more than 100 immersive AR projects for industries including education, retail, construction, healthcare, and marketing.
+  aiSpecialist: `HUSNAIN MAHAVIA | AI & Technology Specialist
+8+ years software engineering + applied AI. ML model development, AI algorithm optimization, large dataset analysis. Enterprise AI integration, cloud deployment, scalable architecture.
+Skills: Python, SQL, Machine Learning, AI Automation, Flutter, Unity AR/VR, WordPress`,
 
-SKILLS
-- AR/VR Development: Unity, ARFoundation, ARKit, ARCore, Vuforia, 8th Wall, AR.js
-- Programming: C#, PHP, JavaScript, Python
-- 3D Modeling: Blender, 3D asset optimization
-- Web AR: 8th Wall, AR.js, browser-based AR
-- Social AR: Snapchat Lens Studio, TikTok Effect House, Instagram Spark AR
-- UI/UX Design: Unity UI, user-centric design
-- Backend: PHP web portals, REST APIs
-- DevOps: Git, Agile, App Store/Play Store deployment
-- Leadership: Team management (10+ developers), client relations
+  digitalMarketing: `HUSNAIN MAHAVIA | Digital Marketing Manager
+5+ years digital marketing + software engineering background. AI-powered SEO, performance advertising, AR campaigns. 900%+ traffic growth, 30% ranking improvement.
+Skills: SEO, Google Ads, Meta Ads, TikTok Ads, Analytics, WordPress, AI Content, CRM`,
 
-WORK EXPERIENCE
-Founder & Lead AR Developer at Visuosofts, Islamabad (Jan 2020 – Aug 2025)
-- Founded and scaled startup, leading team of 10+ developers
-- Delivered 100+ AR projects across education, retail, construction, healthcare
-- 50% year-on-year revenue growth
-- Key Projects: AR Food Menu Visualizer (40% engagement increase), AI-Powered AR Workout Trainer (30% retention boost), Construction AR Walkthrough, AR Business Cards
-
-EDUCATION
-Bachelor of Science in Software Engineering
-University of Gujrat (2016-2020)
-- Final Year Project: AR Construction Walkthrough (78% project score)`;
+  webDeveloper: `HUSNAIN MAHAVIA | Senior Web Developer | WordPress Specialist
+8+ years custom WordPress development, HTML/CSS, landing pages. 50+ custom sites, 15+ e-commerce platforms, Core Web Vitals 90+.
+Skills: HTML5/CSS3, JavaScript, PHP, WordPress, WooCommerce, Shopify, GTM, CRM Integration`,
+};
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { jobTitle, company, jobDescription } = await req.json();
+    const { jobTitle, company, jobDescription, cvVersion } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+
+    // Select the best CV version based on the job or user preference
+    const baseCV = CV_VERSIONS[cvVersion] || CV_VERSIONS.fullstack;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -53,13 +45,37 @@ serve(async (req) => {
         messages: [
           {
             role: "system",
-            content: `You are an expert CV writer. Tailor the candidate's CV for the specific job. 
-Restructure, reword, and emphasize relevant skills. Keep it professional, ATS-friendly, and under 2 pages.
-Return the tailored CV as clean text with clear sections. Also generate a personalized cover letter.`,
+            content: `You are an expert CV writer and career coach. Your job is to tailor the candidate's CV for a specific job.
+
+RULES:
+1. Restructure, reword, and emphasize the most relevant skills and experience
+2. Keep it professional, ATS-friendly, and concise (max 2 pages worth of text)
+3. Use the candidate's REAL experience - do not fabricate anything
+4. Match keywords from the job description
+5. Highlight quantifiable achievements
+6. Also write a personalized cover letter (max 250 words)
+7. The CV should follow this structure: Name/Contact → Profile → Skills → Experience → Education → Certifications`,
           },
           {
             role: "user",
-            content: `BASE CV:\n${BASE_CV}\n\nTARGET JOB:\nTitle: ${jobTitle}\nCompany: ${company}\nDescription: ${jobDescription}\n\nPlease tailor this CV for the job and write a cover letter.`,
+            content: `BASE CV:\n${baseCV}\n\nFull candidate details:
+Name: Husnain Mahavia
+Location: Manchester, UK
+Phone: +44 7387 055617
+Email: husnainmahavia.1@gmail.com
+Education: BSc Software Engineering, COMSATS University (2016-2020)
+Current: Market Research Interviewer at NatCen (Oct 2025-Present, Part-time)
+Previous: Lead at Visuosofts (Jan 2017-Aug 2025) - Full-service digital agency
+Key achievements: 50+ websites, 15+ e-commerce, 100+ AR projects, 900%+ traffic growth, 50% YoY revenue growth, team scaled 1→10+
+Languages: English (Fluent), Urdu (Native), Italian (Basic)
+Status: UK citizen
+
+TARGET JOB:
+Title: ${jobTitle}
+Company: ${company}
+Description: ${jobDescription}
+
+Tailor the CV and write a cover letter.`,
           },
         ],
         tools: [{
@@ -70,11 +86,12 @@ Return the tailored CV as clean text with clear sections. Also generate a person
             parameters: {
               type: "object",
               properties: {
-                tailored_cv: { type: "string", description: "The tailored CV text" },
+                tailored_cv: { type: "string", description: "The full tailored CV text, well-formatted" },
                 cover_letter: { type: "string", description: "The personalized cover letter" },
-                key_changes: { type: "string", description: "Summary of what was changed and why" },
+                key_changes: { type: "string", description: "Brief summary of what was changed and why" },
+                recommended_cv_type: { type: "string", description: "Which CV version was best suited: fullstack, aiSpecialist, digitalMarketing, or webDeveloper" },
               },
-              required: ["tailored_cv", "cover_letter", "key_changes"],
+              required: ["tailored_cv", "cover_letter", "key_changes", "recommended_cv_type"],
             },
           },
         }],
@@ -83,22 +100,14 @@ Return the tailored CV as clean text with clear sections. Also generate a person
     });
 
     if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limited" }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "Credits exhausted" }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+      if (response.status === 429) return new Response(JSON.stringify({ error: "Rate limited" }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      if (response.status === 402) return new Response(JSON.stringify({ error: "Credits exhausted" }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       throw new Error("AI error");
     }
 
     const data = await response.json();
     const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
-    let result = { tailored_cv: "", cover_letter: "", key_changes: "" };
+    let result = { tailored_cv: "", cover_letter: "", key_changes: "", recommended_cv_type: "fullstack" };
     if (toolCall?.function?.arguments) {
       result = JSON.parse(toolCall.function.arguments);
     }

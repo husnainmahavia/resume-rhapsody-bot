@@ -41,9 +41,9 @@ export async function searchJobs(skills: string[], location?: string) {
   return data;
 }
 
-export async function tailorCV(jobTitle: string, company: string, jobDescription: string) {
+export async function tailorCV(jobTitle: string, company: string, jobDescription: string, cvVersion?: string) {
   const { data, error } = await supabase.functions.invoke("ai-tailor-cv", {
-    body: { jobTitle, company, jobDescription },
+    body: { jobTitle, company, jobDescription, cvVersion: cvVersion || "fullstack" },
   });
   if (error) throw error;
   return data;
@@ -57,6 +57,19 @@ export async function generateEmail(
 ) {
   const { data, error } = await supabase.functions.invoke("ai-generate-email", {
     body: { jobTitle, company, hiringManager, jobDescription },
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function sendEmail(
+  to: string,
+  subject: string,
+  body: string,
+  hiringManagerName?: string
+) {
+  const { data, error } = await supabase.functions.invoke("send-email", {
+    body: { to, subject, body, hiringManagerName },
   });
   if (error) throw error;
   return data;
