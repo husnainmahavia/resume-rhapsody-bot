@@ -565,6 +565,19 @@ Keep it under 150 words. Professional but warm. NOT generic — reference someth
 
         // Send email with CV attached and tracking pixel
         if (job.hiring_email) {
+          const expectedDomains = getExpectedDomains({ url: job.url, careers_page_url: job.careers_page_url });
+          const finalEmailValidation = validateHiringEmail(job.hiring_email, expectedDomains);
+          if (!finalEmailValidation.valid || !finalEmailValidation.normalized) {
+            await supabase.from("job_applications").update({
+              status: "no_email",
+              hiring_manager_email: null,
+              notes: `Skipped before send: unverified email (${finalEmailValidation.reason || "unknown_reason"})`,
+            }).eq("id", saved.id);
+            results.push({ job: job.title, company: job.company, status: "no_email" });
+            continue;
+          }
+
+          job.hiring_email = finalEmailValidation.normalized;
           console.log(`🚀 Sending to: ${job.hiring_email}`);
 
           // Create tracking record with pixel
