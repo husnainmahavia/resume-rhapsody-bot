@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, Sparkles, Send, Loader2, CheckCircle2, XCircle,
   Globe, Mail, BarChart3, RefreshCw, ChevronDown, ChevronUp,
-  Filter, Clock, AlertTriangle
+  Filter, Clock, AlertTriangle, RotateCcw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
