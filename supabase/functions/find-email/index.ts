@@ -339,8 +339,8 @@ serve(async (req) => {
           return (LOCAL_PART_PRIORITY[lb] || 0) - (LOCAL_PART_PRIORITY[la] || 0);
         });
 
-        // SMTP verify in batches of 3 to avoid overloading
-        for (let i = 0; i < Math.min(prioritySorted.length, 9); i += 3) {
+        // Only SMTP-verify top 6 patterns to stay within timeout
+        for (let i = 0; i < Math.min(prioritySorted.length, 6); i += 3) {
           const batch = prioritySorted.slice(i, i + 3);
           const results = await Promise.all(batch.map(async (candidate) => {
             const smtpResult = await smtpVerifyEmail(candidate, mxHost);
