@@ -102,6 +102,9 @@ const Index = () => {
                 <TabsTrigger value="csv" className="gap-1.5 data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
                   <Upload className="h-3.5 w-3.5" /> CSV Import
                 </TabsTrigger>
+                <TabsTrigger value="profile" className="gap-1.5 data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
+                  <UserCog className="h-3.5 w-3.5" /> Profile
+                </TabsTrigger>
                 <TabsTrigger value="applications" className="gap-1.5 data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
                   <FileText className="h-3.5 w-3.5" /> Pipeline
                   {applications.length > 0 && (
