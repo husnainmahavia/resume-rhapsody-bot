@@ -18,12 +18,16 @@ type FoundEmail = {
 };
 
 function normalizeDomain(input: string): string {
-  return input
+  let d = input
     .toLowerCase()
     .trim()
     .replace(/^(https?:\/\/)?(www\.)?/, "")
     .split("/")[0]
     .replace(/\s+/g, "");
+
+  // Strip common career/jobs subdomains to get the root company domain
+  d = d.replace(/^(careers|jobs|careerssearch|apply|talent|recruiting|hire|join|work)\./i, "");
+  return d;
 }
 
 function deobfuscateEmails(text: string): string {
