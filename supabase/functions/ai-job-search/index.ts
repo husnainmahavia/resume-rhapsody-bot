@@ -17,8 +17,8 @@ serve(async (req) => {
 
 CRITICAL RULES:
 - ONLY use REAL, well-known companies that actually exist (e.g., BBC, NHS, Booking.com, Amazon, THG, AO.com, Autotrader, etc.)
-- Use REAL company career/HR email addresses. Look up the actual format used by each company (e.g., careers@company.com, recruitment@company.co.uk, jobs@company.com)
-- If you don't know the real email, use the standard format: careers@companydomain.com or hr@companydomain.com using the company's REAL domain
+- Use only VERIFIED company recruitment emails tied to the real company domain
+- If a verified email cannot be confirmed, set hiring_email to an empty string "" (never guess)
 - Job URLs should point to real career pages (e.g., https://careers.company.com/jobs/...)
 - Hiring manager names should be realistic but you can make these up
 - DO NOT invent fictional companies or domains
