@@ -294,6 +294,27 @@ Return ONLY a JSON object with "subject" and "body" fields. No markdown, no code
 
           const { subject, body } = JSON.parse(jsonMatch[0]);
 
+          // Generate tailored CV and cover letter
+          const cvData = await generateCvAndCoverLetter(company.company_name, company.category, company.description || "", lovableKey);
+          
+          const attachments: Array<{ filename: string; content: string; contentType: string }> = [];
+          if (cvData?.tailored_cv) {
+            attachments.push({
+              filename: `Husnain_Mahavia_CV_${company.company_name.replace(/[^a-zA-Z0-9]/g, "_")}.html`,
+              content: generateCvHtml(cvData.tailored_cv, company.company_name),
+              contentType: "text/html",
+            });
+          }
+          if (cvData?.cover_letter) {
+            attachments.push({
+              filename: `Cover_Letter_${company.company_name.replace(/[^a-zA-Z0-9]/g, "_")}.html`,
+              content: generateCoverLetterHtml(cvData.cover_letter, company.company_name),
+              contentType: "text/html",
+            });
+          }
+
+          const emailBody = body + "\n\nPlease find my CV and cover letter attached.\n\nBest regards,\nHusnain Mahavia\n+44 7387 055617\nhusnainmahavia.1@gmail.com";
+
           const sendResponse = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
             method: "POST",
             headers: {
@@ -303,7 +324,8 @@ Return ONLY a JSON object with "subject" and "body" fields. No markdown, no code
             body: JSON.stringify({
               to: company.email,
               subject,
-              body: body + "\n\nBest regards,\nHusnain Mahavia\n+44 7387 055617\nhusnainmahavia.1@gmail.com",
+              body: emailBody,
+              attachments,
             }),
           });
 
