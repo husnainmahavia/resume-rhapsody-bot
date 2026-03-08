@@ -1,33 +1,24 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Rocket, Loader2, Search, FileText, Mail, Send, CheckCircle2,
-  XCircle, Clock, Zap, Pause, Play, AlertTriangle
+  XCircle, Clock, Zap, AlertTriangle, Shield, Timer
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { USER_PROFILE } from "@/lib/user-profile";
-import {
-  searchJobs, createApplication, tailorCV, generateEmail,
-  sendEmail, updateApplication, checkDuplicateApplication
-} from "@/lib/api";
+import { runServerPipeline, getPipelineStatus } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
-type PipelineStep = "idle" | "searching" | "processing" | "complete" | "paused" | "error";
+type PipelineStep = "idle" | "running" | "complete" | "error";
 
-interface JobLog {
-  id: string;
-  jobTitle: string;
+interface PipelineResult {
+  job: string;
   company: string;
-  steps: {
-    search: "done" | "pending";
-    saved: "done" | "pending" | "processing" | "error";
-    cv: "done" | "pending" | "processing" | "error";
-    email: "done" | "pending" | "processing" | "error";
-    sent: "done" | "pending" | "processing" | "error";
-  };
+  status: string;
+  email?: string;
   error?: string;
 }
 
@@ -38,209 +29,48 @@ interface AutoApplyPipelineProps {
 export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) {
   const [status, setStatus] = useState<PipelineStep>("idle");
   const [location, setLocation] = useState("Manchester, UK");
-  const [logs, setLogs] = useState<JobLog[]>([]);
-  const [progress, setProgress] = useState(0);
-  const [currentAction, setCurrentAction] = useState("");
-  const [totalJobs, setTotalJobs] = useState(0);
-  const [processedJobs, setProcessedJobs] = useState(0);
-  const pauseRef = useRef(false);
+  const [results, setResults] = useState<PipelineResult[]>([]);
+  const [pipelineStats, setPipelineStats] = useState({ total: 0, applied: 0, today: 0, dailyLimit: 80 });
+  const [isPolling, setIsPolling] = useState(false);
   const { toast } = useToast();
 
-  const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-  const updateLog = (index: number, update: Partial<JobLog>) => {
-    setLogs((prev) =>
-      prev.map((log, i) => (i === index ? { ...log, ...update } : log))
-    );
-  };
-
-  const updateLogStep = (index: number, step: keyof JobLog["steps"], value: "done" | "processing" | "error") => {
-    setLogs((prev) =>
-      prev.map((log, i) =>
-        i === index ? { ...log, steps: { ...log.steps, [step]: value } } : log
-      )
-    );
-  };
+  // Fetch status on mount
+  useEffect(() => {
+    getPipelineStatus().then(setPipelineStats).catch(() => {});
+  }, []);
 
   const runPipeline = useCallback(async () => {
-    setStatus("searching");
-    setLogs([]);
-    setProgress(0);
-    setProcessedJobs(0);
-    pauseRef.current = false;
+    setStatus("running");
+    setResults([]);
 
     try {
-      // Step 1: Search for jobs
-      setCurrentAction("🔍 Searching for relevant jobs...");
-      const result = await searchJobs(USER_PROFILE.skills.slice(0, 15), location);
+      toast({
+        title: "🚀 Pipeline Started",
+        description: "Running server-side — safe to switch tabs. Human-like delays between emails.",
+      });
+
+      const result = await runServerPipeline(
+        location,
+        USER_PROFILE.skills.slice(0, 15)
+      );
 
       if (result.error) {
-        toast({ title: "Search Error", description: result.error, variant: "destructive" });
+        toast({ title: "Pipeline Error", description: result.error, variant: "destructive" });
         setStatus("error");
         return;
       }
 
-      const jobs = result.jobs || [];
-      if (jobs.length === 0) {
-        toast({ title: "No jobs found", description: "Try a different location", variant: "destructive" });
-        setStatus("error");
-        return;
-      }
-
-      setTotalJobs(jobs.length);
-      setStatus("processing");
-
-      // Initialize logs
-      const initialLogs: JobLog[] = jobs.map((job: any, i: number) => ({
-        id: `job-${i}`,
-        jobTitle: job.title,
-        company: job.company,
-        steps: {
-          search: "done" as const,
-          saved: "pending" as const,
-          cv: "pending" as const,
-          email: "pending" as const,
-          sent: "pending" as const,
-        },
-      }));
-      setLogs(initialLogs);
-      setProgress(10);
-
-      // Step 2: Process each job
-      for (let i = 0; i < jobs.length; i++) {
-        // Check pause
-        while (pauseRef.current) {
-          await delay(500);
-        }
-
-        const job = jobs[i];
-        const jobProgress = 10 + ((i + 1) / jobs.length) * 85;
-
-        try {
-          // 2a: Check for duplicates first
-          setCurrentAction(`🔍 Checking duplicates: ${job.title} at ${job.company}`);
-          const isDuplicate = await checkDuplicateApplication(job.title, job.company);
-          if (isDuplicate) {
-            updateLogStep(i, "saved", "error");
-            updateLog(i, { error: "Already applied — skipped" });
-            setProcessedJobs(i + 1);
-            setProgress(jobProgress);
-            continue;
-          }
-
-          // 2b: Save to database
-          setCurrentAction(`💾 Saving: ${job.title} at ${job.company}`);
-          updateLogStep(i, "saved", "processing");
-
-          const saved = await createApplication({
-            job_title: job.title,
-            company: job.company,
-            location: job.location,
-            salary_range: job.salary_range,
-            job_description: job.description,
-            job_url: job.url,
-            hiring_manager_name: job.hiring_manager,
-            hiring_manager_email: job.hiring_email,
-            source: "auto_apply",
-            status: "discovered",
-          });
-          updateLogStep(i, "saved", "done");
-          await delay(500);
-
-          // 2b: Tailor CV
-          setCurrentAction(`📝 Tailoring CV for: ${job.title}`);
-          updateLogStep(i, "cv", "processing");
-
-          const cvResult = await tailorCV(job.title, job.company, job.description || "");
-          if (cvResult.error) {
-            updateLogStep(i, "cv", "error");
-            updateLog(i, { error: cvResult.error });
-            continue;
-          }
-
-          await updateApplication(saved.id, {
-            tailored_cv: cvResult.tailored_cv,
-            cover_letter: cvResult.cover_letter,
-            status: "cv_tailored",
-          });
-          updateLogStep(i, "cv", "done");
-          await delay(500);
-
-          // 2c: Generate email
-          setCurrentAction(`✉️ Crafting email for: ${job.hiring_manager || job.company}`);
-          updateLogStep(i, "email", "processing");
-
-          const emailResult = await generateEmail(
-            job.title,
-            job.company,
-            job.hiring_manager || "Hiring Team",
-            job.description || ""
-          );
-          if (emailResult.error) {
-            updateLogStep(i, "email", "error");
-            updateLog(i, { error: emailResult.error });
-            continue;
-          }
-
-          await updateApplication(saved.id, {
-            email_subject: emailResult.subject,
-            email_body: emailResult.body,
-          });
-          updateLogStep(i, "email", "done");
-          await delay(500);
-
-          // 2d: Send email (opens mailto or tracks)
-          if (job.hiring_email) {
-            setCurrentAction(`🚀 Sending email to: ${job.hiring_email}`);
-            updateLogStep(i, "sent", "processing");
-
-            try {
-              const sendResult = await sendEmail(
-                job.hiring_email,
-                emailResult.subject,
-                emailResult.body,
-                job.hiring_manager
-              );
-
-              if (sendResult.sent) {
-                updateLogStep(i, "sent", "done");
-                await updateApplication(saved.id, {
-                  status: "applied",
-                  applied_at: new Date().toISOString(),
-                });
-              } else {
-                updateLogStep(i, "sent", "error");
-                updateLog(i, { error: sendResult.error || "Email delivery failed" });
-                await updateApplication(saved.id, { status: "email_failed" });
-              }
-            } catch {
-              updateLogStep(i, "sent", "error");
-              updateLog(i, { error: "Email send failed" });
-              await updateApplication(saved.id, { status: "email_failed" });
-            }
-          } else {
-            updateLogStep(i, "sent", "error");
-            updateLog(i, { error: "No hiring email found" });
-            await updateApplication(saved.id, { status: "email_sent" });
-          }
-
-          setProcessedJobs(i + 1);
-          setProgress(jobProgress);
-          await delay(1000); // Rate limit protection
-
-        } catch (err) {
-          console.error(`Error processing ${job.title}:`, err);
-          updateLog(i, { error: String(err) });
-        }
-      }
-
-      setProgress(100);
+      setResults(result.results || []);
       setStatus("complete");
-      setCurrentAction("✅ All jobs processed!");
       onUpdate();
+
+      // Refresh stats
+      const stats = await getPipelineStatus();
+      setPipelineStats(stats);
+
       toast({
-        title: "Auto-Apply Complete!",
-        description: `Processed ${jobs.length} jobs`,
+        title: "✅ Pipeline Complete!",
+        description: `${result.emailsSent} emails sent, ${result.processed} jobs processed`,
       });
     } catch (err) {
       console.error("Pipeline error:", err);
@@ -253,22 +83,43 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
     }
   }, [location, onUpdate, toast]);
 
-  const togglePause = () => {
-    pauseRef.current = !pauseRef.current;
-    setStatus(pauseRef.current ? "paused" : "processing");
+  const statusIcon = (s: string) => {
+    switch (s) {
+      case "applied": return <CheckCircle2 className="h-3.5 w-3.5 text-success" />;
+      case "duplicate_skipped": return <Shield className="h-3.5 w-3.5 text-info" />;
+      case "no_email": return <Mail className="h-3.5 w-3.5 text-warning" />;
+      case "skipped_limit": return <Timer className="h-3.5 w-3.5 text-warning" />;
+      case "error": return <XCircle className="h-3.5 w-3.5 text-destructive" />;
+      default: return <Clock className="h-3.5 w-3.5 text-muted-foreground" />;
+    }
   };
 
-  const stepIcon = (state: string) => {
-    switch (state) {
-      case "done": return <CheckCircle2 className="h-3 w-3 text-success" />;
-      case "processing": return <Loader2 className="h-3 w-3 text-info animate-spin" />;
-      case "error": return <XCircle className="h-3 w-3 text-destructive" />;
-      default: return <Clock className="h-3 w-3 text-muted-foreground" />;
+  const statusLabel = (s: string) => {
+    switch (s) {
+      case "applied": return "Sent ✅";
+      case "duplicate_skipped": return "Already applied";
+      case "no_email": return "No email found";
+      case "skipped_limit": return "Daily limit";
+      case "error": return "Error";
+      default: return s;
     }
   };
 
   return (
     <div className="space-y-4">
+      {/* Gmail Safety Info */}
+      <div className="flex items-start gap-2 p-3 rounded-lg bg-secondary/50 border border-border">
+        <Shield className="h-4 w-4 text-success mt-0.5 shrink-0" />
+        <div className="text-xs text-muted-foreground">
+          <span className="text-foreground font-medium">Gmail-safe mode:</span>{" "}
+          Human-like delays (45s–2min between emails), max {pipelineStats.dailyLimit}/day, 
+          5-min pause every 10 emails. Runs server-side — won't stop if you switch tabs.
+          <span className="text-muted-foreground block mt-1">
+            📊 Today: {pipelineStats.today}/{pipelineStats.dailyLimit} emails sent
+          </span>
+        </div>
+      </div>
+
       {/* Controls */}
       <div className="flex gap-2 items-end">
         <div className="flex-1">
@@ -278,96 +129,75 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
             onChange={(e) => setLocation(e.target.value)}
             placeholder="Manchester, UK"
             className="bg-secondary border-border"
-            disabled={status === "processing" || status === "searching"}
+            disabled={status === "running"}
           />
         </div>
-        <div className="flex gap-2">
-          {status === "idle" || status === "complete" || status === "error" ? (
-            <Button onClick={runPipeline} className="gap-2 glow-primary">
-              <Rocket className="h-4 w-4" />
-              Auto-Apply All
-            </Button>
+        <Button 
+          onClick={runPipeline} 
+          className="gap-2 glow-primary"
+          disabled={status === "running"}
+        >
+          {status === "running" ? (
+            <><Loader2 className="h-4 w-4 animate-spin" /> Running...</>
           ) : (
-            <Button onClick={togglePause} variant="outline" className="gap-2">
-              {status === "paused" ? (
-                <><Play className="h-4 w-4" /> Resume</>
-              ) : (
-                <><Pause className="h-4 w-4" /> Pause</>
-              )}
-            </Button>
+            <><Rocket className="h-4 w-4" /> Auto-Apply All</>
           )}
-        </div>
+        </Button>
       </div>
 
-      {/* Progress */}
-      {status !== "idle" && (
+      {/* Running indicator */}
+      {status === "running" && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           className="space-y-2"
         >
           <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground font-mono">{currentAction}</span>
-            <Badge variant={
-              status === "complete" ? "default" :
-              status === "error" ? "destructive" :
-              status === "paused" ? "secondary" : "outline"
-            }>
-              {status === "searching" && "Searching..."}
-              {status === "processing" && `${processedJobs}/${totalJobs} jobs`}
-              {status === "paused" && "Paused"}
-              {status === "complete" && "Complete!"}
-              {status === "error" && "Error"}
-            </Badge>
+            <span className="text-muted-foreground font-mono">
+              🤖 Pipeline running server-side with human-like pacing...
+            </span>
+            <Badge variant="outline">Processing</Badge>
           </div>
-          <Progress value={progress} className="h-2" />
+          <Progress value={30} className="h-2 animate-pulse" />
+          <p className="text-xs text-muted-foreground">
+            Safe to switch tabs or close this page. The pipeline continues on the server.
+          </p>
         </motion.div>
       )}
 
-      {/* Job Logs */}
+      {/* Results */}
       <AnimatePresence>
-        {logs.length > 0 && (
+        {results.length > 0 && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className="space-y-1.5 max-h-[400px] overflow-y-auto pr-1"
           >
-            {logs.map((log, i) => (
+            {results.map((r, i) => (
               <motion.div
-                key={log.id}
+                key={`${r.company}-${i}`}
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.03 }}
+                transition={{ delay: i * 0.05 }}
                 className="glass rounded-md px-3 py-2"
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{log.jobTitle}</p>
-                    <p className="text-xs text-muted-foreground">{log.company}</p>
+                    <p className="text-sm font-medium truncate">{r.job}</p>
+                    <p className="text-xs text-muted-foreground">{r.company}</p>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <div className="flex items-center gap-0.5" title="Found">
-                      <Search className="h-2.5 w-2.5 text-muted-foreground" />
-                      {stepIcon(log.steps.search)}
-                    </div>
-                    <div className="flex items-center gap-0.5" title="CV Tailored">
-                      <FileText className="h-2.5 w-2.5 text-muted-foreground" />
-                      {stepIcon(log.steps.cv)}
-                    </div>
-                    <div className="flex items-center gap-0.5" title="Email Generated">
-                      <Mail className="h-2.5 w-2.5 text-muted-foreground" />
-                      {stepIcon(log.steps.email)}
-                    </div>
-                    <div className="flex items-center gap-0.5" title="Sent">
-                      <Send className="h-2.5 w-2.5 text-muted-foreground" />
-                      {stepIcon(log.steps.sent)}
-                    </div>
+                    {statusIcon(r.status)}
+                    <span className="text-xs text-muted-foreground">{statusLabel(r.status)}</span>
                   </div>
                 </div>
-                {log.error && (
+                {r.email && (
+                  <p className="text-xs text-success/70 mt-1">→ {r.email}</p>
+                )}
+                {r.error && (
                   <div className="flex items-center gap-1 mt-1">
                     <AlertTriangle className="h-3 w-3 text-warning" />
-                    <p className="text-xs text-warning">{log.error}</p>
+                    <p className="text-xs text-warning">{r.error}</p>
                   </div>
                 )}
               </motion.div>
@@ -377,12 +207,29 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
       </AnimatePresence>
 
       {/* Idle State */}
-      {status === "idle" && logs.length === 0 && (
+      {status === "idle" && results.length === 0 && (
         <div className="text-center py-8 text-muted-foreground">
           <Zap className="h-10 w-10 mx-auto mb-3 opacity-30" />
           <p className="text-sm">Click <span className="text-primary font-medium">"Auto-Apply All"</span> to start</p>
           <p className="text-xs mt-1">
-            The AI will search → tailor CV → generate email → send — all automatically
+            Searches jobs → tailors CV → writes email with CV included → sends via Gmail
+          </p>
+          <p className="text-xs mt-1 text-muted-foreground/60">
+            Runs entirely server-side with human-like delays to protect your Gmail account
+          </p>
+        </div>
+      )}
+
+      {/* Complete summary */}
+      {status === "complete" && (
+        <div className="text-center p-3 rounded-lg bg-success/10 border border-success/20">
+          <CheckCircle2 className="h-6 w-6 text-success mx-auto mb-1" />
+          <p className="text-sm font-medium text-success">
+            {results.filter(r => r.status === "applied").length} emails sent successfully
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {results.filter(r => r.status === "duplicate_skipped").length} duplicates skipped • 
+            {results.filter(r => r.status === "no_email").length} no email found
           </p>
         </div>
       )}
