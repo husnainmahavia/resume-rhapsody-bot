@@ -424,9 +424,9 @@ Return ONLY a JSON object with "subject" and "body" fields. No markdown, no code
             }).eq("id", company.id);
 
             sent++;
-            sendResults.push({ company: company.company_name, email: company.email, status: "sent" });
+            sendResults.push({ company: company.company_name, email: recipientEmail, status: "sent" });
           } else {
-            sendResults.push({ company: company.company_name, email: company.email, status: sendResult.bounce ? "bounced" : "failed" });
+            sendResults.push({ company: company.company_name, email: recipientEmail, status: sendResult.bounce ? "bounced" : "failed" });
             if (sendResult.bounce) {
               await supabase.from("scraped_companies").update({ status: "bounced" }).eq("id", company.id);
             }
