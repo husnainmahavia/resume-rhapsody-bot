@@ -191,3 +191,53 @@ export async function updateLinkedInOutreach(id: string, updates: Record<string,
   if (error) throw error;
   return data;
 }
+
+// Bounce analytics
+export async function getBounceAnalytics() {
+  const { data: blacklist } = await supabase
+    .from("domain_blacklist")
+    .select("*")
+    .order("bounce_count", { ascending: false });
+  return blacklist || [];
+}
+
+export async function blacklistDomain(domain: string, reason?: string) {
+  const { data, error } = await supabase
+    .from("domain_blacklist")
+    .upsert({
+      domain: domain.toLowerCase(),
+      is_blacklisted: true,
+      blacklisted_at: new Date().toISOString(),
+      reason: reason || "Manually blacklisted",
+    }, { onConflict: "domain" });
+  if (error) throw error;
+  return data;
+}
+
+// Review queue
+export async function getReviewQueue() {
+  const { data, error } = await supabase
+    .from("email_review_queue")
+    .select("*")
+    .is("approved", null)
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function approveReviewItem(id: string) {
+  const { error } = await supabase
+    .from("email_review_queue")
+    .update({ approved: true, approved_at: new Date().toISOString(), validation_status: "approved" })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function rejectReviewItem(id: string, reason?: string) {
+  const { error } = await supabase
+    .from("email_review_queue")
+    .update({ approved: false, validation_status: "rejected", rejected_reason: reason || "Manually rejected" })
+    .eq("id", id);
+  if (error) throw error;
+}

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Bot, Search, FileText, Zap, Rocket, BarChart3, Globe, Linkedin } from "lucide-react";
+import { Bot, Search, FileText, Zap, Rocket, BarChart3, Globe, Linkedin, ShieldCheck } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import StatsBar from "@/components/StatsBar";
 import JobSearch from "@/components/JobSearch";
@@ -10,6 +10,7 @@ import AutoApplyPipeline from "@/components/AutoApplyPipeline";
 import Dashboard from "@/components/Dashboard";
 import ScraperTool from "@/components/ScraperTool";
 import LinkedInTool from "@/components/LinkedInTool";
+import ReviewQueue from "@/components/ReviewQueue";
 import { fetchApplications, type JobApplication } from "@/lib/api";
 
 const Index = () => {
@@ -93,6 +94,9 @@ const Index = () => {
                 <TabsTrigger value="scraper" className="gap-1.5 data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
                   <Globe className="h-3.5 w-3.5" /> Scraper
                 </TabsTrigger>
+                <TabsTrigger value="review" className="gap-1.5 data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
+                  <ShieldCheck className="h-3.5 w-3.5" /> Review Queue
+                </TabsTrigger>
                 <TabsTrigger value="applications" className="gap-1.5 data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
                   <FileText className="h-3.5 w-3.5" /> Pipeline
                   {applications.length > 0 && (
@@ -156,6 +160,19 @@ const Index = () => {
                 </motion.div>
               </TabsContent>
 
+              <TabsContent value="review">
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass rounded-lg p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <ShieldCheck className="h-4 w-4 text-primary" />
+                    <h2 className="font-semibold">Email Review Queue & Bounce Analytics</h2>
+                    <span className="text-xs text-muted-foreground ml-auto font-mono">pre-send review</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Review pending emails before they're sent. Approve verified domains in bulk or reject suspicious ones. Auto-blacklists domains with 3+ bounces.
+                  </p>
+                  <ReviewQueue />
+                </motion.div>
+              </TabsContent>
               <TabsContent value="search">
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass rounded-lg p-5">
                   <div className="flex items-center gap-2 mb-4">
