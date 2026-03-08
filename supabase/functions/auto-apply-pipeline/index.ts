@@ -104,6 +104,7 @@ let APPLICANT_PHONE = "+44 7387 055617";
 let APPLICANT_TITLE = "Full-Stack Developer | AI Specialist | Tech Lead";
 let APPLICANT_SKILLS: string[] = [];
 let APPLICANT_SUMMARY = "";
+let APPLICANT_LOCATION = "Manchester, UK";
 
 // Generate a professional PDF-like HTML CV
 function generateCvHtml(cvText: string, jobTitle: string, company: string): string {
