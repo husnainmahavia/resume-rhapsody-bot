@@ -292,8 +292,26 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
         {status === "running" ? (
           <><Loader2 className="h-4 w-4 animate-spin" /> Running Server-Side...</>
         ) : (
-          <><Rocket className="h-4 w-4" /> Auto-Apply ({selectedSkills.length} skills, {cvVersion === "auto" ? "Auto CV" : cvVersion})</>
+          <><Rocket className="h-4 w-4" /> Auto-Apply ({selectedSkills.length} skills, {searchMode !== "standard" ? searchMode.replace("_", " ") : cvVersion === "auto" ? "Auto CV" : cvVersion})</>
         )}
+      </Button>
+
+      {/* Follow-up button */}
+      <Button
+        variant="outline"
+        className="gap-2 w-full"
+        disabled={status === "running"}
+        onClick={async () => {
+          try {
+            const result = await sendFollowUps();
+            toast({ title: "Follow-ups sent", description: `${result.followUpsSent || 0} follow-up emails sent` });
+            onUpdate();
+          } catch (err) {
+            toast({ title: "Error", description: String(err), variant: "destructive" });
+          }
+        }}
+      >
+        <Mail className="h-4 w-4" /> Send Follow-ups (3+ days old)
       </Button>
 
       {/* Running indicator */}
