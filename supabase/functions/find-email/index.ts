@@ -160,7 +160,7 @@ async function smtpVerify(email: string, mxHost: string): Promise<"accepted" | "
     const read = async () => { const b = new Uint8Array(1024); const n = await conn.read(b); return n ? dec.decode(b.subarray(0, n)) : ""; };
     const write = async (c: string) => { await conn.write(enc.encode(c + "\r\n")); };
 
-    const timeout = new Promise<"timeout">(r => setTimeout(() => r("timeout"), 4000));
+    const timeout = new Promise<"timeout">(r => setTimeout(() => r("timeout"), 3000));
     const verify = async (): Promise<"accepted" | "rejected" | "catch_all"> => {
       const banner = await read();
       if (!banner.startsWith("220")) { conn.close(); return "rejected"; }
