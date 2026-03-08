@@ -124,6 +124,20 @@ const Index = () => {
                 </motion.div>
               </TabsContent>
 
+              <TabsContent value="scraper">
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass rounded-lg p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Globe className="h-4 w-4 text-primary" />
+                    <h2 className="font-semibold">Company Scraper & Email Tool</h2>
+                    <span className="text-xs text-muted-foreground ml-auto font-mono">24/7 scraping</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    AI scrapes Google, Bing & search engines for company emails by category, stores them in a database, and sends personalized outreach emails.
+                  </p>
+                  <ScraperTool />
+                </motion.div>
+              </TabsContent>
+
               <TabsContent value="search">
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass rounded-lg p-5">
                   <div className="flex items-center gap-2 mb-4">
