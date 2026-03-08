@@ -53,13 +53,23 @@ serve(async (req) => {
 
     const htmlBody = body.replace(/\n/g, "<br>");
 
-    const info = await transporter.sendMail({
+    const mailOptions: any = {
       from: `${senderName} <${senderEmail}>`,
       to: to,
       subject: subject,
       text: body,
       html: htmlBody,
-    });
+    };
+
+    if (attachments && Array.isArray(attachments) && attachments.length > 0) {
+      mailOptions.attachments = attachments.map((att: any) => ({
+        filename: att.filename,
+        content: att.content,
+        contentType: att.contentType || "text/html",
+      }));
+    }
+
+    const info = await transporter.sendMail(mailOptions);
 
     console.log(`Email SENT to ${to} - Subject: ${subject} - MessageId: ${info.messageId}`);
 
