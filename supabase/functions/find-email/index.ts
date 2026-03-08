@@ -204,6 +204,75 @@ function generateCommonPatterns(domain: string, hiringManagerName?: string): str
   return [...new Set(patterns)].map(p => `${p}@${domain}`);
 }
 
+/** SMTP RCPT TO probe to verify if a mailbox actually exists */
+async function smtpVerifyEmail(email: string, mxHost: string): Promise<"accepted" | "rejected" | "catch_all" | "timeout" | "blocked"> {
+  try {
+    const conn = await Deno.connect({ hostname: mxHost, port: 25 });
+    const decoder = new TextDecoder();
+    const encoder = new TextEncoder();
+
+    const read = async (): Promise<string> => {
+      const buf = new Uint8Array(1024);
+      const n = await conn.read(buf);
+      return n ? decoder.decode(buf.subarray(0, n)) : "";
+    };
+    const write = async (cmd: string) => {
+      await conn.write(encoder.encode(cmd + "\r\n"));
+    };
+
+    const timeout = new Promise<"timeout">(r => setTimeout(() => r("timeout"), 10000));
+
+    const verify = async (): Promise<"accepted" | "rejected" | "catch_all"> => {
+      const banner = await read();
+      if (!banner.startsWith("220")) { conn.close(); return "rejected"; }
+
+      await write("EHLO verify.local");
+      await read();
+
+      await write("MAIL FROM:<verify@verify.local>");
+      const mfResp = await read();
+      if (!mfResp.startsWith("250")) { await write("QUIT"); conn.close(); return "rejected"; }
+
+      await write(`RCPT TO:<${email}>`);
+      const rcptResp = await read();
+
+      // Catch-all detection
+      const rand = `test_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const domain = email.split("@")[1];
+      await write(`RCPT TO:<${rand}@${domain}>`);
+      const catchResp = await read();
+
+      await write("QUIT");
+      conn.close();
+
+      const rcptCode = parseInt(rcptResp.substring(0, 3));
+      const catchCode = parseInt(catchResp.substring(0, 3));
+
+      if (rcptCode === 250 && catchCode === 250) return "catch_all";
+      if (rcptCode === 250) return "accepted";
+      return "rejected";
+    };
+
+    const result = await Promise.race([verify(), timeout]);
+    if (result === "timeout") { try { conn.close(); } catch {} }
+    return result;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    if (msg.includes("permission") || msg.includes("denied")) return "blocked";
+    return "timeout";
+  }
+}
+
+/** Get MX host for a domain */
+async function getMxHost(domain: string): Promise<string | null> {
+  try {
+    const records = await Deno.resolveDns(domain, "MX");
+    if (!records || records.length === 0) return null;
+    const sorted = records.sort((a: any, b: any) => a.preference - b.preference);
+    return (sorted[0] as any).exchange || null;
+  } catch { return null; }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
