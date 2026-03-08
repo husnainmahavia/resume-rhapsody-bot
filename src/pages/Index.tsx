@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Bot, Search, FileText, Zap, Rocket, BarChart3, Globe, Linkedin, ShieldCheck, Upload, UserCog } from "lucide-react";
+import { Bot, Search, FileText, Zap, Rocket, BarChart3, Globe, Linkedin, ShieldCheck, Upload, UserCog, Mail } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import StatsBar from "@/components/StatsBar";
 import JobSearch from "@/components/JobSearch";
@@ -13,6 +13,7 @@ import LinkedInTool from "@/components/LinkedInTool";
 import ReviewQueue from "@/components/ReviewQueue";
 import CSVUpload from "@/components/CSVUpload";
 import ApplicantProfileForm from "@/components/ApplicantProfileForm";
+import EmailEngineDashboard from "@/components/EmailEngineDashboard";
 import { fetchApplications, type JobApplication } from "@/lib/api";
 
 const Index = () => {
@@ -101,6 +102,9 @@ const Index = () => {
                 </TabsTrigger>
                 <TabsTrigger value="csv" className="gap-1.5 data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
                   <Upload className="h-3.5 w-3.5" /> CSV Import
+                </TabsTrigger>
+                <TabsTrigger value="email-engine" className="gap-1.5 data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
+                  <Mail className="h-3.5 w-3.5" /> Email Engine
                 </TabsTrigger>
                 <TabsTrigger value="profile" className="gap-1.5 data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
                   <UserCog className="h-3.5 w-3.5" /> Profile
@@ -192,6 +196,20 @@ const Index = () => {
                     Upload a CSV with company names, domains, job titles, and emails. Jobs are imported into the pipeline for processing.
                   </p>
                   <CSVUpload onImported={loadApplications} />
+                </motion.div>
+              </TabsContent>
+
+              <TabsContent value="email-engine">
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass rounded-lg p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Mail className="h-4 w-4 text-primary" />
+                    <h2 className="font-semibold">Visuosofts Email Engine</h2>
+                    <span className="text-xs text-muted-foreground ml-auto font-mono">bulk outreach</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    AI discovers companies by industry → generates personalized cold outreach emails → sends from info@visuosofts.com via Resend. Fully automated B2B lead generation.
+                  </p>
+                  <EmailEngineDashboard />
                 </motion.div>
               </TabsContent>
 
