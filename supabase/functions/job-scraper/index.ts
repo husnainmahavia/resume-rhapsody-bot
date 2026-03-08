@@ -39,6 +39,73 @@ p{font-size:13px;margin-bottom:12px}</style></head>
 <body>${text.replace(/\n/g,"<br>")}</body></html>`;
 }
 
+const PUBLIC_EMAIL_DOMAINS = new Set([
+  "gmail.com", "googlemail.com", "yahoo.com", "yahoo.co.uk", "hotmail.com", "outlook.com",
+  "live.com", "icloud.com", "aol.com", "proton.me", "protonmail.com", "gmx.com",
+]);
+
+function normalizeDomain(domain: string): string {
+  return domain.toLowerCase().trim().replace(/^www\./, "");
+}
+
+function extractDomainFromUrl(url?: string | null): string | null {
+  if (!url) return null;
+  try {
+    const withProtocol = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+    return normalizeDomain(new URL(withProtocol).hostname);
+  } catch {
+    return null;
+  }
+}
+
+function extractDomainFromEmail(email?: string | null): string | null {
+  if (!email || !email.includes("@")) return null;
+  const parts = email.toLowerCase().trim().split("@");
+  if (parts.length !== 2) return null;
+  return normalizeDomain(parts[1]);
+}
+
+function validateBusinessEmail(
+  email?: string | null,
+  website?: string | null,
+): { valid: boolean; normalized: string | null; reason?: string } {
+  if (!email) return { valid: false, normalized: null, reason: "missing_email" };
+
+  const normalized = email.toLowerCase().trim();
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(normalized)) {
+    return { valid: false, normalized: null, reason: "invalid_format" };
+  }
+
+  const localPart = normalized.split("@")[0];
+  const emailDomain = extractDomainFromEmail(normalized);
+  if (!emailDomain) {
+    return { valid: false, normalized: null, reason: "invalid_domain" };
+  }
+
+  if (PUBLIC_EMAIL_DOMAINS.has(emailDomain)) {
+    return { valid: false, normalized: null, reason: "public_mailbox_not_allowed" };
+  }
+
+  if (
+    /^no-?reply/.test(localPart) ||
+    /(test|fake|sample|example|demo)/i.test(localPart) ||
+    /example\./i.test(emailDomain)
+  ) {
+    return { valid: false, normalized: null, reason: "placeholder_or_no_reply" };
+  }
+
+  const websiteDomain = extractDomainFromUrl(website);
+  if (websiteDomain) {
+    const matchesWebsite = emailDomain === websiteDomain || emailDomain.endsWith(`.${websiteDomain}`);
+    if (!matchesWebsite) {
+      return { valid: false, normalized: null, reason: "domain_mismatch_with_website" };
+    }
+  }
+
+  return { valid: true, normalized };
+}
+
 async function generateCvAndCoverLetter(company: string, category: string, description: string, apiKey: string) {
   try {
     const categoryLabel = category.replace(/_/g, " ");
