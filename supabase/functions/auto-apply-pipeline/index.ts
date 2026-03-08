@@ -383,7 +383,60 @@ Return JSON with: title, company, location, salary_range, description, url, hiri
       }
 
       const expectedDomains = getExpectedDomains({ url: job.url, careers_page_url: job.careers_page_url });
-      const emailValidation = validateHiringEmail(job.hiring_email, expectedDomains);
+      let emailValidation = validateHiringEmail(job.hiring_email, expectedDomains);
+      
+      // Fallback 1: If AI didn't find a valid email, try Hunter.io
+      if (!emailValidation.valid && job.url) {
+        const jobDomain = extractDomainFromUrl(job.url) || extractDomainFromUrl(job.careers_page_url);
+        if (jobDomain) {
+          console.log(`🔍 Hunter.io fallback for ${jobDomain}...`);
+          try {
+            const hunterRes = await fetch(`${SUPABASE_URL}/functions/v1/find-email`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+              body: JSON.stringify({ companyDomain: jobDomain }),
+            });
+            if (hunterRes.ok) {
+              const hunterData = await hunterRes.json();
+              if (hunterData.emails?.length > 0) {
+                const bestEmail = hunterData.emails[0];
+                console.log(`  ✅ Hunter.io found: ${bestEmail.email} (confidence: ${bestEmail.confidence})`);
+                job.hiring_email = bestEmail.email;
+                job.hiring_manager = bestEmail.name || job.hiring_manager;
+                emailValidation = validateHiringEmail(job.hiring_email, expectedDomains);
+              }
+            }
+          } catch (hunterErr) {
+            console.error("  Hunter.io error:", hunterErr);
+          }
+        }
+      }
+
+      // Fallback 2: If still no email, scrape career/contact pages
+      if (!emailValidation.valid && job.url) {
+        const jobDomain = extractDomainFromUrl(job.url) || extractDomainFromUrl(job.careers_page_url);
+        if (jobDomain) {
+          console.log(`🌐 Scraping career pages for ${jobDomain}...`);
+          try {
+            const scrapeRes = await fetch(`${SUPABASE_URL}/functions/v1/scrape-careers`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+              body: JSON.stringify({ companyDomain: jobDomain }),
+            });
+            if (scrapeRes.ok) {
+              const scrapeData = await scrapeRes.json();
+              if (scrapeData.emails?.length > 0) {
+                console.log(`  ✅ Scraped email: ${scrapeData.emails[0]}`);
+                job.hiring_email = scrapeData.emails[0];
+                emailValidation = validateHiringEmail(job.hiring_email, expectedDomains);
+              }
+            }
+          } catch (scrapeErr) {
+            console.error("  Scrape error:", scrapeErr);
+          }
+        }
+      }
+
       if (!emailValidation.valid) {
         await supabase.from("job_applications").insert({
           job_title: job.title,
@@ -398,7 +451,7 @@ Return JSON with: title, company, location, salary_range, description, url, hiri
           status: "no_email",
           sponsorship_available: job.sponsorship || false,
           careers_page_url: job.careers_page_url || null,
-          notes: `Skipped unverified email (${emailValidation.reason || "unknown_reason"})`,
+          notes: `No email found after AI + Hunter.io + scraper (${emailValidation.reason || "unknown"})`,
         });
 
         results.push({ job: job.title, company: job.company, status: "no_email" });
