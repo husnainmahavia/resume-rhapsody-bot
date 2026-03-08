@@ -15,7 +15,7 @@ export const USER_PROFILE = {
     "LLM Integration", "Prompt Engineering", "MidJourney", "Jasper",
     // AR/VR
     "Unity", "ARFoundation", "ARKit", "ARCore", "Vuforia", "8th Wall",
-    "Snapchat Lens Studio", "TikTok Effect House",
+    "Snapchat Lens Studio", "TikTok Effect House", "Augmented Reality",
     // Marketing & SEO
     "SEO", "Google Ads", "Meta Ads", "Google Analytics", "Google Tag Manager",
     "Digital Marketing", "CRO", "Performance Marketing",
