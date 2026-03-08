@@ -191,7 +191,7 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
 
           // 2d: Send email (opens mailto or tracks)
           if (job.hiring_email) {
-            setCurrentAction(`🚀 Preparing email to: ${job.hiring_email}`);
+            setCurrentAction(`🚀 Sending email to: ${job.hiring_email}`);
             updateLogStep(i, "sent", "processing");
 
             try {
@@ -202,23 +202,23 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
                 job.hiring_manager
               );
 
-              if (sendResult.mailto_url) {
-                // Auto-open mailto link
-                window.open(sendResult.mailto_url, "_blank");
+              if (sendResult.sent) {
+                updateLogStep(i, "sent", "done");
+                await updateApplication(saved.id, {
+                  status: "applied",
+                  applied_at: new Date().toISOString(),
+                });
+              } else {
+                updateLogStep(i, "sent", "error");
+                updateLog(i, { error: sendResult.error || "Email delivery failed" });
+                await updateApplication(saved.id, { status: "email_failed" });
               }
-
-              updateLogStep(i, "sent", "done");
-              await updateApplication(saved.id, {
-                status: "applied",
-                applied_at: new Date().toISOString(),
-              });
             } catch {
               updateLogStep(i, "sent", "error");
               updateLog(i, { error: "Email send failed" });
-              await updateApplication(saved.id, { status: "email_sent" });
+              await updateApplication(saved.id, { status: "email_failed" });
             }
           } else {
-            // No email available, skip sending
             updateLogStep(i, "sent", "error");
             updateLog(i, { error: "No hiring email found" });
             await updateApplication(saved.id, { status: "email_sent" });
