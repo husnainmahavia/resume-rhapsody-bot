@@ -216,7 +216,7 @@ Return JSON array with: title, company, location, salary_range, description, url
               },
               {
                 role: "user",
-                content: `BASE CV:\n${CV_VERSIONS.fullstack}\n\nTARGET: ${job.title} at ${job.company}\nDescription: ${job.description}\n\nTailor CV and write cover letter.`,
+                content: `BASE CV:\n${CV_VERSIONS[cvVersion] || CV_VERSIONS.fullstack}\n\nTARGET: ${job.title} at ${job.company}\nDescription: ${job.description}\n\nTailor CV and write cover letter.`,
               },
             ],
             tools: [{
