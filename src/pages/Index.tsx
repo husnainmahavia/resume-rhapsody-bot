@@ -12,6 +12,7 @@ import ScraperTool from "@/components/ScraperTool";
 import LinkedInTool from "@/components/LinkedInTool";
 import ReviewQueue from "@/components/ReviewQueue";
 import CSVUpload from "@/components/CSVUpload";
+import ApplicantProfileForm from "@/components/ApplicantProfileForm";
 import { fetchApplications, type JobApplication } from "@/lib/api";
 
 const Index = () => {
