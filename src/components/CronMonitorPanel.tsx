@@ -2,12 +2,15 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Clock, RefreshCw, CheckCircle2, XCircle, Timer,
-  Zap, Search, Mail, Send, MessageSquare, Globe, Inbox
+  Zap, Search, Mail, Send, MessageSquare, Globe, Inbox,
+  Gauge, Minus, Plus
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { Slider } from "@/components/ui/slider";
+import { useToast } from "@/hooks/use-toast";
 
 interface CronJob {
   name: string;
@@ -35,8 +38,15 @@ const INDUSTRIES = [
   "Architecture & Interior Design", "Automotive", "Food & Beverage", "Finance & Banking",
 ];
 const REGIONS = [
-  "United Kingdom", "UAE & Kuwait", "Pakistan",
-  "Saudi Arabia", "USA & Canada", "Germany & Europe",
+  "United Kingdom", "United States", "Australia",
+  "Canada", "Ireland", "UAE", "Saudi Arabia", "Germany & Europe",
+];
+
+const SPEED_PRESETS = [
+  { label: "Safe", delayMin: 180, delayMax: 300, batch: 10, desc: "3-5 min gaps, 10/batch" },
+  { label: "Moderate", delayMin: 90, delayMax: 180, batch: 15, desc: "1.5-3 min gaps, 15/batch" },
+  { label: "Fast", delayMin: 45, delayMax: 90, batch: 20, desc: "45s-1.5 min gaps, 20/batch" },
+  { label: "Turbo", delayMin: 20, delayMax: 45, batch: 30, desc: "20-45s gaps, 30/batch" },
 ];
 
 function getRotatingTarget() {
@@ -83,15 +93,34 @@ function getLastRun(minute: number): string {
 
 export default function CronMonitorPanel() {
   const [now, setNow] = useState(new Date());
+  const [speedIndex, setSpeedIndex] = useState(0); // Default: Safe
+  const { toast } = useToast();
   const rotating = getRotatingTarget();
   const nextRotating = getNextRotatingTarget();
+
+  useEffect(() => {
+    // Load saved speed
+    const saved = localStorage.getItem("email_speed_preset");
+    if (saved) setSpeedIndex(Number(saved));
+  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(interval);
   }, []);
 
+  const handleSpeedChange = (value: number[]) => {
+    const idx = value[0];
+    setSpeedIndex(idx);
+    localStorage.setItem("email_speed_preset", String(idx));
+    toast({
+      title: `⚡ Speed: ${SPEED_PRESETS[idx].label}`,
+      description: SPEED_PRESETS[idx].desc,
+    });
+  };
+
   const currentMinute = now.getMinutes();
+  const currentSpeed = SPEED_PRESETS[speedIndex];
 
   return (
     <div className="space-y-4">
@@ -108,6 +137,61 @@ export default function CronMonitorPanel() {
               {now.toLocaleTimeString()}
             </span>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Email Send Speed Control */}
+      <Card className="bg-secondary/30 border-border">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Gauge className="h-4 w-4 text-accent" />
+            Email Send Speed
+            <Badge variant="outline" className={`text-[9px] ml-auto ${
+              speedIndex >= 3 ? "text-destructive border-destructive/30" :
+              speedIndex >= 2 ? "text-warning border-warning/30" :
+              "text-success border-success/30"
+            }`}>
+              {currentSpeed.label}
+            </Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="px-1">
+            <Slider
+              value={[speedIndex]}
+              onValueChange={handleSpeedChange}
+              min={0}
+              max={3}
+              step={1}
+              className="w-full"
+            />
+            <div className="flex justify-between mt-1.5">
+              {SPEED_PRESETS.map((p, i) => (
+                <span key={p.label} className={`text-[9px] ${i === speedIndex ? "text-foreground font-medium" : "text-muted-foreground/50"}`}>
+                  {p.label}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="bg-background/40 rounded p-2">
+              <p className="text-lg font-mono font-bold">{currentSpeed.delayMin}s</p>
+              <p className="text-[9px] text-muted-foreground">Min Delay</p>
+            </div>
+            <div className="bg-background/40 rounded p-2">
+              <p className="text-lg font-mono font-bold">{currentSpeed.delayMax}s</p>
+              <p className="text-[9px] text-muted-foreground">Max Delay</p>
+            </div>
+            <div className="bg-background/40 rounded p-2">
+              <p className="text-lg font-mono font-bold">{currentSpeed.batch}</p>
+              <p className="text-[9px] text-muted-foreground">Batch Size</p>
+            </div>
+          </div>
+          {speedIndex >= 2 && (
+            <p className="text-[10px] text-warning flex items-center gap-1">
+              ⚠️ Higher speeds may trigger spam filters. Use with caution.
+            </p>
+          )}
         </CardContent>
       </Card>
 
