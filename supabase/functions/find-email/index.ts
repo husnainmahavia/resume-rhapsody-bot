@@ -220,7 +220,7 @@ async function smtpVerifyEmail(email: string, mxHost: string): Promise<"accepted
       await conn.write(encoder.encode(cmd + "\r\n"));
     };
 
-    const timeout = new Promise<"timeout">(r => setTimeout(() => r("timeout"), 10000));
+    const timeout = new Promise<"timeout">(r => setTimeout(() => r("timeout"), 5000));
 
     const verify = async (): Promise<"accepted" | "rejected" | "catch_all"> => {
       const banner = await read();
