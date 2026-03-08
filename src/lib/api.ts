@@ -12,6 +12,16 @@ export async function fetchApplications() {
   return data;
 }
 
+export async function checkDuplicateApplication(jobTitle: string, company: string): Promise<boolean> {
+  const { data } = await supabase
+    .from("job_applications")
+    .select("id")
+    .ilike("job_title", jobTitle)
+    .ilike("company", company)
+    .limit(1);
+  return (data && data.length > 0);
+}
+
 export async function createApplication(app: TablesInsert<"job_applications">) {
   const { data, error } = await supabase
     .from("job_applications")
