@@ -87,8 +87,11 @@ serve(async (req) => {
 
     // Step 1: Search for jobs via AI
     console.log("🔍 Searching for jobs...");
-    const searchPrompt = `Find 5-8 REAL job listings from REAL companies actively hiring in ${location || "Manchester, UK"} for someone with these skills: ${(skills || ["JavaScript", "React", "Python", "WordPress", "AI"]).join(", ")}.
+    const targetSkills = (skills || ["JavaScript", "React", "Python", "WordPress", "AI"]).join(", ");
+    const targetJobType = jobType || "Full-time";
+    const searchPrompt = `Find 5-8 REAL job listings from REAL companies actively hiring in ${location || "Manchester, UK"} for someone with these skills: ${targetSkills}.
 
+Job type: ${targetJobType}
 CRITICAL: Only use REAL companies with REAL domains. Use actual recruitment email formats like careers@, jobs@, hr@, recruitment@ with the company's real domain.
 
 Return JSON array with: title, company, location, salary_range, description, url, hiring_manager, hiring_email`;
