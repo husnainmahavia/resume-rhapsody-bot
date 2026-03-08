@@ -419,7 +419,7 @@ Return JSON with: title, company, location, salary_range, description, url, hiri
           status: "no_email",
           sponsorship_available: job.sponsorship || false,
           careers_page_url: job.careers_page_url || null,
-          notes: `No email found after AI + Hunter.io + scraper (${emailValidation.reason || "unknown"})`,
+          notes: `No email found after AI + scraper + MX validation (${emailValidation.reason || "unknown"})`,
         });
 
         results.push({ job: job.title, company: job.company, status: "no_email" });
