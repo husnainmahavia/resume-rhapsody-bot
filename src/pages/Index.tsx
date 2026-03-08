@@ -104,6 +104,11 @@ const Index = () => {
         description: "Review pending emails before they're sent. Approve verified domains in bulk or reject suspicious ones.",
         component: <ReviewQueue />,
       },
+      tracking: {
+        icon: Eye, title: "Email Open Tracking", subtitle: "real-time",
+        description: "See which companies opened your application emails, how many times, and when. Powered by invisible tracking pixels.",
+        component: <EmailOpenTracker />,
+      },
       csv: {
         icon: Upload, title: "CSV Job Import", subtitle: "bulk upload",
         description: "Upload a CSV with company names, domains, job titles, and emails. Jobs are imported into the pipeline for processing.",
