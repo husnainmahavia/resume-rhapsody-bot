@@ -301,7 +301,7 @@ REQUIREMENTS:
         query = query.in("id", targetLeadIds);
       }
 
-      const { data: leads, error } = await query.limit(50);
+      const { data: leads, error } = await query.limit(10);
       if (error) throw error;
       if (!leads || leads.length === 0) {
         return new Response(JSON.stringify({ success: true, sent: 0, message: "No emails ready to send" }), {
