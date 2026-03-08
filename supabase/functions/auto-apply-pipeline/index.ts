@@ -558,7 +558,7 @@ Keep it under 150 words. Professional but warm. NOT generic — reference someth
           email_body: emailResult.body,
         }).eq("id", saved.id);
 
-        // Send email with CV attached and tracking pixel
+        // Queue email for review instead of sending directly
         if (job.hiring_email) {
           const expectedDomains = getExpectedDomains({ url: job.url, careers_page_url: job.careers_page_url });
           const finalEmailValidation = validateHiringEmail(job.hiring_email, expectedDomains);
@@ -573,61 +573,27 @@ Keep it under 150 words. Professional but warm. NOT generic — reference someth
           }
 
           job.hiring_email = finalEmailValidation.normalized;
-          console.log(`🚀 Sending to: ${job.hiring_email}`);
 
-          // Create tracking record with pixel
-          const { data: trackingRecord } = await supabase
-            .from("email_tracking")
-            .insert({ application_id: saved.id })
-            .select()
-            .single();
-
-          const trackingPixelUrl = trackingRecord
-            ? `${SUPABASE_URL}/functions/v1/email-track?id=${trackingRecord.tracking_pixel_id}`
-            : "";
-
-          const transporter = nodemailer.createTransport({
-            host: "smtp.gmail.com",
-            port: 465,
-            secure: true,
-            auth: { user: senderEmail, pass: GMAIL_APP_PASSWORD },
-          });
-
-          const htmlBody = emailResult.body.replace(/\n/g, "<br>");
-          const trackingPixel = trackingPixelUrl ? `<img src="${trackingPixelUrl}" width="1" height="1" style="display:none" alt="" />` : "";
-
-          const safeCompany = job.company.replace(/[^a-zA-Z0-9]/g, "_");
-          const cvFilename = `Husnain_Mahavia_CV_${safeCompany}.html`;
-
-          await transporter.sendMail({
-            from: `${senderName} <${senderEmail}>`,
-            to: job.hiring_email,
-            subject: emailResult.subject,
-            text: emailResult.body,
-            html: `<div style="font-family: 'Calibri', Arial, sans-serif; line-height: 1.6; max-width: 600px; color: #1a1a1a;">${htmlBody}${trackingPixel}</div>`,
-            attachments: [
-              {
-                filename: cvFilename,
-                content: cvHtml,
-                contentType: "text/html",
-              },
-              {
-                filename: `Cover_Letter_${safeCompany}.txt`,
-                content: cvResult.cover_letter,
-                contentType: "text/plain",
-              },
-            ],
+          // Insert into review queue for approval
+          await supabase.from("email_review_queue").insert({
+            recipient_email: job.hiring_email,
+            recipient_name: job.hiring_manager || null,
+            company: job.company,
+            email_subject: emailResult.subject,
+            email_body: emailResult.body,
+            source: "auto_apply",
+            application_id: saved.id,
+            domain_match: finalEmailValidation.valid,
+            validation_status: "pending",
+            validation_reason: finalEmailValidation.reason || "domain_verified",
           });
 
           await supabase.from("job_applications").update({
-            status: "applied",
-            applied_at: new Date().toISOString(),
-            follow_up_scheduled_at: new Date(Date.now() + 3 * 86400000).toISOString(),
+            status: "queued_for_review",
           }).eq("id", saved.id);
 
-          emailsSentThisRun++;
-          console.log(`✅ Email SENT with CV + tracking to ${job.hiring_email} (${emailsSentThisRun} this run)`);
-          results.push({ job: job.title, company: job.company, status: "applied", email: job.hiring_email });
+          console.log(`📋 Queued for review: ${job.hiring_email} (${job.company})`);
+          results.push({ job: job.title, company: job.company, status: "queued_for_review", email: job.hiring_email });
         } else {
           await supabase.from("job_applications").update({ status: "no_email" }).eq("id", saved.id);
           results.push({ job: job.title, company: job.company, status: "no_email" });
