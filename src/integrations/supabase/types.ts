@@ -14,7 +14,72 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      job_applications: {
+        Row: {
+          applied_at: string | null
+          company: string
+          cover_letter: string | null
+          created_at: string
+          email_body: string | null
+          email_subject: string | null
+          hiring_manager_email: string | null
+          hiring_manager_name: string | null
+          id: string
+          job_description: string | null
+          job_title: string
+          job_url: string | null
+          location: string | null
+          notes: string | null
+          salary_range: string | null
+          source: string | null
+          status: string
+          tailored_cv: string | null
+          updated_at: string
+        }
+        Insert: {
+          applied_at?: string | null
+          company: string
+          cover_letter?: string | null
+          created_at?: string
+          email_body?: string | null
+          email_subject?: string | null
+          hiring_manager_email?: string | null
+          hiring_manager_name?: string | null
+          id?: string
+          job_description?: string | null
+          job_title: string
+          job_url?: string | null
+          location?: string | null
+          notes?: string | null
+          salary_range?: string | null
+          source?: string | null
+          status?: string
+          tailored_cv?: string | null
+          updated_at?: string
+        }
+        Update: {
+          applied_at?: string | null
+          company?: string
+          cover_letter?: string | null
+          created_at?: string
+          email_body?: string | null
+          email_subject?: string | null
+          hiring_manager_email?: string | null
+          hiring_manager_name?: string | null
+          id?: string
+          job_description?: string | null
+          job_title?: string
+          job_url?: string | null
+          location?: string | null
+          notes?: string | null
+          salary_range?: string | null
+          source?: string | null
+          status?: string
+          tailored_cv?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
