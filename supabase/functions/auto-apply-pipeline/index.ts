@@ -340,7 +340,7 @@ Return JSON with: title, company, location, salary_range, description, url, hiri
       let emailValidation = validateHiringEmail(job.hiring_email, expectedDomains);
       
       // Fallback 1: If AI didn't find a valid email, try Hunter.io
-      if (!emailValidation.valid && job.url) {
+      if (!emailValidation.valid && (job.url || job.careers_page_url)) {
         const jobDomain = extractDomainFromUrl(job.url) || extractDomainFromUrl(job.careers_page_url);
         if (jobDomain) {
           console.log(`🔍 Hunter.io fallback for ${jobDomain}...`);
@@ -348,7 +348,11 @@ Return JSON with: title, company, location, salary_range, description, url, hiri
             const hunterRes = await fetch(`${SUPABASE_URL}/functions/v1/find-email`, {
               method: "POST",
               headers: { "Content-Type": "application/json", Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
-              body: JSON.stringify({ companyDomain: jobDomain }),
+              body: JSON.stringify({
+                companyDomain: jobDomain,
+                companyName: job.company,
+                hiringManagerName: job.hiring_manager,
+              }),
             });
             if (hunterRes.ok) {
               const hunterData = await hunterRes.json();
@@ -367,7 +371,7 @@ Return JSON with: title, company, location, salary_range, description, url, hiri
       }
 
       // Fallback 2: If still no email, scrape career/contact pages
-      if (!emailValidation.valid && job.url) {
+      if (!emailValidation.valid && (job.url || job.careers_page_url)) {
         const jobDomain = extractDomainFromUrl(job.url) || extractDomainFromUrl(job.careers_page_url);
         if (jobDomain) {
           console.log(`🌐 Scraping career pages for ${jobDomain}...`);
