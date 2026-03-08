@@ -1,0 +1,1 @@
+ALTER TABLE public.scraped_companies ADD CONSTRAINT scraped_companies_email_category_unique UNIQUE (email, category);
