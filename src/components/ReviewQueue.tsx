@@ -2,12 +2,13 @@ import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ShieldCheck, ShieldX, Mail, CheckCircle2, XCircle,
-  Loader2, RefreshCw, Eye, Ban, AlertTriangle
+  Loader2, RefreshCw, Eye, Ban, AlertTriangle, Send
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
+import { sendEmail } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 interface QueueItem {
