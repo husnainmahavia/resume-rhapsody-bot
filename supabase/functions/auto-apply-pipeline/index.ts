@@ -170,8 +170,26 @@ serve(async (req) => {
     const GMAIL_APP_PASSWORD = Deno.env.get("GMAIL_APP_PASSWORD")!;
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    const senderEmail = "husnainmahavia.1@gmail.com";
-    const senderName = "Husnain Mahavia";
+
+    // Load applicant profile from DB
+    const { data: profileData } = await supabase
+      .from("applicant_profile")
+      .select("*")
+      .limit(1)
+      .single();
+
+    if (profileData) {
+      APPLICANT_NAME = (profileData as any).name || APPLICANT_NAME;
+      APPLICANT_EMAIL = (profileData as any).email || APPLICANT_EMAIL;
+      APPLICANT_PHONE = (profileData as any).phone || APPLICANT_PHONE;
+      APPLICANT_TITLE = (profileData as any).title || APPLICANT_TITLE;
+      APPLICANT_SKILLS = (profileData as any).skills || APPLICANT_SKILLS;
+      APPLICANT_SUMMARY = (profileData as any).summary || APPLICANT_SUMMARY;
+      FULL_CV_CONTENT = (profileData as any).cv_content || FULL_CV_CONTENT;
+    }
+
+    const senderEmail = APPLICANT_EMAIL;
+    const senderName = APPLICANT_NAME;
 
     if (action === "status") {
       const { count: totalCount } = await supabase.from("job_applications").select("*", { count: "exact", head: true });
