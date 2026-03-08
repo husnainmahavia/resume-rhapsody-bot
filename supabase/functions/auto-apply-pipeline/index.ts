@@ -371,7 +371,7 @@ Return JSON with: title, company, location, salary_range, description, url, hiri
       }
 
       // Fallback 2: If still no email, scrape career/contact pages
-      if (!emailValidation.valid && job.url) {
+      if (!emailValidation.valid && (job.url || job.careers_page_url)) {
         const jobDomain = extractDomainFromUrl(job.url) || extractDomainFromUrl(job.careers_page_url);
         if (jobDomain) {
           console.log(`🌐 Scraping career pages for ${jobDomain}...`);
