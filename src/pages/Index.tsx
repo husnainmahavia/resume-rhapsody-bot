@@ -11,6 +11,7 @@ import Dashboard from "@/components/Dashboard";
 import ScraperTool from "@/components/ScraperTool";
 import LinkedInTool from "@/components/LinkedInTool";
 import ReviewQueue from "@/components/ReviewQueue";
+import CSVUpload from "@/components/CSVUpload";
 import { fetchApplications, type JobApplication } from "@/lib/api";
 
 const Index = () => {
