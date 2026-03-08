@@ -93,6 +93,9 @@ const Index = () => {
                 <TabsTrigger value="scraper" className="gap-1.5 data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
                   <Globe className="h-3.5 w-3.5" /> Scraper
                 </TabsTrigger>
+                <TabsTrigger value="review" className="gap-1.5 data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
+                  <ShieldCheck className="h-3.5 w-3.5" /> Review Queue
+                </TabsTrigger>
                 <TabsTrigger value="applications" className="gap-1.5 data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
                   <FileText className="h-3.5 w-3.5" /> Pipeline
                   {applications.length > 0 && (
