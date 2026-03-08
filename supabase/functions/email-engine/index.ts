@@ -38,10 +38,12 @@ const INDUSTRIES = [
 
 const REGIONS = [
   "United Kingdom",
-  "UAE & Kuwait",
-  "Pakistan",
+  "United States",
+  "Australia",
+  "Canada",
+  "Ireland",
+  "UAE",
   "Saudi Arabia",
-  "USA & Canada",
   "Germany & Europe",
 ];
 

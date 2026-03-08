@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, Sparkles, Send, Loader2, CheckCircle2, XCircle,
   Globe, Mail, BarChart3, RefreshCw, ChevronDown, ChevronUp,
-  Filter, Clock, AlertTriangle
+  Filter, Clock, AlertTriangle, RotateCcw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -51,8 +51,8 @@ const DEFAULT_INDUSTRIES = [
 ];
 
 const DEFAULT_REGIONS = [
-  "United Kingdom", "UAE & Kuwait", "Pakistan",
-  "Saudi Arabia", "USA & Canada", "Germany & Europe",
+  "United Kingdom", "United States", "Australia",
+  "Canada", "Ireland", "UAE", "Saudi Arabia", "Germany & Europe",
 ];
 
 function getLeadStatus(lead: Lead): StatusFilter {
@@ -78,6 +78,7 @@ export default function EmailEngineDashboard() {
   const [discovering, setDiscovering] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [sending, setSending] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
   const [expandedLead, setExpandedLead] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<StatusFilter>("all");
@@ -188,6 +189,38 @@ export default function EmailEngineDashboard() {
     }
   };
 
+  const handleRetryErrors = async () => {
+    const errorLeads = leads.filter(l => !!l.send_error);
+    if (errorLeads.length === 0) {
+      toast({ title: "No errors to retry", variant: "destructive" });
+      return;
+    }
+    setRetrying(true);
+    try {
+      // Clear errors first, then re-send
+      for (const lead of errorLeads) {
+        await supabase.from("email_engine_leads").update({
+          send_error: null,
+          sent: false,
+        }).eq("id", lead.id);
+      }
+      // Now send them
+      const { data } = await supabase.functions.invoke("email-engine", {
+        body: { action: "send", leadIds: errorLeads.map(l => l.id) },
+      });
+      toast({
+        title: `🔄 Retried ${data?.sent || 0} emails`,
+        description: data?.errors ? `${data.errors} still failing` : "All retried successfully",
+      });
+      loadStats();
+      loadLeads();
+    } catch (e) {
+      toast({ title: "Retry failed", description: String(e), variant: "destructive" });
+    } finally {
+      setRetrying(false);
+    }
+  };
+
   const toggleLead = (id: string) => {
     const next = new Set(selectedLeads);
     next.has(id) ? next.delete(id) : next.add(id);
@@ -267,6 +300,12 @@ export default function EmailEngineDashboard() {
               {sending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
               Send Bulk {selectedLeads.size > 0 && `(${selectedLeads.size})`}
             </Button>
+            {filterCounts.error > 0 && (
+              <Button variant="outline" size="sm" onClick={handleRetryErrors} disabled={retrying} className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10">
+                {retrying ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+                Retry Errors ({filterCounts.error})
+              </Button>
+            )}
             <Button variant="ghost" size="sm" onClick={() => { loadStats(); loadLeads(); }} className="gap-1.5">
               <RefreshCw className="h-3 w-3" /> Refresh
             </Button>
