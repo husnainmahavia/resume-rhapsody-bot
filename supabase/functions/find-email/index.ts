@@ -18,12 +18,16 @@ type FoundEmail = {
 };
 
 function normalizeDomain(input: string): string {
-  return input
+  let d = input
     .toLowerCase()
     .trim()
     .replace(/^(https?:\/\/)?(www\.)?/, "")
     .split("/")[0]
     .replace(/\s+/g, "");
+
+  // Strip common career/jobs subdomains to get the root company domain
+  d = d.replace(/^(careers|jobs|careerssearch|apply|talent|recruiting|hire|join|work)\./i, "");
+  return d;
 }
 
 function deobfuscateEmails(text: string): string {
@@ -189,7 +193,7 @@ serve(async (req) => {
     // 1) Hunter domain search (primary)
     if (HUNTER_KEY) {
       const hunterRes = await fetch(
-        `https://api.hunter.io/v2/domain-search?domain=${encodeURIComponent(domain)}&api_key=${HUNTER_KEY}&limit=15`,
+        `https://api.hunter.io/v2/domain-search?domain=${encodeURIComponent(domain)}&api_key=${HUNTER_KEY}&limit=10`,
         { signal: AbortSignal.timeout(10000) },
       );
 
