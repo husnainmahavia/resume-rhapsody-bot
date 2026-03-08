@@ -200,6 +200,15 @@ export default function ReviewQueue() {
               <CheckCircle2 className="h-3 w-3" /> Approve All Verified ({queue.filter(q => q.domain_match).length})
             </Button>
           )}
+          <Button
+            size="sm"
+            variant="default"
+            className="gap-1 text-xs"
+            onClick={handleSendApproved}
+            disabled={processing === "sending"}
+          >
+            <Send className="h-3 w-3" /> {processing === "sending" ? "Sending..." : "Send Approved"}
+          </Button>
           <Button size="sm" variant="ghost" onClick={loadData} className="gap-1 text-xs">
             <RefreshCw className="h-3 w-3" /> Refresh
           </Button>
