@@ -12,7 +12,7 @@ import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { USER_PROFILE } from "@/lib/user-profile";
-import { runServerPipeline, getPipelineStatus } from "@/lib/api";
+import { runServerPipeline, getPipelineStatus, sendFollowUps } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 type PipelineStep = "idle" | "running" | "complete" | "error";
@@ -47,12 +47,20 @@ const JOB_TYPE_OPTIONS = [
   { value: "Hybrid", label: "Hybrid" },
 ];
 
+const SEARCH_MODE_OPTIONS = [
+  { value: "standard", label: "Standard Search" },
+  { value: "careers_page", label: "Careers Page Scraping" },
+  { value: "sponsorship", label: "Sponsorship Companies" },
+  { value: "recent_24h", label: "Last 24h Jobs Only" },
+];
+
 export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) {
   const [status, setStatus] = useState<PipelineStep>("idle");
   const [location, setLocation] = useState("Manchester, UK");
   const [selectedSkills, setSelectedSkills] = useState<string[]>(ALL_SKILLS.slice(0, 15));
   const [cvVersion, setCvVersion] = useState("auto");
   const [jobType, setJobType] = useState("Full-time");
+  const [searchMode, setSearchMode] = useState("standard");
   const [showConfig, setShowConfig] = useState(true);
   const [results, setResults] = useState<PipelineResult[]>([]);
   const [pipelineStats, setPipelineStats] = useState({ total: 0, applied: 0, today: 0, dailyLimit: 80 });
@@ -91,7 +99,8 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
         location,
         selectedSkills,
         cvVersion,
-        jobType
+        jobType,
+        searchMode
       );
 
       if (result.error) {
@@ -115,7 +124,7 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
       setStatus("error");
       toast({ title: "Pipeline Error", description: String(err), variant: "destructive" });
     }
-  }, [location, selectedSkills, cvVersion, jobType, onUpdate, toast]);
+  }, [location, selectedSkills, cvVersion, jobType, searchMode, onUpdate, toast]);
 
   const statusIcon = (s: string) => {
     switch (s) {
