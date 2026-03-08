@@ -86,9 +86,17 @@ export async function sendEmail(
 }
 
 // Server-side pipeline - runs in background, won't stop when tab switches
-export async function runServerPipeline(location: string, skills?: string[], cvVersion?: string, jobType?: string) {
+export async function runServerPipeline(location: string, skills?: string[], cvVersion?: string, jobType?: string, searchMode?: string) {
   const { data, error } = await supabase.functions.invoke("auto-apply-pipeline", {
-    body: { location, skills, cvVersion, jobType, action: "run" },
+    body: { location, skills, cvVersion, jobType, searchMode, action: "run" },
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function sendFollowUps() {
+  const { data, error } = await supabase.functions.invoke("follow-up", {
+    body: {},
   });
   if (error) throw error;
   return data;
