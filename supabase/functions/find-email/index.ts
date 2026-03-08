@@ -325,26 +325,88 @@ serve(async (req) => {
       });
     }
 
-    // Step 3: If no high-confidence scraped emails, generate patterns
+    // Step 3: If no high-confidence scraped emails, generate patterns + SMTP verify them
     const strongCount = [...foundEmails.values()].filter(e => e.confidence >= 70).length;
-    if (strongCount < 1) {
+    if (strongCount < 1 && mxValid) {
       const commonCandidates = generateCommonPatterns(domain, hiringManagerName);
-      for (const candidate of commonCandidates) {
-        if (foundEmails.has(candidate)) continue;
-        const local = candidate.split("@")[0];
-        const priority = LOCAL_PART_PRIORITY[local] || 10;
-        const confidence = mxValid ? Math.min(priority, 60) : Math.min(priority, 25);
-        foundEmails.set(candidate, {
-          email: candidate,
-          name: "",
-          title: "",
-          confidence,
-          isHR: HR_KEYWORDS.some(k => candidate.includes(k)),
-          source: "common_pattern",
-          verifiedStatus: mxValid ? "mx_valid" : "mx_invalid",
+      const mxHost = await getMxHost(domain);
+
+      if (mxHost) {
+        console.log(`🔬 SMTP-verifying ${commonCandidates.length} pattern candidates via ${mxHost}...`);
+        // Test top-priority patterns first (info, contact, enquiries, hello)
+        const prioritySorted = commonCandidates.sort((a, b) => {
+          const la = a.split("@")[0], lb = b.split("@")[0];
+          return (LOCAL_PART_PRIORITY[lb] || 0) - (LOCAL_PART_PRIORITY[la] || 0);
         });
+
+        // SMTP verify in batches of 3 to avoid overloading
+        for (let i = 0; i < Math.min(prioritySorted.length, 9); i += 3) {
+          const batch = prioritySorted.slice(i, i + 3);
+          const results = await Promise.all(batch.map(async (candidate) => {
+            const smtpResult = await smtpVerifyEmail(candidate, mxHost);
+            return { candidate, smtpResult };
+          }));
+
+          for (const { candidate, smtpResult } of results) {
+            if (foundEmails.has(candidate)) continue;
+            const local = candidate.split("@")[0];
+            const basePriority = LOCAL_PART_PRIORITY[local] || 10;
+
+            let confidence: number;
+            let verifiedStatus: string;
+            if (smtpResult === "accepted") {
+              confidence = 90; // SMTP confirmed — this email EXISTS
+              verifiedStatus = "smtp_verified";
+              console.log(`  ✅ SMTP VERIFIED: ${candidate}`);
+            } else if (smtpResult === "catch_all") {
+              confidence = Math.min(basePriority + 10, 70);
+              verifiedStatus = "catch_all";
+            } else if (smtpResult === "rejected") {
+              confidence = 5; // Definitively doesn't exist
+              verifiedStatus = "smtp_rejected";
+              console.log(`  ❌ SMTP REJECTED: ${candidate}`);
+            } else {
+              confidence = Math.min(basePriority, 50);
+              verifiedStatus = `smtp_${smtpResult}`;
+            }
+
+            foundEmails.set(candidate, {
+              email: candidate,
+              name: "",
+              title: "",
+              confidence,
+              isHR: HR_KEYWORDS.some(k => candidate.includes(k)),
+              source: "common_pattern",
+              verifiedStatus,
+            });
+          }
+
+          // If we found an SMTP-verified email, stop checking more
+          const verified = [...foundEmails.values()].filter(e => e.verifiedStatus === "smtp_verified");
+          if (verified.length >= 2) break;
+        }
+      } else {
+        // No MX host — add patterns with low confidence
+        for (const candidate of commonCandidates) {
+          if (foundEmails.has(candidate)) continue;
+          const local = candidate.split("@")[0];
+          const priority = LOCAL_PART_PRIORITY[local] || 10;
+          foundEmails.set(candidate, {
+            email: candidate, name: "", title: "",
+            confidence: Math.min(priority, 25),
+            isHR: HR_KEYWORDS.some(k => candidate.includes(k)),
+            source: "common_pattern",
+            verifiedStatus: "mx_invalid",
+          });
+        }
       }
-      console.log(`🧠 Added ${commonCandidates.length} pattern candidates`);
+
+      // Remove SMTP-rejected emails
+      for (const [email, data] of foundEmails) {
+        if (data.verifiedStatus === "smtp_rejected") foundEmails.delete(email);
+      }
+
+      console.log(`🧠 Pattern candidates after SMTP verification: ${foundEmails.size}`);
     }
 
     // Sort: scraped/mailto first, then by confidence
