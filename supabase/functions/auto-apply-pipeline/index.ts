@@ -22,6 +22,30 @@ function humanDelay(): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+class AICreditsError extends Error {
+  status: number;
+  constructor(status: number) {
+    const msg = status === 402
+      ? "AI credits exhausted. Please add credits in Settings → Workspace → Usage."
+      : "AI rate limit exceeded. Please wait a moment and try again.";
+    super(msg);
+    this.name = "AICreditsError";
+    this.status = status;
+  }
+}
+
+async function callAIGateway(apiKey: string, body: Record<string, unknown>): Promise<Response> {
+  const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (resp.status === 402 || resp.status === 429) {
+    throw new AICreditsError(resp.status);
+  }
+  return resp;
+}
+
 function normalizeDomain(domain: string): string {
   let d = domain.toLowerCase().trim().replace(/^www\./, "");
   d = d.replace(/^(careers|jobs|careerssearch|apply|talent|recruiting|hire|join|work)\./i, "");
