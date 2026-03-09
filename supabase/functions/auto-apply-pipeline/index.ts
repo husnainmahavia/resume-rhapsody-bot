@@ -22,6 +22,30 @@ function humanDelay(): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+class AICreditsError extends Error {
+  status: number;
+  constructor(status: number) {
+    const msg = status === 402
+      ? "AI credits exhausted. Please add credits in Settings → Workspace → Usage."
+      : "AI rate limit exceeded. Please wait a moment and try again.";
+    super(msg);
+    this.name = "AICreditsError";
+    this.status = status;
+  }
+}
+
+async function callAIGateway(apiKey: string, body: Record<string, unknown>): Promise<Response> {
+  const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (resp.status === 402 || resp.status === 429) {
+    throw new AICreditsError(resp.status);
+  }
+  return resp;
+}
+
 function normalizeDomain(domain: string): string {
   let d = domain.toLowerCase().trim().replace(/^www\./, "");
   d = d.replace(/^(careers|jobs|careerssearch|apply|talent|recruiting|hire|join|work)\./i, "");
@@ -267,44 +291,45 @@ VERIFICATION: Before returning each job, mentally verify:
 
 Return JSON with: title, company, location, salary_range, description, url, hiring_manager, hiring_email, sponsorship (boolean), careers_page_url`;
 
-    const searchResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: "You are a UK recruitment specialist. Only return REAL companies with VERIFIED contact emails. Return valid JSON only." },
-          { role: "user", content: searchPrompt },
-        ],
-        tools: [{
-          type: "function",
-          function: {
-            name: "return_jobs",
-            description: "Return real job listings",
-            parameters: {
-              type: "object",
-              properties: {
-                jobs: {
-                  type: "array",
-                  items: {
-                    type: "object",
-                    properties: {
-                      title: { type: "string" }, company: { type: "string" },
-                      location: { type: "string" }, salary_range: { type: "string" },
-                      description: { type: "string" }, url: { type: "string" },
-                      hiring_manager: { type: "string" }, hiring_email: { type: "string" },
-                      sponsorship: { type: "boolean" }, careers_page_url: { type: "string" },
-                    },
-                    required: ["title", "company", "location", "description", "hiring_email"],
+    const searchResponse = await callAIGateway(LOVABLE_API_KEY, {
+      model: "google/gemini-2.5-flash",
+      messages: [
+        { role: "system", content: "You are a job search assistant. Find real job listings matching the criteria. Return structured results." },
+        { role: "user", content: searchPrompt },
+      ],
+      tools: [{
+        type: "function",
+        function: {
+          name: "return_jobs",
+          description: "Return found job listings",
+          parameters: {
+            type: "object",
+            properties: {
+              jobs: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    title: { type: "string" },
+                    company: { type: "string" },
+                    location: { type: "string" },
+                    salary_range: { type: "string" },
+                    description: { type: "string" },
+                    url: { type: "string" },
+                    hiring_manager: { type: "string" },
+                    hiring_email: { type: "string" },
+                    sponsorship: { type: "boolean" },
+                    careers_page_url: { type: "string" },
                   },
+                  required: ["title", "company", "location"],
                 },
               },
-              required: ["jobs"],
             },
+            required: ["jobs"],
           },
-        }],
-        tool_choice: { type: "function", function: { name: "return_jobs" } },
-      }),
+        },
+      }],
+      tool_choice: { type: "function", function: { name: "return_jobs" } },
     });
 
     if (!searchResponse.ok) throw new Error(`Search failed: ${searchResponse.status}`);
@@ -511,10 +536,7 @@ TAILORING INSTRUCTIONS:
 
 Return the complete tailored CV text and cover letter.`;
 
-        const cvResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-          body: JSON.stringify({
+        const cvResponse = await callAIGateway(LOVABLE_API_KEY, {
             model: "google/gemini-2.5-flash",
             messages: [
               { role: "system", content: "You are a professional CV writer. Return tailored CV content maintaining the exact same professional format." },
@@ -536,7 +558,6 @@ Return the complete tailored CV text and cover letter.`;
               },
             }],
             tool_choice: { type: "function", function: { name: "return_documents" } },
-          }),
         });
 
         if (!cvResponse.ok) throw new Error("CV tailoring failed");
@@ -558,10 +579,7 @@ Return the complete tailored CV text and cover letter.`;
 
         // Generate email — short professional intro only (CV attached as file)
         console.log(`✉️ Generating email for: ${job.company}`);
-        const emailResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-          body: JSON.stringify({
+        const emailResponse = await callAIGateway(LOVABLE_API_KEY, {
             model: "google/gemini-2.5-flash",
             messages: [
               {
@@ -599,7 +617,6 @@ Keep it under 150 words. Professional but warm. NOT generic — reference someth
               },
             }],
             tool_choice: { type: "function", function: { name: "return_email" } },
-          }),
         });
 
         if (!emailResponse.ok) throw new Error("Email generation failed");
@@ -669,8 +686,9 @@ Keep it under 150 words. Professional but warm. NOT generic — reference someth
 
   } catch (e) {
     console.error("Pipeline error:", e);
+    const status = e instanceof AICreditsError ? e.status : 500;
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
