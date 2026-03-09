@@ -20,7 +20,7 @@ const QUICK_ACTIONS = [
     label: "Fix All Emails",
     icon: Zap,
     message:
-      "Run bulk_fix_emails on the top 10 unsent leads. Verify each current email with Hunter.io and replace any that are invalid with real verified ones.",
+      "Run bulk_fix_emails on the top 10 unsent leads. Verify each current email and replace any that are invalid with real verified ones.",
   },
   {
     label: "Analyze Bounces",
