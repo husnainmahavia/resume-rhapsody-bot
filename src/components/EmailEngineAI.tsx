@@ -47,7 +47,7 @@ export default function EmailEngineAI({ onDataChanged }: { onDataChanged?: () =>
     {
       role: "assistant",
       content:
-        "👋 I'm your **AI Email Boss**. I use Hunter.io to find and verify **real business emails** — fixing the deliverability problem where ~90% of AI-generated emails bounce.\n\nTry a quick action below or ask me anything.",
+        "👋 I'm your **AI Email Boss**. I use built-in AI + DNS/MX verification to find and verify **real business emails** — fixing the deliverability problem where ~90% of AI-generated emails bounce.\n\nTry a quick action below or ask me anything.",
     },
   ]);
   const [input, setInput] = useState("");
