@@ -159,7 +159,7 @@ async function aiSearchEmails(query: string, apiKey: string, retries = 3): Promi
         method: "POST",
         headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "gemini-2.5-flash",
+          model: "gemini-2.5-flash-lite",
           messages: [{
             role: "user",
             content: `You are a job research assistant. Search for real companies matching: "${query}"
