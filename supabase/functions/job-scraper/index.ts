@@ -303,8 +303,8 @@ serve(async (req) => {
             }
           }
 
-          // Delay between searches
-          await new Promise(r => setTimeout(r, 2000 + Math.random() * 3000));
+          // Longer delay between searches to avoid Gemini rate limits
+          await new Promise(r => setTimeout(r, 8000 + Math.random() * 7000));
         }
 
         results.push({ category: cat.name, found: catFound, new: catNew, rejected: catRejected });
