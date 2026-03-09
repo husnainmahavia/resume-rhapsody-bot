@@ -291,44 +291,45 @@ VERIFICATION: Before returning each job, mentally verify:
 
 Return JSON with: title, company, location, salary_range, description, url, hiring_manager, hiring_email, sponsorship (boolean), careers_page_url`;
 
-    const searchResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: "You are a UK recruitment specialist. Only return REAL companies with VERIFIED contact emails. Return valid JSON only." },
-          { role: "user", content: searchPrompt },
-        ],
-        tools: [{
-          type: "function",
-          function: {
-            name: "return_jobs",
-            description: "Return real job listings",
-            parameters: {
-              type: "object",
-              properties: {
-                jobs: {
-                  type: "array",
-                  items: {
-                    type: "object",
-                    properties: {
-                      title: { type: "string" }, company: { type: "string" },
-                      location: { type: "string" }, salary_range: { type: "string" },
-                      description: { type: "string" }, url: { type: "string" },
-                      hiring_manager: { type: "string" }, hiring_email: { type: "string" },
-                      sponsorship: { type: "boolean" }, careers_page_url: { type: "string" },
-                    },
-                    required: ["title", "company", "location", "description", "hiring_email"],
+    const searchResponse = await callAIGateway(LOVABLE_API_KEY, {
+      model: "google/gemini-2.5-flash",
+      messages: [
+        { role: "system", content: "You are a job search assistant. Find real job listings matching the criteria. Return structured results." },
+        { role: "user", content: searchPrompt },
+      ],
+      tools: [{
+        type: "function",
+        function: {
+          name: "return_jobs",
+          description: "Return found job listings",
+          parameters: {
+            type: "object",
+            properties: {
+              jobs: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    title: { type: "string" },
+                    company: { type: "string" },
+                    location: { type: "string" },
+                    salary_range: { type: "string" },
+                    description: { type: "string" },
+                    url: { type: "string" },
+                    hiring_manager: { type: "string" },
+                    hiring_email: { type: "string" },
+                    sponsorship: { type: "boolean" },
+                    careers_page_url: { type: "string" },
                   },
+                  required: ["title", "company", "location"],
                 },
               },
-              required: ["jobs"],
             },
+            required: ["jobs"],
           },
-        }],
-        tool_choice: { type: "function", function: { name: "return_jobs" } },
-      }),
+        },
+      }],
+      tool_choice: { type: "function", function: { name: "return_jobs" } },
     });
 
     if (!searchResponse.ok) throw new Error(`Search failed: ${searchResponse.status}`);
