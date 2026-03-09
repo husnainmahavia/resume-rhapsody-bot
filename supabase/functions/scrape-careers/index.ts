@@ -7,16 +7,27 @@ const corsHeaders = {
 
 const EMAIL_REGEX = /[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}/g;
 
+// Expanded fake email blocklist per PDF strategy
+const FAKE_EMAIL_PREFIXES = new Set([
+  "noreply", "no-reply", "donotreply", "do-not-reply",
+  "notification", "notifications", "alerts", "alert",
+  "admin", "webmaster", "postmaster", "hostmaster",
+  "automated", "mailer-daemon", "daemon", "bounce",
+  "abuse", "root", "nobody", "null",
+]);
+
 const INVALID_EMAIL_PATTERNS = [
   /example\.com$/i, /test\.com$/i, /your-?email/i, /placeholder/i,
   /\.png$/i, /\.jpg$/i, /\.gif$/i, /\.svg$/i, /\.css$/i, /\.js$/i,
   /wixpress\.com$/i, /sentry\.io$/i, /cloudflare/i, /webpack/i,
   /schema\.org$/i, /w3\.org$/i, /googleapis\.com$/i, /gstatic\.com$/i,
+  /noreply\.com$/i, /reply\.com$/i,
 ];
 
 const PUBLIC_DOMAINS = new Set([
   "gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "live.com",
   "icloud.com", "aol.com", "protonmail.com", "proton.me", "gmx.com",
+  "googlemail.com", "yahoo.co.uk",
 ]);
 
 const USER_AGENTS = [
@@ -26,27 +37,26 @@ const USER_AGENTS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0",
 ];
 
-// Priority scoring for email local parts — higher = more likely to be the RIGHT contact
+// Updated scoring per PDF — job-hunting optimized priorities
 const EMAIL_PRIORITY: Record<string, number> = {
-  "info": 100,
-  "contact": 95,
-  "enquiries": 90,
-  "enquiry": 90,
-  "hello": 85,
-  "office": 80,
-  "admin": 75,
-  "reception": 70,
-  "hr": 65,
-  "careers": 65,
-  "jobs": 60,
-  "recruitment": 60,
-  "talent": 55,
-  "hiring": 55,
-  "people": 50,
-  "team": 45,
-  "support": 40,
-  "marketing": 35,
+  "careers": 90,
+  "hiring": 90,
+  "hr": 85,
+  "jobs": 85,
+  "talent": 85,
+  "recruitment": 85,
+  "people": 60,
+  "team": 55,
+  "contact": 50,
+  "hello": 50,
+  "enquiries": 45,
+  "enquiry": 45,
+  "info": 40,    // PDF: often unmonitored
+  "office": 40,
+  "reception": 35,
+  "marketing": 30,
   "sales": 30,
+  "support": 20, // PDF: wrong department
 };
 
 function deobfuscateText(raw: string): string {
@@ -59,14 +69,14 @@ function deobfuscateText(raw: string): string {
 
 type ScoredEmail = { email: string; score: number; source: string };
 
-/** Extract emails from mailto: links — these are the MOST reliable */
+/** Extract emails from mailto: links — highest reliability */
 function extractMailtoEmails(html: string): ScoredEmail[] {
   const mailtoRegex = /mailto:([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/gi;
   const results: ScoredEmail[] = [];
   let match;
   while ((match = mailtoRegex.exec(html)) !== null) {
     const email = match[1].toLowerCase().trim();
-    results.push({ email, score: 200, source: "mailto" }); // Highest priority
+    results.push({ email, score: 200, source: "mailto" });
   }
   return results;
 }
@@ -74,7 +84,6 @@ function extractMailtoEmails(html: string): ScoredEmail[] {
 /** Extract emails from structured data (JSON-LD, schema.org) */
 function extractStructuredEmails(html: string): ScoredEmail[] {
   const results: ScoredEmail[] = [];
-  // JSON-LD blocks
   const jsonLdRegex = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
   let match;
   while ((match = jsonLdRegex.exec(html)) !== null) {
@@ -91,7 +100,7 @@ function extractStructuredEmails(html: string): ScoredEmail[] {
         if (Array.isArray(obj)) obj.forEach(findEmails);
       };
       findEmails(data);
-    } catch { /* ignore parse errors */ }
+    } catch { /* ignore */ }
   }
   return results;
 }
@@ -108,16 +117,28 @@ function extractTextEmails(html: string): ScoredEmail[] {
   });
 }
 
-/** Filter out invalid emails */
+/** Filter out invalid/fake emails per PDF strategy */
 function isValidEmail(email: string): boolean {
   const lower = email.toLowerCase();
   const domain = lower.split("@")[1];
+  const localPart = lower.split("@")[0];
   if (!domain) return false;
   if (PUBLIC_DOMAINS.has(domain)) return false;
   if (INVALID_EMAIL_PATTERNS.some(p => p.test(lower))) return false;
-  if (lower.startsWith("no-reply@") || lower.startsWith("noreply@")) return false;
-  if (lower.startsWith("mailer-daemon@")) return false;
+  if (FAKE_EMAIL_PREFIXES.has(localPart)) return false;
+  // Also check prefixes with hyphens stripped
+  if (FAKE_EMAIL_PREFIXES.has(localPart.replace(/-/g, ""))) return false;
   return true;
+}
+
+/** Generate pattern-guessed emails for a domain (Layer 4C from PDF) */
+function generatePatternEmails(domain: string): ScoredEmail[] {
+  const patterns = ["hr", "careers", "hiring", "jobs", "talent", "recruitment"];
+  return patterns.map(prefix => ({
+    email: `${prefix}@${domain}`,
+    score: EMAIL_PRIORITY[prefix] || 50,
+    source: "pattern_guess",
+  }));
 }
 
 function randomUA(): string {
@@ -142,15 +163,12 @@ async function scrapeUrl(url: string): Promise<ScoredEmail[]> {
     if (!contentType.includes("text/html") && !contentType.includes("text/plain")) return [];
     const html = await res.text();
 
-    // Extract from ALL sources, each with its own priority score
     const mailto = extractMailtoEmails(html);
     const structured = extractStructuredEmails(html);
     const text = extractTextEmails(html);
 
     return [...mailto, ...structured, ...text].filter(e => isValidEmail(e.email));
-  } catch {
-    // Silent fail
-  }
+  } catch { /* Silent fail */ }
 
   // Retry with www. prefix
   if (!url.includes("www.")) {
@@ -174,17 +192,26 @@ async function scrapeUrl(url: string): Promise<ScoredEmail[]> {
   return [];
 }
 
+/** Verify email via DNS MX lookup (self-sustaining, no API needed) */
+async function verifyMxRecord(domain: string): Promise<boolean> {
+  try {
+    const records = await Deno.resolveDns(domain, "MX");
+    return records && records.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     const { companyDomain, url } = await req.json();
 
-    // If a direct URL is provided, scrape it
+    // Direct URL scrape
     if (url) {
       console.log(`🔍 Scraping URL: ${url}`);
       const scored = await scrapeUrl(url);
-      // Deduplicate and sort by score
       const emailMap = new Map<string, ScoredEmail>();
       for (const e of scored) {
         const existing = emailMap.get(e.email);
@@ -192,7 +219,7 @@ serve(async (req) => {
       }
       const sorted = [...emailMap.values()].sort((a, b) => b.score - a.score);
       const emails = sorted.map(e => e.email);
-      console.log(`📧 Found ${emails.length} emails, best: ${emails[0] || "none"} (source: ${sorted[0]?.source || "none"})`);
+      console.log(`📧 Found ${emails.length} emails, best: ${emails[0] || "none"}`);
       return new Response(JSON.stringify({ url, emails }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -207,11 +234,11 @@ serve(async (req) => {
     const domain = companyDomain.toLowerCase().trim().replace(/^(https?:\/\/)?(www\.)?/, "").split("/")[0];
     console.log(`🌐 Discovering emails for: ${domain}`);
 
-    // Prioritize contact/about pages which are most likely to have official emails
+    // Layer 1: Scrape priority pages (contact, careers, about, homepage)
     const candidatePages = [
       `https://${domain}/contact`,
       `https://${domain}/contact-us`,
-      `https://${domain}`,              // Homepage often has mailto links
+      `https://${domain}`,
       `https://${domain}/about`,
       `https://${domain}/about-us`,
       `https://${domain}/careers`,
@@ -238,13 +265,29 @@ serve(async (req) => {
         if (emails.length > 0) {
           allScored.push(...emails);
           pagesScraped.push(pageUrl);
-          console.log(`  ✅ Found ${emails.length} emails on ${pageUrl} (best: ${emails.sort((a, b) => b.score - a.score)[0]?.email})`);
+          console.log(`  ✅ Found ${emails.length} emails on ${pageUrl}`);
         }
       }
 
-      // If we have a high-confidence mailto email, we can stop early
+      // Early exit if high-confidence mailto found
       const hasMailto = allScored.some(e => e.source === "mailto");
       if (hasMailto && allScored.length >= 3) break;
+    }
+
+    // Layer 4C: Pattern guessing fallback if no emails found
+    if (allScored.length === 0) {
+      console.log(`🔮 No emails found, trying pattern guessing for ${domain}...`);
+      const hasMx = await verifyMxRecord(domain);
+      if (hasMx) {
+        const guessed = generatePatternEmails(domain);
+        // Verify each guessed email via MX (domain already verified)
+        for (const g of guessed) {
+          allScored.push({ ...g, score: g.score - 10 }); // Slightly lower score for guesses
+        }
+        console.log(`  🎯 Generated ${guessed.length} pattern emails (MX verified for ${domain})`);
+      } else {
+        console.log(`  ❌ Domain ${domain} has no MX records, skipping pattern guessing`);
+      }
     }
 
     // Deduplicate, keeping highest score per email
@@ -268,7 +311,7 @@ serve(async (req) => {
       emails: uniqueEmails,
       emailDetails: sorted.slice(0, 10).map(e => ({ email: e.email, score: e.score, source: e.source })),
       pagesScraped,
-      strategy: "mailto-first + structured-data + text-extraction (priority-scored)",
+      strategy: "pdf-strategy: mailto-first + structured-data + text-extraction + pattern-guessing (priority-scored)",
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (e) {
