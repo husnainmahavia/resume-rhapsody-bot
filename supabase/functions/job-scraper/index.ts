@@ -109,11 +109,11 @@ function validateBusinessEmail(
 async function generateCvAndCoverLetter(company: string, category: string, description: string, apiKey: string) {
   try {
     const categoryLabel = category.replace(/_/g, " ");
-    const res = await fetch(AI_URL, {
+    const res = await fetch(GEMINI_URL, {
       method: "POST",
       headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash-lite",
+        model: "gemini-2.5-flash-lite",
         messages: [{
           role: "user",
           content: `Tailor this CV for a cold outreach to ${company} (a ${categoryLabel} company: ${description || ""}).
@@ -131,6 +131,7 @@ No markdown, no code fences. JSON only.`
         max_tokens: 2000,
       }),
     });
+    if (!res.ok) { console.error("CV gen failed:", res.status); return null; }
     const raw = await res.text();
     let data;
     try { data = JSON.parse(raw); } catch { return null; }
