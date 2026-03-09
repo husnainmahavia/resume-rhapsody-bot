@@ -226,7 +226,7 @@ export default function EmailEngineAI({ onDataChanged }: { onDataChanged?: () =>
                   <div className="bg-secondary/60 rounded-lg px-3 py-2 flex items-center gap-2">
                     <Loader2 className="h-3 w-3 animate-spin text-primary" />
                     <span className="text-[10px] text-muted-foreground">
-                      Searching Hunter.io & analyzing...
+                      AI analyzing & verifying...
                     </span>
                   </div>
                 </div>
