@@ -248,7 +248,9 @@ export default function Dashboard({ applications }: DashboardProps) {
         </Card>
       </div>
 
-      {/* Recent Opens/Replies */}
+      {/* Sender Health Widget */}
+      <SenderHealthWidget />
+
       {/* Bounce Rate Chart */}
       <BounceChart />
 
