@@ -340,11 +340,11 @@ serve(async (req) => {
 
           const recipientEmail = validation.normalized;
           const categoryLabel = company.category.replace(/_/g, " ");
-          const emailResponse = await fetch(AI_URL, {
+          const emailResponse = await fetch(GEMINI_URL, {
             method: "POST",
-            headers: { "Authorization": `Bearer ${lovableKey}`, "Content-Type": "application/json" },
+            headers: { "Authorization": `Bearer ${geminiKey}`, "Content-Type": "application/json" },
             body: JSON.stringify({
-              model: "google/gemini-2.5-flash-lite",
+              model: "gemini-2.5-flash-lite",
               messages: [{
                 role: "user",
                 content: `Write a professional cold outreach email from Husnain Mahavia (Full-Stack Developer & AI Specialist, 8+ years experience) to ${company.company_name} (${categoryLabel} company).
