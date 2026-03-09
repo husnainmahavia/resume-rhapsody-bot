@@ -300,7 +300,7 @@ VERIFICATION: Before returning each job, mentally verify:
 
 Return JSON with: title, company, location, salary_range, description, url, hiring_manager, hiring_email, sponsorship (boolean), careers_page_url`;
 
-    const searchResponse = await callAIGateway(LOVABLE_API_KEY, {
+    const searchResponse = await callGemini(GEMINI_API_KEY, {
       model: "google/gemini-2.5-flash",
       messages: [
         { role: "system", content: "You are a job search assistant. Find real job listings matching the criteria. Return structured results." },
