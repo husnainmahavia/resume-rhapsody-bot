@@ -243,11 +243,11 @@ REQUIREMENTS:
 7. Tone: professional, warm, knowledgeable — NOT salesy or pushy
 8. Do NOT use "Dear Sir/Madam" — use "Dear [Company Name] Team" or find a better greeting`;
 
-          const emailResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          const emailResponse = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
             method: "POST",
-            headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+            headers: { Authorization: `Bearer ${GEMINI_API_KEY}`, "Content-Type": "application/json" },
             body: JSON.stringify({
-              model: "google/gemini-2.5-flash",
+              model: "gemini-2.5-flash",
               messages: [
                 { role: "system", content: "You write professional B2B cold outreach emails. Every email must be unique and company-specific." },
                 { role: "user", content: emailPrompt },
