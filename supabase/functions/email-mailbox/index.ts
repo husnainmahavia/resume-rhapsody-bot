@@ -10,6 +10,15 @@ const corsHeaders = {
 const senderEmail = "husnainmahavia.1@gmail.com";
 const senderName = "Husnain Mahavia";
 
+// Rate limiting rules per PDF strategy (Layer 5)
+const RATE_LIMITS = {
+  maxEmailsPerDay: 50,
+  maxEmailsPerDomain: 3,
+  minDelayBetweenEmails: 5000, // 5 seconds minimum
+  maxBouncesBeforePause: 5,
+  verifyBeforeSending: true,
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -19,8 +28,9 @@ Deno.serve(async (req) => {
 
     if (action === "send") return await handleSend(payload);
     if (action === "fetch_replies") return await handleFetchReplies();
+    if (action === "health") return await handleHealthCheck();
 
-    return json({ error: "Invalid action. Use 'send' or 'fetch_replies'" }, 400);
+    return json({ error: "Invalid action. Use 'send', 'fetch_replies', or 'health'" }, 400);
   } catch (error) {
     console.error("email-mailbox error:", error);
     return json({ error: error instanceof Error ? error.message : "Unknown error" }, 500);
@@ -48,6 +58,64 @@ async function handleSend(payload: Record<string, unknown>) {
     return json({ success: false, sent: false, error: "GMAIL_APP_PASSWORD not configured" }, 500);
   }
 
+  const supabase = serviceClient();
+
+  // Rate limit check: daily limit
+  const today = new Date().toISOString().split("T")[0];
+  const { count: sentToday } = await supabase
+    .from("job_applications")
+    .select("*", { count: "exact", head: true })
+    .eq("status", "applied")
+    .gte("applied_at", today);
+
+  if ((sentToday || 0) >= RATE_LIMITS.maxEmailsPerDay) {
+    return json({ success: false, sent: false, error: `Daily limit reached (${RATE_LIMITS.maxEmailsPerDay}). Resume tomorrow.` }, 429);
+  }
+
+  // Rate limit check: per-domain limit
+  const recipientDomain = to.split("@")[1]?.toLowerCase();
+  if (recipientDomain) {
+    const { count: domainCount } = await supabase
+      .from("job_applications")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "applied")
+      .ilike("hiring_manager_email", `%@${recipientDomain}`);
+
+    if ((domainCount || 0) >= RATE_LIMITS.maxEmailsPerDomain) {
+      return json({ success: false, sent: false, error: `Domain limit reached: max ${RATE_LIMITS.maxEmailsPerDomain} emails to ${recipientDomain}` }, 429);
+    }
+  }
+
+  // Bounce pause check: if 5+ recent bounces, pause sending
+  const { count: recentBounces } = await supabase
+    .from("email_tracking")
+    .select("*", { count: "exact", head: true })
+    .eq("bounced", true)
+    .gte("created_at", new Date(Date.now() - 24 * 3600000).toISOString());
+
+  if ((recentBounces || 0) >= RATE_LIMITS.maxBouncesBeforePause) {
+    return json({
+      success: false, sent: false,
+      error: `Sending paused: ${recentBounces} bounces in last 24h. Review bounce list before resuming.`,
+    }, 429);
+  }
+
+  // Check domain blacklist
+  if (recipientDomain) {
+    const { data: blacklisted } = await supabase
+      .from("domain_blacklist")
+      .select("id")
+      .eq("domain", recipientDomain)
+      .eq("is_blacklisted", true)
+      .limit(1)
+      .maybeSingle();
+
+    if (blacklisted) {
+      return json({ success: false, sent: false, error: `Domain ${recipientDomain} is blacklisted` }, 400);
+    }
+  }
+
+  // Send via SMTP
   const transporter = nodemailer.createTransport({
     host: "smtp.gmail.com",
     port: 465,
@@ -63,9 +131,8 @@ async function handleSend(payload: Record<string, unknown>) {
     html: body.replace(/\n/g, "<br>"),
   });
 
-  const supabase = serviceClient();
+  // Upsert tracking record
   const appId = applicationId ?? (await findLatestApplicationByEmail(supabase, to));
-
   if (appId) {
     await upsertTrackingRecord(supabase, appId);
   }
@@ -76,6 +143,7 @@ async function handleSend(payload: Record<string, unknown>) {
     sent: true,
     messageId: info.messageId,
     message: `Email sent to ${hiringManagerName || to}`,
+    rateLimits: { sentToday: (sentToday || 0) + 1, dailyLimit: RATE_LIMITS.maxEmailsPerDay },
   });
 }
 
@@ -151,9 +219,7 @@ async function handleFetchReplies() {
             const text = await streamToString(bodyPart);
             snippet = text.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim().slice(0, 200);
           }
-        } catch {
-          // best effort
-        }
+        } catch { /* best effort */ }
 
         const tracking = appRow.email_tracking;
         const trackingId = Array.isArray(tracking) && tracking.length > 0
@@ -193,10 +259,46 @@ async function handleFetchReplies() {
   return json({ success: true, repliesFound, checkedApplications: unreplied.length, results });
 }
 
+/** Layer 6: Sender health monitoring per PDF strategy */
+async function handleHealthCheck() {
+  const supabase = serviceClient();
+
+  const { count: totalSent } = await supabase
+    .from("job_applications").select("*", { count: "exact", head: true }).eq("status", "applied");
+
+  const { count: totalBounced } = await supabase
+    .from("email_tracking").select("*", { count: "exact", head: true }).eq("bounced", true);
+
+  const { count: totalOpened } = await supabase
+    .from("email_tracking").select("*", { count: "exact", head: true }).gt("open_count", 0);
+
+  const { count: totalReplied } = await supabase
+    .from("email_tracking").select("*", { count: "exact", head: true }).not("replied_at", "is", null);
+
+  const sent = totalSent || 0;
+  const bounced = totalBounced || 0;
+  const opened = totalOpened || 0;
+  const replied = totalReplied || 0;
+  const delivered = sent - bounced;
+
+  const bounceRate = sent > 0 ? ((bounced / sent) * 100).toFixed(1) : "0";
+  const openRate = delivered > 0 ? ((opened / delivered) * 100).toFixed(1) : "0";
+  const replyRate = delivered > 0 ? ((replied / delivered) * 100).toFixed(1) : "0";
+
+  // PDF targets: bounce <3%, open 15-25%, reply 2-5%
+  const reputation = parseFloat(bounceRate) < 3 ? "good" : parseFloat(bounceRate) < 5 ? "warning" : "critical";
+
+  return json({
+    success: true,
+    stats: { sent, delivered, bounced, opened, replied },
+    rates: { bounceRate: `${bounceRate}%`, openRate: `${openRate}%`, replyRate: `${replyRate}%` },
+    reputation,
+    targets: { bounceRate: "<3%", openRate: "15-25%", replyRate: "2-5%" },
+  });
+}
+
 function serviceClient() {
-  const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  return createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 }
 
 async function findLatestApplicationByEmail(supabase: ReturnType<typeof serviceClient>, email: string) {
@@ -207,7 +309,6 @@ async function findLatestApplicationByEmail(supabase: ReturnType<typeof serviceC
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-
   return data?.id ?? null;
 }
 
@@ -238,17 +339,14 @@ async function upsertTrackingRecord(supabase: ReturnType<typeof serviceClient>, 
 async function streamToString(stream: ReadableStream | Uint8Array | string | { getReader?: () => ReadableStreamDefaultReader<Uint8Array> }): Promise<string> {
   if (typeof stream === "string") return stream;
   if (stream instanceof Uint8Array) return new TextDecoder().decode(stream);
-
   const reader = stream.getReader?.();
   if (!reader) return String(stream);
-
   const chunks: Uint8Array[] = [];
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
     chunks.push(value);
   }
-
   const totalLength = chunks.reduce((acc, val) => acc + val.length, 0);
   const merged = new Uint8Array(totalLength);
   let offset = 0;
@@ -256,7 +354,6 @@ async function streamToString(stream: ReadableStream | Uint8Array | string | { g
     merged.set(chunk, offset);
     offset += chunk.length;
   }
-
   return new TextDecoder().decode(merged);
 }
 
