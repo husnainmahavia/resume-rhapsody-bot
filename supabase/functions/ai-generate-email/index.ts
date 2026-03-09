@@ -15,60 +15,69 @@ serve(async (req) => {
     const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
     if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not configured");
 
-    const response = await fetch(GEMINI_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${GEMINI_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gemini-2.5-flash",
-        messages: [
-          {
-            role: "system",
-            content: `You are an expert at writing cold outreach emails to hiring managers. 
+    const requestBody = JSON.stringify({
+      model: "gemini-2.5-flash-lite",
+      messages: [
+        {
+          role: "system",
+          content: `You are an expert at writing cold outreach emails to hiring managers. 
 Write personalized, concise, compelling emails that get responses. 
 The candidate is Husnain Mahavia, a Full-Stack Developer with 8+ years experience, 150+ projects, based in Manchester UK.
 
 IMPORTANT: Include the tailored CV summary and cover letter highlights in the email body so the recipient has everything they need without attachments.
 Make the email feel personal and genuine, not templated.`,
-          },
-          {
-            role: "user",
-            content: `Write a cold email to apply for this job:
+        },
+        {
+          role: "user",
+          content: `Write a cold email to apply for this job:
 Job: ${jobTitle} at ${company}
 Hiring Manager: ${hiringManager || "Hiring Team"}
 Description: ${jobDescription}
 
 Generate a compelling subject line and email body.`,
-          },
-        ],
-        tools: [{
-          type: "function",
-          function: {
-            name: "return_email",
-            description: "Return the generated email",
-            parameters: {
-              type: "object",
-              properties: {
-                subject: { type: "string" },
-                body: { type: "string" },
-              },
-              required: ["subject", "body"],
+        },
+      ],
+      tools: [{
+        type: "function",
+        function: {
+          name: "return_email",
+          description: "Return the generated email",
+          parameters: {
+            type: "object",
+            properties: {
+              subject: { type: "string" },
+              body: { type: "string" },
             },
+            required: ["subject", "body"],
           },
-        }],
-        tool_choice: { type: "function", function: { name: "return_email" } },
-      }),
+        },
+      }],
+      tool_choice: { type: "function", function: { name: "return_email" } },
     });
 
-    if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limited" }), {
+    let response: Response | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      response = await fetch(GEMINI_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${GEMINI_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: requestBody,
+      });
+      if (response.status !== 429) break;
+      const waitMs = (attempt + 1) * 15000 + Math.random() * 5000;
+      console.log(`Rate limited, retrying in ${Math.round(waitMs / 1000)}s (attempt ${attempt + 1}/3)`);
+      await new Promise(r => setTimeout(r, waitMs));
+    }
+
+    if (!response || !response.ok) {
+      if (response?.status === 429) {
+        return new Response(JSON.stringify({ error: "Rate limited after retries. Please wait a minute and try again." }), {
           status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      throw new Error(`Gemini error: ${response.status}`);
+      throw new Error(`Gemini error: ${response?.status}`);
     }
 
     const data = await response.json();
