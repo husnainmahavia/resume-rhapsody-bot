@@ -131,7 +131,7 @@ export default function EmailEngineAI({ onDataChanged }: { onDataChanged?: () =>
           <div className="text-left">
             <span className="text-sm font-semibold">AI Email Boss</span>
             <span className="text-[9px] ml-2 bg-primary/15 text-primary px-1.5 py-0.5 rounded-full font-medium">
-              Hunter.io Powered
+              AI Powered
             </span>
           </div>
         </div>
