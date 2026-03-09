@@ -536,10 +536,7 @@ TAILORING INSTRUCTIONS:
 
 Return the complete tailored CV text and cover letter.`;
 
-        const cvResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-          body: JSON.stringify({
+        const cvResponse = await callAIGateway(LOVABLE_API_KEY, {
             model: "google/gemini-2.5-flash",
             messages: [
               { role: "system", content: "You are a professional CV writer. Return tailored CV content maintaining the exact same professional format." },
@@ -561,7 +558,6 @@ Return the complete tailored CV text and cover letter.`;
               },
             }],
             tool_choice: { type: "function", function: { name: "return_documents" } },
-          }),
         });
 
         if (!cvResponse.ok) throw new Error("CV tailoring failed");
