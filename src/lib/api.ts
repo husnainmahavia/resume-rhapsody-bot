@@ -221,6 +221,7 @@ export async function getSenderHealth() {
 }
 
 // Bounce analytics
+export async function getBounceAnalytics() {
   const { data: blacklist } = await supabase
     .from("domain_blacklist")
     .select("*")
