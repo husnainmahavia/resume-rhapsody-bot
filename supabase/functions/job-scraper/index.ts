@@ -384,7 +384,7 @@ Return ONLY a JSON object with "subject" and "body" fields. No markdown, no code
           const { subject, body } = JSON.parse(jsonMatch[0]);
 
           // Generate tailored CV and cover letter
-          const cvData = await generateCvAndCoverLetter(company.company_name, company.category, company.description || "", lovableKey);
+          const cvData = await generateCvAndCoverLetter(company.company_name, company.category, company.description || "", geminiKey);
           
           const attachments: Array<{ filename: string; content: string; contentType: string }> = [];
           if (cvData?.tailored_cv) {
