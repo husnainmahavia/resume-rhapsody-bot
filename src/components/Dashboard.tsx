@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { checkInboxReplies, type JobApplication } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import SenderHealthWidget from "@/components/SenderHealthWidget";
 
 interface DashboardProps {
   applications: JobApplication[];
@@ -247,7 +248,9 @@ export default function Dashboard({ applications }: DashboardProps) {
         </Card>
       </div>
 
-      {/* Recent Opens/Replies */}
+      {/* Sender Health Widget */}
+      <SenderHealthWidget />
+
       {/* Bounce Rate Chart */}
       <BounceChart />
 
