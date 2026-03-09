@@ -112,8 +112,8 @@ export async function getPipelineStatus() {
 }
 
 export async function checkInboxReplies() {
-  const { data, error } = await supabase.functions.invoke("check-inbox-replies", {
-    body: {},
+  const { data, error } = await supabase.functions.invoke("email-mailbox", {
+    body: { action: "fetch_replies" },
   });
   if (error) throw error;
   return data;
