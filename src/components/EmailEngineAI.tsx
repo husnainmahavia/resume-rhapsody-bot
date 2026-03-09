@@ -110,7 +110,7 @@ export default function EmailEngineAI({ onDataChanged }: { onDataChanged?: () =>
     const map: Record<string, string> = {
       list_leads: "📋 Listed leads",
       verify_email: "🔍 Verified email",
-      find_company_email: "🏢 Searched Hunter.io",
+      find_company_email: "🏢 AI email search",
       fix_lead_email: "✏️ Updated lead",
       bulk_fix_emails: "⚡ Bulk verified & fixed",
     };
