@@ -686,8 +686,9 @@ Keep it under 150 words. Professional but warm. NOT generic — reference someth
 
   } catch (e) {
     console.error("Pipeline error:", e);
+    const status = e instanceof AICreditsError ? e.status : 500;
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
