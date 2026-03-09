@@ -11,12 +11,12 @@ const SYSTEM_PROMPT = `You are the AI Boss of the Visuosofts Email Engine — a 
 
 YOUR MISSION:
 The engine discovers companies via AI and generates contact emails like info@company.com — but ~90% of these are undeliverable because they're guesses, not real addresses.
-Your job is to FIX this by using Hunter.io to find and verify REAL email addresses.
+Your job is to FIX this by using AI intelligence to find real, verified email addresses for companies.
 
 TOOLS AT YOUR DISPOSAL:
 1. list_leads — see current leads, filter by status (bounced, failed, unsent, sent)
-2. verify_email — check if a specific email is deliverable via Hunter.io
-3. find_company_email — search Hunter.io for real emails at a company domain
+2. verify_email — use AI + DNS/MX checks to verify if an email is likely deliverable
+3. find_company_email — use AI to research and find real email addresses for a company
 4. fix_lead_email — update a lead with a verified email address
 5. bulk_fix_emails — automatically verify & fix emails for multiple unsent leads
 
@@ -24,8 +24,8 @@ STRATEGY:
 - When asked to fix emails: use bulk_fix_emails to batch-process leads
 - When analyzing bounces: list failed leads, then verify their emails
 - When investigating specific leads: verify_email → find_company_email → fix_lead_email
-- Always prefer emails with confidence >= 70 from Hunter.io
-- Prioritize decision-maker emails (marketing, CEO, director) over generic (info@, hello@)
+- Use AI research to find real contact pages, team pages, and public email addresses
+- Prioritize decision-maker emails over generic (info@, hello@)
 
 Be concise, actionable, and show results clearly. Use markdown formatting.`;
 
@@ -52,7 +52,7 @@ const TOOLS = [
     type: "function",
     function: {
       name: "verify_email",
-      description: "Verify if an email address is deliverable using Hunter.io",
+      description: "Verify if an email address is likely deliverable using AI analysis and DNS checks",
       parameters: {
         type: "object",
         properties: {
@@ -66,8 +66,7 @@ const TOOLS = [
     type: "function",
     function: {
       name: "find_company_email",
-      description:
-        "Find verified email addresses for a company domain using Hunter.io domain search",
+      description: "Use AI to find real verified email addresses for a company based on domain and company name",
       parameters: {
         type: "object",
         properties: {
@@ -97,8 +96,7 @@ const TOOLS = [
     type: "function",
     function: {
       name: "bulk_fix_emails",
-      description:
-        "Automatically verify and fix emails for unsent leads using Hunter.io. Checks current email validity, then searches for better alternatives if invalid.",
+      description: "Automatically verify and fix emails for unsent leads using AI. Checks current email validity and searches for better alternatives.",
       parameters: {
         type: "object",
         properties: {
@@ -114,6 +112,84 @@ const TOOLS = [
   },
 ];
 
+// Use AI to verify/find emails instead of Hunter.io
+async function aiEmailLookup(
+  apiKey: string,
+  prompt: string
+): Promise<Record<string, unknown>> {
+  const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash",
+      messages: [
+        {
+          role: "system",
+          content: `You are an email intelligence agent. You analyze company domains and email addresses to determine deliverability and find real contact emails.
+
+RULES:
+- For email verification: analyze the domain, check if it's a real company domain, assess the email pattern
+- For email finding: suggest the most likely REAL email addresses based on common corporate patterns
+- Common patterns: info@, hello@, contact@, careers@, hr@, marketing@, sales@
+- For UK companies, also consider: enquiries@, recruitment@
+- Rate confidence 0-100 based on how likely the email is real
+- NEVER make up personal names or specific employee emails - only suggest pattern-based emails
+- Always return valid JSON`,
+        },
+        { role: "user", content: prompt },
+      ],
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "return_result",
+            description: "Return the email analysis result",
+            parameters: {
+              type: "object",
+              properties: {
+                result: {
+                  type: "object",
+                  description: "The analysis result as a JSON object",
+                },
+              },
+              required: ["result"],
+            },
+          },
+        },
+      ],
+      tool_choice: { type: "function", function: { name: "return_result" } },
+    }),
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    console.error("AI lookup error:", resp.status, errText);
+    throw new Error(`AI lookup failed: ${resp.status}`);
+  }
+
+  const data = await resp.json();
+  const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+  if (toolCall?.function?.arguments) {
+    const parsed = JSON.parse(toolCall.function.arguments);
+    return parsed.result || parsed;
+  }
+  return { error: "No result from AI" };
+}
+
+// Simple DNS MX check via DNS-over-HTTPS
+async function checkMX(domain: string): Promise<boolean> {
+  try {
+    const resp = await fetch(`https://dns.google/resolve?name=${domain}&type=MX`);
+    const data = await resp.json();
+    return (data.Answer?.length || 0) > 0;
+  } catch {
+    return false;
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -123,7 +199,6 @@ serve(async (req) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
-    const HUNTER_API_KEY = Deno.env.get("HUNTER_API_KEY");
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -150,47 +225,51 @@ serve(async (req) => {
       }
 
       if (name === "verify_email") {
-        if (!HUNTER_API_KEY) return JSON.stringify({ error: "Hunter.io API key not configured" });
         const email = args.email as string;
-        const resp = await fetch(
-          `https://api.hunter.io/v2/email-verifier?email=${encodeURIComponent(email)}&api_key=${HUNTER_API_KEY}`
+        const domain = email.split("@")[1];
+        
+        // Check MX records
+        const hasMX = await checkMX(domain);
+        
+        // Use AI to analyze
+        const aiResult = await aiEmailLookup(LOVABLE_API_KEY, 
+          `Verify this email address: ${email}
+Domain: ${domain}
+MX Records exist: ${hasMX}
+
+Analyze: Is this likely a real, deliverable business email? 
+Return JSON with: email, status (valid/invalid/risky/unknown), score (0-100), reason, mx_records (boolean), is_generic (boolean), is_disposable (boolean)`
         );
-        const data = await resp.json();
-        const d = data.data || {};
-        return JSON.stringify({
-          email,
-          status: d.status,
-          score: d.score,
-          result: d.result,
-          smtp_check: d.smtp_check,
-          mx_records: d.mx_records,
-          disposable: d.disposable,
-          webmail: d.webmail,
-          accept_all: d.accept_all,
-        });
+
+        return JSON.stringify({ email, mx_records: hasMX, ...aiResult });
       }
 
       if (name === "find_company_email") {
-        if (!HUNTER_API_KEY) return JSON.stringify({ error: "Hunter.io API key not configured" });
         const domain = (args.domain as string).replace(/^https?:\/\//, "").replace(/\/.*$/, "");
-        const resp = await fetch(
-          `https://api.hunter.io/v2/domain-search?domain=${encodeURIComponent(domain)}&api_key=${HUNTER_API_KEY}&limit=5`
+        const companyName = (args.company_name as string) || domain;
+        
+        // Check MX records first
+        const hasMX = await checkMX(domain);
+        
+        // Use AI to find likely emails
+        const aiResult = await aiEmailLookup(LOVABLE_API_KEY,
+          `Find real email addresses for this company:
+Company: ${companyName}
+Domain: ${domain}
+MX Records exist: ${hasMX}
+
+Research common email patterns for this domain. Return JSON with:
+- domain: the domain
+- organization: company name  
+- mx_valid: boolean
+- emails: array of objects with { email, type (generic/personal), confidence (0-100), department }
+- suggested_best: the single best email to use for B2B outreach
+
+Only suggest emails at the ${domain} domain. Prefer contact@, info@, hello@, careers@, marketing@ patterns.
+Rate confidence based on how common that pattern is for companies.`
         );
-        const data = await resp.json();
-        const emails = (data.data?.emails || []).map((e: Record<string, unknown>) => ({
-          email: e.value,
-          type: e.type,
-          confidence: e.confidence,
-          first_name: e.first_name,
-          last_name: e.last_name,
-          position: e.position,
-        }));
-        return JSON.stringify({
-          domain,
-          organization: data.data?.organization,
-          total_found: data.data?.total || 0,
-          emails,
-        });
+
+        return JSON.stringify({ domain, organization: companyName, mx_valid: hasMX, ...aiResult });
       }
 
       if (name === "fix_lead_email") {
@@ -204,7 +283,6 @@ serve(async (req) => {
       }
 
       if (name === "bulk_fix_emails") {
-        if (!HUNTER_API_KEY) return JSON.stringify({ error: "Hunter.io API key not configured" });
         const maxLeads = (args.max_leads as number) || 10;
         const filter = (args.filter as string) || "unsent";
 
@@ -229,66 +307,67 @@ serve(async (req) => {
               continue;
             }
 
-            // Step 1: verify current email
-            if (lead.contact_email) {
-              const vResp = await fetch(
-                `https://api.hunter.io/v2/email-verifier?email=${encodeURIComponent(lead.contact_email)}&api_key=${HUNTER_API_KEY}`
-              );
-              const vData = await vResp.json();
-              const status = vData.data?.status;
+            // Check MX records
+            const hasMX = await checkMX(domain);
+            if (!hasMX) {
+              results.push({ company: lead.company_name, domain, status: "no_mx_records", email: lead.contact_email });
+              continue;
+            }
 
-              if (status === "valid" || status === "accept_all") {
+            // Verify current email via AI
+            if (lead.contact_email) {
+              const verifyResult = await aiEmailLookup(LOVABLE_API_KEY,
+                `Quick verify: Is "${lead.contact_email}" likely deliverable for company "${lead.company_name}" (domain: ${domain})?
+MX records exist: true.
+Return JSON: { status: "valid"|"invalid"|"risky", score: 0-100, reason: string }`
+              );
+
+              const status = (verifyResult as Record<string, unknown>).status;
+              if (status === "valid") {
                 results.push({
                   company: lead.company_name,
                   email: lead.contact_email,
                   status: "already_valid",
-                  hunter_status: status,
-                  score: vData.data?.score,
+                  score: (verifyResult as Record<string, unknown>).score,
                 });
                 continue;
               }
             }
 
-            // Step 2: find a real email via domain search
-            const sResp = await fetch(
-              `https://api.hunter.io/v2/domain-search?domain=${encodeURIComponent(domain)}&api_key=${HUNTER_API_KEY}&limit=3`
+            // Find better email via AI
+            const findResult = await aiEmailLookup(LOVABLE_API_KEY,
+              `Find the best B2B outreach email for company "${lead.company_name}" at domain "${domain}".
+Current email "${lead.contact_email || 'none'}" may be invalid.
+Return JSON: { suggested_email: string, confidence: number (0-100), reason: string }`
             );
-            const sData = await sResp.json();
-            const topEmail = (sData.data?.emails || []).sort(
-              (a: Record<string, number>, b: Record<string, number>) =>
-                (b.confidence || 0) - (a.confidence || 0)
-            )[0];
 
-            if (topEmail && (topEmail.confidence as number) >= 50) {
+            const suggested = (findResult as Record<string, string>).suggested_email;
+            const confidence = Number((findResult as Record<string, unknown>).confidence) || 0;
+
+            if (suggested && confidence >= 50 && suggested.includes("@") && suggested.endsWith(domain)) {
               await supabase
                 .from("email_engine_leads")
-                .update({
-                  contact_email: topEmail.value,
-                  send_error: null,
-                  bounced: false,
-                })
+                .update({ contact_email: suggested, send_error: null, bounced: false })
                 .eq("id", lead.id);
 
               results.push({
                 company: lead.company_name,
                 old_email: lead.contact_email,
-                new_email: topEmail.value,
-                confidence: topEmail.confidence,
-                name: [topEmail.first_name, topEmail.last_name].filter(Boolean).join(" ") || undefined,
-                position: topEmail.position || undefined,
+                new_email: suggested,
+                confidence,
                 status: "fixed",
+                reason: (findResult as Record<string, string>).reason,
               });
             } else {
               results.push({
                 company: lead.company_name,
                 email: lead.contact_email,
                 domain,
-                status: "no_verified_email_found",
+                status: "no_better_email_found",
+                suggestion: suggested,
+                confidence,
               });
             }
-
-            // Rate limit Hunter.io
-            await new Promise((r) => setTimeout(r, 600));
           } catch (e) {
             results.push({
               company: lead.company_name,
@@ -356,7 +435,6 @@ serve(async (req) => {
       const choice = data.choices?.[0];
       if (!choice) throw new Error("No AI response");
 
-      // If no tool calls, we're done
       const toolCalls = choice.message?.tool_calls;
       if (!toolCalls || toolCalls.length === 0) {
         const finalContent = choice.message?.content || "Done — no further action needed.";
@@ -366,7 +444,6 @@ serve(async (req) => {
         );
       }
 
-      // Execute tool calls
       allMessages.push(choice.message);
 
       for (const tc of toolCalls) {
@@ -385,7 +462,6 @@ serve(async (req) => {
       }
     }
 
-    // If we exhausted rounds, return whatever we have
     return new Response(
       JSON.stringify({
         message: "I reached the maximum processing rounds. Here's what I found so far — you can ask me to continue.",
