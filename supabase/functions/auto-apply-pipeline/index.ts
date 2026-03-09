@@ -579,10 +579,7 @@ Return the complete tailored CV text and cover letter.`;
 
         // Generate email — short professional intro only (CV attached as file)
         console.log(`✉️ Generating email for: ${job.company}`);
-        const emailResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-          body: JSON.stringify({
+        const emailResponse = await callAIGateway(LOVABLE_API_KEY, {
             model: "google/gemini-2.5-flash",
             messages: [
               {
@@ -620,7 +617,6 @@ Keep it under 150 words. Professional but warm. NOT generic — reference someth
               },
             }],
             tool_choice: { type: "function", function: { name: "return_email" } },
-          }),
         });
 
         if (!emailResponse.ok) throw new Error("Email generation failed");
