@@ -335,7 +335,7 @@ Return JSON: { status: "valid"|"invalid"|"risky", score: 0-100, reason: string }
             }
 
             // Find better email via AI
-            const findResult = await aiEmailLookup(LOVABLE_API_KEY,
+            const findResult = await aiEmailLookup(GEMINI_API_KEY,
               `Find the best B2B outreach email for company "${lead.company_name}" at domain "${domain}".
 Current email "${lead.contact_email || 'none'}" may be invalid.
 Return JSON: { suggested_email: string, confidence: number (0-100), reason: string }`
