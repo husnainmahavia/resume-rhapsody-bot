@@ -32,7 +32,7 @@ const QUICK_ACTIONS = [
     label: "Find Real Emails",
     icon: Search,
     message:
-      "For the top 5 unsent leads, search Hunter.io for real verified email addresses and update them.",
+      "For the top 5 unsent leads, find real verified email addresses using AI and DNS checks, and update them.",
   },
   {
     label: "Health Report",
