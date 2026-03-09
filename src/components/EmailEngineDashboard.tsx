@@ -104,6 +104,11 @@ export default function EmailEngineDashboard() {
     } catch (e) { console.error("List error:", e); }
   };
 
+  const handleAIDataChanged = useCallback(() => {
+    loadStats();
+    loadLeads();
+  }, []);
+
   const filteredLeads = useMemo(() => {
     if (activeFilter === "all") return leads;
     return leads.filter(l => getLeadStatus(l) === activeFilter);
