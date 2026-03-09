@@ -65,7 +65,7 @@ serve(async (req) => {
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY")!;
     const VISUOSOFTS_EMAIL_PASSWORD = Deno.env.get("VISUOSOFTS_EMAIL_PASSWORD");
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -96,11 +96,11 @@ CRITICAL RULES:
 - Avoid companies that are too small (freelancers) or too large (Fortune 500)
 - Each opportunity should reference a specific Visuosofts service relevant to their business`;
 
-      const searchResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      const searchResponse = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
         method: "POST",
-        headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+        headers: { Authorization: `Bearer ${GEMINI_API_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
+          model: "gemini-2.5-flash",
           messages: [
             { role: "system", content: "You are a B2B lead researcher. Return only real, verified companies. Return valid JSON only." },
             { role: "user", content: discoverPrompt },
@@ -243,11 +243,11 @@ REQUIREMENTS:
 7. Tone: professional, warm, knowledgeable — NOT salesy or pushy
 8. Do NOT use "Dear Sir/Madam" — use "Dear [Company Name] Team" or find a better greeting`;
 
-          const emailResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          const emailResponse = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
             method: "POST",
-            headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+            headers: { Authorization: `Bearer ${GEMINI_API_KEY}`, "Content-Type": "application/json" },
             body: JSON.stringify({
-              model: "google/gemini-2.5-flash",
+              model: "gemini-2.5-flash",
               messages: [
                 { role: "system", content: "You write professional B2B cold outreach emails. Every email must be unique and company-specific." },
                 { role: "user", content: emailPrompt },

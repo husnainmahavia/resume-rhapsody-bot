@@ -24,24 +24,33 @@ function humanDelay(): Promise<void> {
 
 class AICreditsError extends Error {
   status: number;
-  constructor(status: number) {
-    const msg = status === 402
-      ? "AI credits exhausted. Please add credits in Settings → Workspace → Usage."
-      : "AI rate limit exceeded. Please wait a moment and try again.";
-    super(msg);
+  constructor(status: number, msg?: string) {
+    super(msg || "AI request failed");
     this.name = "AICreditsError";
     this.status = status;
   }
 }
 
-async function callAIGateway(apiKey: string, body: Record<string, unknown>): Promise<Response> {
-  const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+async function callGemini(apiKey: string, body: Record<string, unknown>): Promise<Response> {
+  // Use Google's OpenAI-compatible endpoint for Gemini
+  const model = String(body.model || "gemini-2.5-flash").replace("google/", "");
+  const url = `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`;
+  
+  const resp = await fetch(url, {
     method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ ...body, model }),
   });
-  if (resp.status === 402 || resp.status === 429) {
-    throw new AICreditsError(resp.status);
+  
+  if (resp.status === 429) {
+    throw new AICreditsError(429, "Gemini rate limit exceeded. Please wait and try again.");
+  }
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => "");
+    throw new AICreditsError(resp.status, `Gemini API error (${resp.status}): ${errText.slice(0, 200)}`);
   }
   return resp;
 }
@@ -193,7 +202,7 @@ serve(async (req) => {
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY")!;;
     const GMAIL_APP_PASSWORD = Deno.env.get("GMAIL_APP_PASSWORD")!;
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -291,7 +300,7 @@ VERIFICATION: Before returning each job, mentally verify:
 
 Return JSON with: title, company, location, salary_range, description, url, hiring_manager, hiring_email, sponsorship (boolean), careers_page_url`;
 
-    const searchResponse = await callAIGateway(LOVABLE_API_KEY, {
+    const searchResponse = await callGemini(GEMINI_API_KEY, {
       model: "google/gemini-2.5-flash",
       messages: [
         { role: "system", content: "You are a job search assistant. Find real job listings matching the criteria. Return structured results." },
@@ -536,7 +545,7 @@ TAILORING INSTRUCTIONS:
 
 Return the complete tailored CV text and cover letter.`;
 
-        const cvResponse = await callAIGateway(LOVABLE_API_KEY, {
+        const cvResponse = await callGemini(GEMINI_API_KEY, {
             model: "google/gemini-2.5-flash",
             messages: [
               { role: "system", content: "You are a professional CV writer. Return tailored CV content maintaining the exact same professional format." },
@@ -579,7 +588,7 @@ Return the complete tailored CV text and cover letter.`;
 
         // Generate email — short professional intro only (CV attached as file)
         console.log(`✉️ Generating email for: ${job.company}`);
-        const emailResponse = await callAIGateway(LOVABLE_API_KEY, {
+        const emailResponse = await callGemini(GEMINI_API_KEY, {
             model: "google/gemini-2.5-flash",
             messages: [
               {
