@@ -2,9 +2,19 @@
 export const EMAIL_REGEX =
   /[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}/g;
 
+// Expanded fake email blocklist per PDF strategy
+const FAKE_EMAIL_PREFIXES = new Set([
+  "noreply", "no-reply", "donotreply", "do-not-reply",
+  "notification", "notifications", "alerts", "alert",
+  "admin", "webmaster", "postmaster", "hostmaster",
+  "automated", "mailer-daemon", "daemon", "bounce",
+  "abuse", "root", "nobody", "null",
+]);
+
 const INVALID_PATTERNS = [
   /example\.com$/i, /test\.com$/i, /your-?email/i, /placeholder/i,
   /\.png$/i, /\.jpg$/i, /\.gif$/i, /\.svg$/i, /\.css$/i, /\.js$/i,
+  /noreply\.com$/i, /reply\.com$/i,
 ];
 
 const PUBLIC_DOMAINS = new Set([
@@ -13,11 +23,30 @@ const PUBLIC_DOMAINS = new Set([
   "proton.me", "gmx.com",
 ]);
 
+// Updated scoring per PDF strategy — job-hunting optimized
+export const EMAIL_SCORING: Record<string, number> = {
+  "careers": 90,
+  "hiring": 90,
+  "hr": 85,
+  "jobs": 85,
+  "talent": 85,
+  "recruitment": 85,
+  "people": 60,
+  "team": 55,
+  "contact": 50,
+  "hello": 50,
+  "enquiries": 45,
+  "enquiry": 45,
+  "info": 40,
+  "office": 40,
+  "reception": 35,
+  "marketing": 30,
+  "sales": 30,
+  "support": 20,
+};
+
 /**
- * Deobfuscate common email obfuscation patterns:
- * - HTML entities: &#64; → @, &#46; → .
- * - Text patterns: [at], (at), [dot], (dot)
- * - Zero-width characters
+ * Deobfuscate common email obfuscation patterns.
  */
 export function deobfuscateEmail(raw: string): string | null {
   let text = raw
@@ -34,14 +63,11 @@ export function deobfuscateEmail(raw: string): string | null {
 
 /**
  * Extract all valid emails from an HTML string,
- * filtering out public mailboxes and invalid patterns.
+ * filtering out fake emails, public mailboxes, and invalid patterns.
  */
 export function extractEmails(html: string): string[] {
   const text = html.replace(/<[^>]*>/g, " ");
-  const deobfuscated = deobfuscateEmail(text) ? text : text;
-  
-  // Apply deobfuscation then extract
-  const cleaned = deobfuscated
+  const cleaned = text
     .replace(/&#64;/g, "@").replace(/&#46;/g, ".")
     .replace(/\[at\]/gi, "@").replace(/\[dot\]/gi, ".")
     .replace(/[\u200B\u200C\u200D\uFEFF]/g, "");
@@ -51,10 +77,12 @@ export function extractEmails(html: string): string[] {
   return [...new Set(matches)].filter(email => {
     const lower = email.toLowerCase();
     const domain = lower.split("@")[1];
+    const localPart = lower.split("@")[0];
     if (!domain) return false;
     if (PUBLIC_DOMAINS.has(domain)) return false;
     if (INVALID_PATTERNS.some(p => p.test(lower))) return false;
-    if (lower.startsWith("noreply@") || lower.startsWith("no-reply@")) return false;
+    if (FAKE_EMAIL_PREFIXES.has(localPart)) return false;
+    if (FAKE_EMAIL_PREFIXES.has(localPart.replace(/-/g, ""))) return false;
     return true;
   });
 }
@@ -69,11 +97,22 @@ export function isValidCompanyEmail(email: string): { valid: boolean; reason?: s
   if (!EMAIL_REGEX.test(lower)) return { valid: false, reason: "invalid_format" };
 
   const domain = lower.split("@")[1];
+  const localPart = lower.split("@")[0];
   if (PUBLIC_DOMAINS.has(domain)) return { valid: false, reason: "public_mailbox" };
-  if (lower.startsWith("noreply@") || lower.startsWith("no-reply@")) return { valid: false, reason: "noreply" };
+  if (FAKE_EMAIL_PREFIXES.has(localPart) || FAKE_EMAIL_PREFIXES.has(localPart.replace(/-/g, ""))) {
+    return { valid: false, reason: "fake_or_automated" };
+  }
   if (INVALID_PATTERNS.some(p => p.test(lower))) return { valid: false, reason: "invalid_pattern" };
 
   return { valid: true };
+}
+
+/**
+ * Score an email by likelihood of being monitored (per PDF strategy).
+ */
+export function scoreEmail(email: string): number {
+  const localPart = email.toLowerCase().split("@")[0];
+  return EMAIL_SCORING[localPart] || 10;
 }
 
 /**
@@ -86,7 +125,6 @@ export function parseCSV(csvText: string): Record<string, string>[] {
   const headers = lines[0].toLowerCase().split(",").map(h => h.trim().replace(/^["']|["']$/g, ""));
   
   return lines.slice(1).map(line => {
-    // Handle quoted CSV fields
     const values: string[] = [];
     let current = "";
     let inQuotes = false;

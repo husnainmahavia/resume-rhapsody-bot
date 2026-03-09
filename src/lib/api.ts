@@ -211,8 +211,16 @@ export async function scrapeCareerPages(companyDomain: string) {
   return data;
 }
 
+// Sender health check (Layer 6 from PDF strategy)
+export async function getSenderHealth() {
+  const { data, error } = await supabase.functions.invoke("email-mailbox", {
+    body: { action: "health" },
+  });
+  if (error) throw error;
+  return data;
+}
+
 // Bounce analytics
-export async function getBounceAnalytics() {
   const { data: blacklist } = await supabase
     .from("domain_blacklist")
     .select("*")
