@@ -272,6 +272,12 @@ export default function EmailEngineDashboard() {
   const industries = stats?.industries || DEFAULT_INDUSTRIES;
   const regions = stats?.regions || DEFAULT_REGIONS;
 
+  const selectedIds = Array.from(selectedLeads);
+  const selectedAllGenerated =
+    selectedIds.length > 0 &&
+    selectedIds.every((id) => leads.find((l) => l.id === id)?.email_generated);
+  const generateCta = selectedAllGenerated ? "Regenerate Emails" : "Generate Emails";
+
   return (
     <div className="space-y-4">
       {/* Stats Row */}
