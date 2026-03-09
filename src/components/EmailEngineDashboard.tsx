@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, Sparkles, Send, Loader2, CheckCircle2, XCircle,
@@ -13,6 +13,7 @@ import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import EmailEngineAI from "./EmailEngineAI";
 
 interface Lead {
   id: string;
@@ -102,6 +103,11 @@ export default function EmailEngineDashboard() {
       if (data?.leads) setLeads(data.leads);
     } catch (e) { console.error("List error:", e); }
   };
+
+  const handleAIDataChanged = useCallback(() => {
+    loadStats();
+    loadLeads();
+  }, []);
 
   const filteredLeads = useMemo(() => {
     if (activeFilter === "all") return leads;
@@ -297,6 +303,9 @@ export default function EmailEngineDashboard() {
           </Card>
         ))}
       </div>
+
+      {/* AI Email Boss */}
+      <EmailEngineAI onDataChanged={handleAIDataChanged} />
 
       {/* Controls */}
       <Card className="bg-secondary/30 border-border">
