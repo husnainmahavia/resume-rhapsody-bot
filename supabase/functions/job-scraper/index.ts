@@ -146,16 +146,23 @@ No markdown, no code fences. JSON only.`
   }
 }
 
-async function aiSearchEmails(query: string, apiKey: string): Promise<Array<{ company: string; email: string; website: string; description: string; location: string }>> {
-  try {
-    const response = await fetch(GEMINI_URL, {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "gemini-2.5-flash",
-        messages: [{
-          role: "user",
-          content: `You are a job research assistant. Search for real companies matching: "${query}"
+async function aiSearchEmails(query: string, apiKey: string, retries = 3): Promise<Array<{ company: string; email: string; website: string; description: string; location: string }>> {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      if (attempt > 0) {
+        const backoff = (attempt * 15000) + Math.random() * 10000;
+        console.log(`  ⏳ Rate limit retry ${attempt}/${retries}, waiting ${Math.round(backoff/1000)}s...`);
+        await new Promise(r => setTimeout(r, backoff));
+      }
+
+      const response = await fetch(GEMINI_URL, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "gemini-2.5-flash",
+          messages: [{
+            role: "user",
+            content: `You are a job research assistant. Search for real companies matching: "${query}"
 
 Return ONLY a JSON array of objects. Each object must have:
 - "company": company name (real companies only)
@@ -168,42 +175,52 @@ Find 5-8 REAL companies with VERIFIED business email addresses.
 If verified email is not publicly available, skip that company (do not fabricate).
 
 CRITICAL: Only return companies you are confident are real. Return valid JSON array only, no markdown, no code fences.`
-        }],
-        temperature: 0.3,
-        max_tokens: 2000,
-      }),
-    });
+          }],
+          temperature: 0.3,
+          max_tokens: 2000,
+        }),
+      });
 
-    if (!response.ok) {
-      console.error("Gemini search error:", response.status);
-      return [];
-    }
+      if (response.status === 429) {
+        console.warn(`  ⚠️ Gemini 429 rate limit on attempt ${attempt + 1}`);
+        await response.text(); // consume body
+        continue;
+      }
 
-    const rawText = await response.text();
-    console.log("Gemini response status:", response.status, "length:", rawText.length);
-    
-    let data;
-    try {
-      data = JSON.parse(rawText);
-    } catch {
-      console.error("Failed to parse Gemini response:", rawText.substring(0, 200));
+      if (!response.ok) {
+        console.error("Gemini search error:", response.status);
+        await response.text();
+        return [];
+      }
+
+      const rawText = await response.text();
+      console.log("Gemini response status:", response.status, "length:", rawText.length);
+      
+      let data;
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        console.error("Failed to parse Gemini response:", rawText.substring(0, 200));
+        return [];
+      }
+      
+      const content = data.choices?.[0]?.message?.content || "[]";
+      const cleaned = content.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+      const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) {
+        console.error("No JSON array found in content:", content.substring(0, 200));
+        return [];
+      }
+      
+      const parsed = JSON.parse(jsonMatch[0]);
+      return Array.isArray(parsed) ? parsed.filter((r: any) => r.email && r.company) : [];
+    } catch (e) {
+      console.error("AI search error:", e);
       return [];
     }
-    
-    const content = data.choices?.[0]?.message?.content || "[]";
-    const cleaned = content.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
-    const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) {
-      console.error("No JSON array found in content:", content.substring(0, 200));
-      return [];
-    }
-    
-    const parsed = JSON.parse(jsonMatch[0]);
-    return Array.isArray(parsed) ? parsed.filter((r: any) => r.email && r.company) : [];
-  } catch (e) {
-    console.error("AI search error:", e);
-    return [];
   }
+  console.error("  ❌ All retries exhausted for query:", query);
+  return [];
 }
 
 serve(async (req) => {
