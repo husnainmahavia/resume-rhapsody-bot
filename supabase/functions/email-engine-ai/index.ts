@@ -316,7 +316,7 @@ Rate confidence based on how common that pattern is for companies.`
 
             // Verify current email via AI
             if (lead.contact_email) {
-              const verifyResult = await aiEmailLookup(LOVABLE_API_KEY,
+              const verifyResult = await aiEmailLookup(GEMINI_API_KEY,
                 `Quick verify: Is "${lead.contact_email}" likely deliverable for company "${lead.company_name}" (domain: ${domain})?
 MX records exist: true.
 Return JSON: { status: "valid"|"invalid"|"risky", score: 0-100, reason: string }`
