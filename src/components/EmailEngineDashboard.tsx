@@ -304,6 +304,9 @@ export default function EmailEngineDashboard() {
         ))}
       </div>
 
+      {/* AI Email Boss */}
+      <EmailEngineAI onDataChanged={handleAIDataChanged} />
+
       {/* Controls */}
       <Card className="bg-secondary/30 border-border">
         <CardContent className="p-4 space-y-3">
