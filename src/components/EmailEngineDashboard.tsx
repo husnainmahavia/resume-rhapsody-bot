@@ -136,14 +136,45 @@ export default function EmailEngineDashboard() {
   };
 
   const handleGenerate = async () => {
+    const ids = selectedLeads.size > 0 ? Array.from(selectedLeads) : undefined;
+
+    const selectedLeadObjs: Lead[] = ids
+      ? (ids
+          .map((id) => leads.find((l) => l.id === id))
+          .filter(Boolean) as Lead[])
+      : [];
+
+    const allSelectedSent = selectedLeadObjs.length > 0 && selectedLeadObjs.every((l) => l.sent);
+    if (allSelectedSent) {
+      toast({
+        title: "Nothing to generate",
+        description: "All selected leads are already sent.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const hasAnyPending = leads.some((l) => !l.email_generated && !l.sent && !l.send_error);
+    if (!ids && !hasAnyPending) {
+      toast({
+        title: "0 emails generated",
+        description: "All leads already have emails; use Send Bulk (or select leads to regenerate).",
+      });
+      return;
+    }
+
+    const force =
+      selectedLeadObjs.length > 0 &&
+      selectedLeadObjs.every((l) => l.email_generated) &&
+      selectedLeadObjs.some((l) => !l.sent);
+
     setGenerating(true);
     try {
-      const ids = selectedLeads.size > 0 ? Array.from(selectedLeads) : undefined;
       const { data } = await supabase.functions.invoke("email-engine", {
-        body: { action: "generate", leadIds: ids },
+        body: { action: "generate", leadIds: ids, force },
       });
       toast({
-        title: `✉️ Generated ${data?.generated || 0} emails`,
+        title: `✉️ ${force ? "Regenerated" : "Generated"} ${data?.generated || 0} emails`,
         description: `Out of ${data?.total || 0} leads processed`,
       });
       loadStats();
@@ -241,6 +272,12 @@ export default function EmailEngineDashboard() {
   const industries = stats?.industries || DEFAULT_INDUSTRIES;
   const regions = stats?.regions || DEFAULT_REGIONS;
 
+  const selectedIds = Array.from(selectedLeads);
+  const selectedAllGenerated =
+    selectedIds.length > 0 &&
+    selectedIds.every((id) => leads.find((l) => l.id === id)?.email_generated);
+  const generateCta = selectedAllGenerated ? "Regenerate Emails" : "Generate Emails";
+
   return (
     <div className="space-y-4">
       {/* Stats Row */}
@@ -294,7 +331,7 @@ export default function EmailEngineDashboard() {
           <div className="flex gap-2 flex-wrap">
             <Button variant="outline" size="sm" onClick={handleGenerate} disabled={generating} className="gap-1.5">
               {generating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-              Generate Emails {selectedLeads.size > 0 && `(${selectedLeads.size})`}
+              {generateCta} {selectedLeads.size > 0 && `(${selectedLeads.size})`}
             </Button>
             <Button variant="outline" size="sm" onClick={handleSend} disabled={sending} className="gap-1.5">
               {sending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}

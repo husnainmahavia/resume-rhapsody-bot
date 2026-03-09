@@ -61,7 +61,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { action, industry, region, leadIds, batchId } = await req.json();
+    const { action, industry, region, leadIds, batchId, force } = await req.json();
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -184,10 +184,16 @@ CRITICAL RULES:
     // === ACTION: GENERATE EMAILS ===
     if (action === "generate") {
       const targetLeadIds = leadIds as string[] | undefined;
+      const shouldForce = Boolean(force);
+
       let query = supabase
         .from("email_engine_leads")
         .select("*")
-        .eq("email_generated", false);
+        .eq("sent", false);
+
+      if (!shouldForce) {
+        query = query.eq("email_generated", false);
+      }
 
       if (targetLeadIds && targetLeadIds.length > 0) {
         query = query.in("id", targetLeadIds);
@@ -196,9 +202,18 @@ CRITICAL RULES:
       const { data: leads, error } = await query.limit(20);
       if (error) throw error;
       if (!leads || leads.length === 0) {
-        return new Response(JSON.stringify({ success: true, generated: 0, message: "No leads to generate emails for" }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({
+            success: true,
+            generated: 0,
+            message: shouldForce
+              ? "No unsent leads to regenerate emails for"
+              : "No leads to generate emails for",
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
 
       console.log(`✉️ Generating emails for ${leads.length} leads`);
