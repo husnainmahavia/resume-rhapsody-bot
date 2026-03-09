@@ -331,7 +331,7 @@ export default function EmailEngineDashboard() {
           <div className="flex gap-2 flex-wrap">
             <Button variant="outline" size="sm" onClick={handleGenerate} disabled={generating} className="gap-1.5">
               {generating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-              Generate Emails {selectedLeads.size > 0 && `(${selectedLeads.size})`}
+              {generateCta} {selectedLeads.size > 0 && `(${selectedLeads.size})`}
             </Button>
             <Button variant="outline" size="sm" onClick={handleSend} disabled={sending} className="gap-1.5">
               {sending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
