@@ -148,11 +148,11 @@ No markdown, no code fences. JSON only.`
 
 async function aiSearchEmails(query: string, apiKey: string): Promise<Array<{ company: string; email: string; website: string; description: string; location: string }>> {
   try {
-    const response = await fetch(AI_URL, {
+    const response = await fetch(GEMINI_URL, {
       method: "POST",
       headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "gemini-2.5-flash",
         messages: [{
           role: "user",
           content: `You are a job research assistant. Search for real companies matching: "${query}"
@@ -174,20 +174,23 @@ CRITICAL: Only return companies you are confident are real. Return valid JSON ar
       }),
     });
 
+    if (!response.ok) {
+      console.error("Gemini search error:", response.status);
+      return [];
+    }
+
     const rawText = await response.text();
-    console.log("AI response status:", response.status, "length:", rawText.length);
+    console.log("Gemini response status:", response.status, "length:", rawText.length);
     
     let data;
     try {
       data = JSON.parse(rawText);
     } catch {
-      console.error("Failed to parse AI gateway response:", rawText.substring(0, 200));
+      console.error("Failed to parse Gemini response:", rawText.substring(0, 200));
       return [];
     }
     
     const content = data.choices?.[0]?.message?.content || "[]";
-    
-    // Extract JSON array from response (handles markdown code fences too)
     const cleaned = content.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
     const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
     if (!jsonMatch) {
