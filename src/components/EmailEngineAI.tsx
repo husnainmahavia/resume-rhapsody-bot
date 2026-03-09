@@ -20,7 +20,7 @@ const QUICK_ACTIONS = [
     label: "Fix All Emails",
     icon: Zap,
     message:
-      "Run bulk_fix_emails on the top 10 unsent leads. Verify each current email with Hunter.io and replace any that are invalid with real verified ones.",
+      "Run bulk_fix_emails on the top 10 unsent leads. Verify each current email and replace any that are invalid with real verified ones.",
   },
   {
     label: "Analyze Bounces",
@@ -32,7 +32,7 @@ const QUICK_ACTIONS = [
     label: "Find Real Emails",
     icon: Search,
     message:
-      "For the top 5 unsent leads, search Hunter.io for real verified email addresses and update them.",
+      "For the top 5 unsent leads, find real verified email addresses using AI and DNS checks, and update them.",
   },
   {
     label: "Health Report",
@@ -47,7 +47,7 @@ export default function EmailEngineAI({ onDataChanged }: { onDataChanged?: () =>
     {
       role: "assistant",
       content:
-        "👋 I'm your **AI Email Boss**. I use Hunter.io to find and verify **real business emails** — fixing the deliverability problem where ~90% of AI-generated emails bounce.\n\nTry a quick action below or ask me anything.",
+        "👋 I'm your **AI Email Boss**. I use built-in AI + DNS/MX verification to find and verify **real business emails** — fixing the deliverability problem where ~90% of AI-generated emails bounce.\n\nTry a quick action below or ask me anything.",
     },
   ]);
   const [input, setInput] = useState("");
@@ -110,7 +110,7 @@ export default function EmailEngineAI({ onDataChanged }: { onDataChanged?: () =>
     const map: Record<string, string> = {
       list_leads: "📋 Listed leads",
       verify_email: "🔍 Verified email",
-      find_company_email: "🏢 Searched Hunter.io",
+      find_company_email: "🏢 AI email search",
       fix_lead_email: "✏️ Updated lead",
       bulk_fix_emails: "⚡ Bulk verified & fixed",
     };
@@ -131,7 +131,7 @@ export default function EmailEngineAI({ onDataChanged }: { onDataChanged?: () =>
           <div className="text-left">
             <span className="text-sm font-semibold">AI Email Boss</span>
             <span className="text-[9px] ml-2 bg-primary/15 text-primary px-1.5 py-0.5 rounded-full font-medium">
-              Hunter.io Powered
+              AI Powered
             </span>
           </div>
         </div>
@@ -226,7 +226,7 @@ export default function EmailEngineAI({ onDataChanged }: { onDataChanged?: () =>
                   <div className="bg-secondary/60 rounded-lg px-3 py-2 flex items-center gap-2">
                     <Loader2 className="h-3 w-3 animate-spin text-primary" />
                     <span className="text-[10px] text-muted-foreground">
-                      Searching Hunter.io & analyzing...
+                      AI analyzing & verifying...
                     </span>
                   </div>
                 </div>
