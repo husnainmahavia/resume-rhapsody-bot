@@ -32,18 +32,12 @@ serve(async (req) => {
 
     const baseCV = CV_VERSIONS[cvVersion] || CV_VERSIONS.fullstack;
 
-    const response = await fetch(GEMINI_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${GEMINI_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gemini-2.5-flash",
-        messages: [
-          {
-            role: "system",
-            content: `You are an expert CV writer and career coach. Your job is to tailor the candidate's CV for a specific job.
+    const requestBody = JSON.stringify({
+      model: "gemini-2.5-flash-lite",
+      messages: [
+        {
+          role: "system",
+          content: `You are an expert CV writer and career coach. Your job is to tailor the candidate's CV for a specific job.
 
 RULES:
 1. Restructure, reword, and emphasize the most relevant skills and experience
@@ -53,10 +47,10 @@ RULES:
 5. Highlight quantifiable achievements
 6. Also write a personalized cover letter (max 250 words)
 7. The CV should follow this structure: Name/Contact → Profile → Skills → Experience → Education → Certifications`,
-          },
-          {
-            role: "user",
-            content: `BASE CV:\n${baseCV}\n\nFull candidate details:
+        },
+        {
+          role: "user",
+          content: `BASE CV:\n${baseCV}\n\nFull candidate details:
 Name: Husnain Mahavia
 Location: Manchester, UK
 Phone: +44 7387 055617
@@ -74,32 +68,50 @@ Company: ${company}
 Description: ${jobDescription}
 
 Tailor the CV and write a cover letter.`,
-          },
-        ],
-        tools: [{
-          type: "function",
-          function: {
-            name: "return_documents",
-            description: "Return tailored CV and cover letter",
-            parameters: {
-              type: "object",
-              properties: {
-                tailored_cv: { type: "string", description: "The full tailored CV text, well-formatted" },
-                cover_letter: { type: "string", description: "The personalized cover letter" },
-                key_changes: { type: "string", description: "Brief summary of what was changed and why" },
-                recommended_cv_type: { type: "string", description: "Which CV version was best suited: fullstack, aiSpecialist, digitalMarketing, or webDeveloper" },
-              },
-              required: ["tailored_cv", "cover_letter", "key_changes", "recommended_cv_type"],
+        },
+      ],
+      tools: [{
+        type: "function",
+        function: {
+          name: "return_documents",
+          description: "Return tailored CV and cover letter",
+          parameters: {
+            type: "object",
+            properties: {
+              tailored_cv: { type: "string", description: "The full tailored CV text, well-formatted" },
+              cover_letter: { type: "string", description: "The personalized cover letter" },
+              key_changes: { type: "string", description: "Brief summary of what was changed and why" },
+              recommended_cv_type: { type: "string", description: "Which CV version was best suited: fullstack, aiSpecialist, digitalMarketing, or webDeveloper" },
             },
+            required: ["tailored_cv", "cover_letter", "key_changes", "recommended_cv_type"],
           },
-        }],
-        tool_choice: { type: "function", function: { name: "return_documents" } },
-      }),
+        },
+      }],
+      tool_choice: { type: "function", function: { name: "return_documents" } },
     });
 
-    if (!response.ok) {
-      if (response.status === 429) return new Response(JSON.stringify({ error: "Rate limited" }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      throw new Error(`Gemini error: ${response.status}`);
+    // Retry with exponential backoff for rate limits
+    let response: Response | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      response = await fetch(GEMINI_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${GEMINI_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: requestBody,
+      });
+
+      if (response.status !== 429) break;
+
+      const waitMs = (attempt + 1) * 15000 + Math.random() * 5000;
+      console.log(`Rate limited, retrying in ${Math.round(waitMs / 1000)}s (attempt ${attempt + 1}/3)`);
+      await new Promise(r => setTimeout(r, waitMs));
+    }
+
+    if (!response || !response.ok) {
+      if (response?.status === 429) return new Response(JSON.stringify({ error: "Rate limited after retries. Please wait a minute and try again." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      throw new Error(`Gemini error: ${response?.status}`);
     }
 
     const data = await response.json();
