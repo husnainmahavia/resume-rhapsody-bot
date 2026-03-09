@@ -545,7 +545,7 @@ TAILORING INSTRUCTIONS:
 
 Return the complete tailored CV text and cover letter.`;
 
-        const cvResponse = await callAIGateway(LOVABLE_API_KEY, {
+        const cvResponse = await callGemini(GEMINI_API_KEY, {
             model: "google/gemini-2.5-flash",
             messages: [
               { role: "system", content: "You are a professional CV writer. Return tailored CV content maintaining the exact same professional format." },
