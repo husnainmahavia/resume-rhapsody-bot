@@ -98,11 +98,11 @@ CRITICAL RULES:
 
       let searchResponse: Response | null = null;
       for (let attempt = 0; attempt < 4; attempt++) {
-        searchResponse = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
+        searchResponse = await fetch("https://api.deepseek.com/chat/completions", {
           method: "POST",
-          headers: { Authorization: `Bearer ${GEMINI_API_KEY}`, "Content-Type": "application/json" },
+          headers: { Authorization: `Bearer ${DEEPSEEK_API_KEY}`, "Content-Type": "application/json" },
           body: JSON.stringify({
-            model: "gemini-2.5-flash-lite",
+            model: "deepseek-chat",
             messages: [
               { role: "system", content: "You are a B2B lead researcher. Return only real, verified companies. Return valid JSON only." },
               { role: "user", content: discoverPrompt },
