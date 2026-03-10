@@ -303,7 +303,7 @@ serve(async (req) => {
             }
           }
 
-          // Longer delay between searches to avoid Gemini rate limits
+          // Longer delay between searches to avoid rate limits
           await new Promise(r => setTimeout(r, 8000 + Math.random() * 7000));
         }
 
