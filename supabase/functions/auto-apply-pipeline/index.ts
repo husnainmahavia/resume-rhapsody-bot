@@ -63,9 +63,9 @@ async function callGemini(apiKey: string, body: Record<string, unknown>): Promis
       body: JSON.stringify({ ...body, model }),
     });
     
-    if (resp.status === 429) {
+    if (resp.status === 429 || resp.status === 503) {
       const waitMs = (attempt + 1) * 15000 + Math.random() * 5000;
-      console.log(`⚠️ Rate limited (attempt ${attempt + 1}/4), waiting ${Math.round(waitMs / 1000)}s...`);
+      console.log(`⚠️ ${resp.status === 429 ? 'Rate limited' : 'Server overloaded'} (attempt ${attempt + 1}/4), waiting ${Math.round(waitMs / 1000)}s...`);
       await new Promise((r) => setTimeout(r, waitMs));
       continue;
     }
