@@ -117,18 +117,20 @@ async function aiEmailLookup(
   apiKey: string,
   prompt: string
 ): Promise<Record<string, unknown>> {
-  const resp = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "gemini-2.5-flash",
-      messages: [
-        {
-          role: "system",
-          content: `You are an email intelligence agent. You analyze company domains and email addresses to determine deliverability and find real contact emails.
+  let resp: Response | null = null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    resp = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gemini-2.5-flash-lite",
+        messages: [
+          {
+            role: "system",
+            content: `You are an email intelligence agent. You analyze company domains and email addresses to determine deliverability and find real contact emails.
 
 RULES:
 - For email verification: analyze the domain, check if it's a real company domain, assess the email pattern
@@ -138,36 +140,43 @@ RULES:
 - Rate confidence 0-100 based on how likely the email is real
 - NEVER make up personal names or specific employee emails - only suggest pattern-based emails
 - Always return valid JSON`,
-        },
-        { role: "user", content: prompt },
-      ],
-      tools: [
-        {
-          type: "function",
-          function: {
-            name: "return_result",
-            description: "Return the email analysis result",
-            parameters: {
-              type: "object",
-              properties: {
-                result: {
-                  type: "object",
-                  description: "The analysis result as a JSON object",
+          },
+          { role: "user", content: prompt },
+        ],
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: "return_result",
+              description: "Return the email analysis result",
+              parameters: {
+                type: "object",
+                properties: {
+                  result: {
+                    type: "object",
+                    description: "The analysis result as a JSON object",
+                  },
                 },
+                required: ["result"],
               },
-              required: ["result"],
             },
           },
-        },
-      ],
-      tool_choice: { type: "function", function: { name: "return_result" } },
-    }),
-  });
+        ],
+        tool_choice: { type: "function", function: { name: "return_result" } },
+      }),
+    });
 
-  if (!resp.ok) {
-    const errText = await resp.text();
-    console.error("AI lookup error:", resp.status, errText);
-    throw new Error(`AI lookup failed: ${resp.status}`);
+    if (resp && resp.status !== 429 && resp.status !== 503) break;
+
+    const waitMs = (attempt + 1) * 15000 + Math.random() * 5000;
+    console.log(`AI lookup ${resp?.status}, retrying in ${Math.round(waitMs / 1000)}s (${attempt + 1}/4)`);
+    await new Promise((r) => setTimeout(r, waitMs));
+  }
+
+  if (!resp || !resp.ok) {
+    const errText = await resp?.text().catch(() => "") || "";
+    console.error("AI lookup error:", resp?.status, errText);
+    throw new Error(`AI lookup failed: ${resp?.status}`);
   }
 
   const data = await resp.json();
@@ -401,34 +410,38 @@ Return JSON: { suggested_email: string, confidence: number (0-100), reason: stri
     const MAX_ROUNDS = 6;
 
     for (let round = 0; round < MAX_ROUNDS; round++) {
-      const resp = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${GEMINI_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "gemini-2.5-flash",
-          messages: allMessages,
-          tools: TOOLS,
-          tool_choice: "auto",
-        }),
-      });
+      let resp: Response | null = null;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        resp = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${GEMINI_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "gemini-2.5-flash-lite",
+            messages: allMessages,
+            tools: TOOLS,
+            tool_choice: "auto",
+          }),
+        });
 
-      if (!resp.ok) {
-        const errText = await resp.text();
-        console.error(`AI gateway error ${resp.status}:`, errText);
-        if (resp.status === 429)
+        if (resp && resp.status !== 429 && resp.status !== 503) break;
+
+        const waitMs = (attempt + 1) * 15000 + Math.random() * 5000;
+        console.log(`AI chat ${resp?.status}, retrying in ${Math.round(waitMs / 1000)}s (${attempt + 1}/4)`);
+        await new Promise((r) => setTimeout(r, waitMs));
+      }
+
+      if (!resp || !resp.ok) {
+        const errText = await resp?.text().catch(() => "") || "";
+        console.error(`AI gateway error ${resp?.status}:`, errText);
+        if (resp?.status === 429)
           return new Response(
             JSON.stringify({ error: "Rate limited — please try again shortly." }),
             { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
-        if (resp.status === 402)
-          return new Response(
-            JSON.stringify({ error: "AI credits exhausted. Top up in Settings → Workspace → Usage." }),
-            { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        throw new Error(`AI error: ${resp.status}`);
+        throw new Error(`AI error: ${resp?.status}`);
       }
 
       const data = await resp.json();
