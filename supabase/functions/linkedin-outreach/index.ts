@@ -51,52 +51,59 @@ For each job provide:
 
 Return ONLY valid JSON array.`;
 
-      const response = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${GEMINI_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "gemini-2.5-flash",
-          messages: [
-            { role: "system", content: "Return only valid JSON arrays. No markdown." },
-            { role: "user", content: prompt },
-          ],
-          tools: [{
-            type: "function",
-            function: {
-              name: "return_linkedin_jobs",
-              description: "Return LinkedIn job listings",
-              parameters: {
-                type: "object",
-                properties: {
-                  jobs: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        title: { type: "string" },
-                        company: { type: "string" },
-                        location: { type: "string" },
-                        salary_range: { type: "string" },
-                        description: { type: "string" },
-                        linkedin_url: { type: "string" },
-                        hiring_manager_name: { type: "string" },
-                        hiring_manager_linkedin: { type: "string" },
-                        recent_post_topic: { type: "string" },
+      let response: Response | null = null;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        response = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${GEMINI_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "gemini-2.5-flash-lite",
+            messages: [
+              { role: "system", content: "Return only valid JSON arrays. No markdown." },
+              { role: "user", content: prompt },
+            ],
+            tools: [{
+              type: "function",
+              function: {
+                name: "return_linkedin_jobs",
+                description: "Return LinkedIn job listings",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    jobs: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          title: { type: "string" },
+                          company: { type: "string" },
+                          location: { type: "string" },
+                          salary_range: { type: "string" },
+                          description: { type: "string" },
+                          linkedin_url: { type: "string" },
+                          hiring_manager_name: { type: "string" },
+                          hiring_manager_linkedin: { type: "string" },
+                          recent_post_topic: { type: "string" },
+                        },
+                        required: ["title", "company", "location", "description"],
                       },
-                      required: ["title", "company", "location", "description"],
                     },
                   },
+                  required: ["jobs"],
                 },
-                required: ["jobs"],
               },
-            },
-          }],
-          tool_choice: { type: "function", function: { name: "return_linkedin_jobs" } },
-        }),
-      });
+            }],
+            tool_choice: { type: "function", function: { name: "return_linkedin_jobs" } },
+          }),
+        });
+        if (response && response.status !== 429 && response.status !== 503) break;
+        const waitMs = (attempt + 1) * 15000 + Math.random() * 5000;
+        console.log(`⚠️ LinkedIn search ${response?.status}, retry ${attempt + 1}/4`);
+        await new Promise(r => setTimeout(r, waitMs));
+      }
 
       if (!response.ok) {
         const t = await response.text();
