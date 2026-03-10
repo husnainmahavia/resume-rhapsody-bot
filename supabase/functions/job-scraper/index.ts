@@ -361,7 +361,7 @@ serve(async (req) => {
             method: "POST",
             headers: { "Authorization": `Bearer ${deepseekKey}`, "Content-Type": "application/json" },
             body: JSON.stringify({
-              model: "gemini-2.5-flash-lite",
+              model: "deepseek-chat",
               messages: [{
                 role: "user",
                 content: `Write a professional cold outreach email from Husnain Mahavia (Full-Stack Developer & AI Specialist, 8+ years experience) to ${company.company_name} (${categoryLabel} company).
