@@ -27,8 +27,8 @@ serve(async (req) => {
 
   try {
     const { jobTitle, company, jobDescription, cvVersion } = await req.json();
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-    if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not configured");
+    const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
+    if (!DEEPSEEK_API_KEY) throw new Error("DEEPSEEK_API_KEY not configured");
 
     const baseCV = CV_VERSIONS[cvVersion] || CV_VERSIONS.fullstack;
 
