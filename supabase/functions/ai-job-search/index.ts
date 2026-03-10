@@ -102,8 +102,8 @@ Return ONLY valid JSON array. No markdown, no explanation.`;
         });
       }
       const t = await response?.text() || "";
-      console.error("Gemini error:", response?.status, t);
-      throw new Error(`Gemini API error: ${response?.status}`);
+      console.error("DeepSeek error:", response?.status, t);
+      throw new Error(`DeepSeek API error: ${response?.status}`);
     }
 
     const data = await response.json();

@@ -111,7 +111,7 @@ Tailor the CV and write a cover letter.`,
 
     if (!response || !response.ok) {
       if (response?.status === 429) return new Response(JSON.stringify({ error: "Rate limited after retries. Please wait a minute and try again." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      throw new Error(`Gemini error: ${response?.status}`);
+      throw new Error(`DeepSeek error: ${response?.status}`);
     }
 
     const data = await response.json();
