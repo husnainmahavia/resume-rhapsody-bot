@@ -250,35 +250,42 @@ REQUIREMENTS:
 7. Tone: professional, warm, knowledgeable — NOT salesy or pushy
 8. Do NOT use "Dear Sir/Madam" — use "Dear [Company Name] Team" or find a better greeting`;
 
-          const emailResponse = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
-            method: "POST",
-            headers: { Authorization: `Bearer ${GEMINI_API_KEY}`, "Content-Type": "application/json" },
-            body: JSON.stringify({
-              model: "gemini-2.5-flash",
-              messages: [
-                { role: "system", content: "You write professional B2B cold outreach emails. Every email must be unique and company-specific." },
-                { role: "user", content: emailPrompt },
-              ],
-              tools: [{
-                type: "function",
-                function: {
-                  name: "return_email",
-                  description: "Return email subject and body",
-                  parameters: {
-                    type: "object",
-                    properties: {
-                      subject: { type: "string" },
-                      body: { type: "string" },
+          let emailResponse: Response | null = null;
+          for (let attempt = 0; attempt < 4; attempt++) {
+            emailResponse = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
+              method: "POST",
+              headers: { Authorization: `Bearer ${GEMINI_API_KEY}`, "Content-Type": "application/json" },
+              body: JSON.stringify({
+                model: "gemini-2.5-flash-lite",
+                messages: [
+                  { role: "system", content: "You write professional B2B cold outreach emails. Every email must be unique and company-specific." },
+                  { role: "user", content: emailPrompt },
+                ],
+                tools: [{
+                  type: "function",
+                  function: {
+                    name: "return_email",
+                    description: "Return email subject and body",
+                    parameters: {
+                      type: "object",
+                      properties: {
+                        subject: { type: "string" },
+                        body: { type: "string" },
+                      },
+                      required: ["subject", "body"],
                     },
-                    required: ["subject", "body"],
                   },
-                },
-              }],
-              tool_choice: { type: "function", function: { name: "return_email" } },
-            }),
-          });
+                }],
+                tool_choice: { type: "function", function: { name: "return_email" } },
+              }),
+            });
+            if (emailResponse && emailResponse.status !== 429 && emailResponse.status !== 503) break;
+            const waitMs = (attempt + 1) * 15000 + Math.random() * 5000;
+            console.log(`⚠️ Email gen ${emailResponse?.status}, retry ${attempt + 1}/4 in ${Math.round(waitMs / 1000)}s`);
+            await new Promise(r => setTimeout(r, waitMs));
+          }
 
-          if (!emailResponse.ok) throw new Error(`Email gen failed: ${emailResponse.status}`);
+          if (!emailResponse || !emailResponse.ok) throw new Error(`Email gen failed: ${emailResponse?.status}`);
           const emailData = await emailResponse.json();
           const emailResult = emailData.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments
             ? JSON.parse(emailData.choices[0].message.tool_calls[0].function.arguments)

@@ -172,39 +172,46 @@ Generate THREE types of messages:
 
 Return JSON with keys: connection_message, inmail_message, post_comment`;
 
-      const response = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${GEMINI_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "gemini-2.5-flash",
-          messages: [
-            { role: "system", content: "Return only valid JSON. No markdown." },
-            { role: "user", content: prompt },
-          ],
-          tools: [{
-            type: "function",
-            function: {
-              name: "return_messages",
-              description: "Return generated LinkedIn messages",
-              parameters: {
-                type: "object",
-                properties: {
-                  connection_message: { type: "string" },
-                  inmail_message: { type: "string" },
-                  post_comment: { type: "string" },
+      let response: Response | null = null;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        response = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${GEMINI_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "gemini-2.5-flash-lite",
+            messages: [
+              { role: "system", content: "Return only valid JSON. No markdown." },
+              { role: "user", content: prompt },
+            ],
+            tools: [{
+              type: "function",
+              function: {
+                name: "return_messages",
+                description: "Return generated LinkedIn messages",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    connection_message: { type: "string" },
+                    inmail_message: { type: "string" },
+                    post_comment: { type: "string" },
+                  },
+                  required: ["connection_message", "inmail_message", "post_comment"],
                 },
-                required: ["connection_message", "inmail_message", "post_comment"],
               },
-            },
-          }],
-          tool_choice: { type: "function", function: { name: "return_messages" } },
-        }),
-      });
+            }],
+            tool_choice: { type: "function", function: { name: "return_messages" } },
+          }),
+        });
+        if (response && response.status !== 429 && response.status !== 503) break;
+        const waitMs = (attempt + 1) * 15000 + Math.random() * 5000;
+        console.log(`⚠️ LinkedIn msg gen ${response?.status}, retry ${attempt + 1}/4`);
+        await new Promise(r => setTimeout(r, waitMs));
+      }
 
-      if (!response.ok) throw new Error(`AI error: ${response.status}`);
+      if (!response || !response.ok) throw new Error(`AI error: ${response?.status}`);
 
       const data = await response.json();
       const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
