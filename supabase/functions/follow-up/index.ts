@@ -56,33 +56,42 @@ Deno.serve(async (req) => {
     for (const app of toFollowUp) {
       try {
         // Generate follow-up email via AI
-        const response = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${GEMINI_API_KEY}`, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: "gemini-2.5-flash-lite",
-            messages: [
-              { role: "system", content: "Write a brief, polite follow-up email (under 100 words). Reference the original application. Be warm but professional. Sign off as Husnain Mahavia, +44 7387 055617." },
-              { role: "user", content: `Following up on my application for ${app.job_title} at ${app.company}. Original email subject: ${app.email_subject}. Hiring manager: ${app.hiring_manager_name || "Hiring Team"}.` },
-            ],
-            tools: [{
-              type: "function",
-              function: {
-                name: "return_followup",
-                description: "Return follow-up email",
-                parameters: {
-                  type: "object",
-                  properties: {
-                    subject: { type: "string" },
-                    body: { type: "string" },
+        let response: Response | null = null;
+        for (let attempt = 0; attempt < 4; attempt++) {
+          response = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${GEMINI_API_KEY}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              model: "gemini-2.5-flash-lite",
+              messages: [
+                { role: "system", content: "Write a brief, polite follow-up email (under 100 words). Reference the original application. Be warm but professional. Sign off as Husnain Mahavia, +44 7387 055617." },
+                { role: "user", content: `Following up on my application for ${app.job_title} at ${app.company}. Original email subject: ${app.email_subject}. Hiring manager: ${app.hiring_manager_name || "Hiring Team"}.` },
+              ],
+              tools: [{
+                type: "function",
+                function: {
+                  name: "return_followup",
+                  description: "Return follow-up email",
+                  parameters: {
+                    type: "object",
+                    properties: {
+                      subject: { type: "string" },
+                      body: { type: "string" },
+                    },
+                    required: ["subject", "body"],
                   },
-                  required: ["subject", "body"],
                 },
-              },
-            }],
-            tool_choice: { type: "function", function: { name: "return_followup" } },
-          }),
-        });
+              }],
+              tool_choice: { type: "function", function: { name: "return_followup" } },
+            }),
+          });
+          if (response && response.status !== 429 && response.status !== 503) break;
+          const waitMs = (attempt + 1) * 15000 + Math.random() * 5000;
+          console.log(`⚠️ Follow-up AI ${response?.status}, retry ${attempt + 1}/4`);
+          await new Promise(r => setTimeout(r, waitMs));
+        }
+
+        if (!response || !response.ok) { console.error(`Follow-up AI error: ${response?.status}`); continue; }
 
         const data = await response.json();
         const result = data.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments

@@ -181,9 +181,9 @@ CRITICAL: Only return companies you are confident are real. Return valid JSON ar
         }),
       });
 
-      if (response.status === 429) {
-        console.warn(`  ⚠️ Gemini 429 rate limit on attempt ${attempt + 1}`);
-        await response.text(); // consume body
+      if (response.status === 429 || response.status === 503) {
+        console.warn(`  ⚠️ Gemini ${response.status} on attempt ${attempt + 1}`);
+        await response.text();
         continue;
       }
 
