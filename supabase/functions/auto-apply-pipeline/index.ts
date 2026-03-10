@@ -46,13 +46,12 @@ async function throttleAI(): Promise<void> {
   lastAICallTime = Date.now();
 }
 
-async function callGemini(apiKey: string, body: Record<string, unknown>): Promise<Response> {
-  const model = String(body.model || "gemini-2.5-flash").replace("google/", "");
-  const url = `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`;
+async function callDeepSeek(apiKey: string, body: Record<string, unknown>): Promise<Response> {
+  const url = `https://api.deepseek.com/chat/completions`;
   
   // Retry with exponential backoff for rate limits
   for (let attempt = 0; attempt < 4; attempt++) {
-    await throttleGemini();
+    await throttleAI();
     
     const resp = await fetch(url, {
       method: "POST",
@@ -60,7 +59,7 @@ async function callGemini(apiKey: string, body: Record<string, unknown>): Promis
         "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ ...body, model }),
+      body: JSON.stringify({ ...body, model: "deepseek-chat" }),
     });
     
     if (resp.status === 429 || resp.status === 503) {
@@ -71,11 +70,11 @@ async function callGemini(apiKey: string, body: Record<string, unknown>): Promis
     }
     if (!resp.ok) {
       const errText = await resp.text().catch(() => "");
-      throw new AICreditsError(resp.status, `Gemini API error (${resp.status}): ${errText.slice(0, 200)}`);
+      throw new AICreditsError(resp.status, `DeepSeek API error (${resp.status}): ${errText.slice(0, 200)}`);
     }
     return resp;
   }
-  throw new AICreditsError(429, "Gemini rate limit exceeded after 4 retries. Will retry on next cron run.");
+  throw new AICreditsError(429, "DeepSeek rate limit exceeded after 4 retries. Will retry on next cron run.");
 }
 
 function normalizeDomain(domain: string): string {
