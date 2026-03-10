@@ -5,15 +5,15 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     const { skills, location, jobType } = await req.json();
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-    if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not configured");
+    const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
+    if (!DEEPSEEK_API_KEY) throw new Error("DEEPSEEK_API_KEY not configured");
 
     const prompt = `You are a job search assistant. Find 5-8 REAL job listings from REAL companies that are actively hiring in ${location || "Manchester, UK"} for someone with these skills: ${skills.join(", ")}.
 
@@ -42,14 +42,14 @@ Return ONLY valid JSON array. No markdown, no explanation.`;
     // Retry with exponential backoff for rate limits
     let response: Response | null = null;
     for (let attempt = 0; attempt < 4; attempt++) {
-      response = await fetch(GEMINI_URL, {
+      response = await fetch(DEEPSEEK_URL, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${GEMINI_API_KEY}`,
+          Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "gemini-2.5-flash",
+          model: "deepseek-chat",
           messages: [
             { role: "system", content: "You are a job search API. Return only valid JSON arrays of job objects. No markdown formatting." },
             { role: "user", content: prompt },
@@ -102,8 +102,8 @@ Return ONLY valid JSON array. No markdown, no explanation.`;
         });
       }
       const t = await response?.text() || "";
-      console.error("Gemini error:", response?.status, t);
-      throw new Error(`Gemini API error: ${response?.status}`);
+      console.error("DeepSeek error:", response?.status, t);
+      throw new Error(`DeepSeek API error: ${response?.status}`);
     }
 
     const data = await response.json();

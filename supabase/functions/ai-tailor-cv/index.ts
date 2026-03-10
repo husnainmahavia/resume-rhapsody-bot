@@ -5,7 +5,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
 
 const CV_VERSIONS: Record<string, string> = {
   fullstack: `HUSNAIN MAHAVIA | Full-Stack Developer | WordPress & AI Integration Specialist | Tech Lead
@@ -27,13 +27,13 @@ serve(async (req) => {
 
   try {
     const { jobTitle, company, jobDescription, cvVersion } = await req.json();
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-    if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not configured");
+    const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
+    if (!DEEPSEEK_API_KEY) throw new Error("DEEPSEEK_API_KEY not configured");
 
     const baseCV = CV_VERSIONS[cvVersion] || CV_VERSIONS.fullstack;
 
     const requestBody = JSON.stringify({
-      model: "gemini-2.5-flash-lite",
+      model: "deepseek-chat",
       messages: [
         {
           role: "system",
@@ -93,10 +93,10 @@ Tailor the CV and write a cover letter.`,
     // Retry with exponential backoff for rate limits
     let response: Response | null = null;
     for (let attempt = 0; attempt < 4; attempt++) {
-      response = await fetch(GEMINI_URL, {
+      response = await fetch(DEEPSEEK_URL, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${GEMINI_API_KEY}`,
+          Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: requestBody,
@@ -111,7 +111,7 @@ Tailor the CV and write a cover letter.`,
 
     if (!response || !response.ok) {
       if (response?.status === 429) return new Response(JSON.stringify({ error: "Rate limited after retries. Please wait a minute and try again." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      throw new Error(`Gemini error: ${response?.status}`);
+      throw new Error(`DeepSeek error: ${response?.status}`);
     }
 
     const data = await response.json();

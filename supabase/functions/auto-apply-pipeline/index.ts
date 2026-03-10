@@ -31,28 +31,27 @@ class AICreditsError extends Error {
   }
 }
 
-// Throttle: wait between AI calls to stay under 15 RPM free tier
-let lastGeminiCallTime = 0;
-const GEMINI_CALL_INTERVAL_MS = 5000; // 5 seconds between calls = max 12 RPM (under 15 RPM limit)
+// Throttle: wait between AI calls to stay under rate limits
+let lastAICallTime = 0;
+const AI_CALL_INTERVAL_MS = 5000;
 
-async function throttleGemini(): Promise<void> {
+async function throttleAI(): Promise<void> {
   const now = Date.now();
-  const elapsed = now - lastGeminiCallTime;
-  if (elapsed < GEMINI_CALL_INTERVAL_MS) {
-    const waitMs = GEMINI_CALL_INTERVAL_MS - elapsed;
+  const elapsed = now - lastAICallTime;
+  if (elapsed < AI_CALL_INTERVAL_MS) {
+    const waitMs = AI_CALL_INTERVAL_MS - elapsed;
     console.log(`⏱ Throttling AI call: waiting ${Math.round(waitMs / 1000)}s...`);
     await new Promise((r) => setTimeout(r, waitMs));
   }
-  lastGeminiCallTime = Date.now();
+  lastAICallTime = Date.now();
 }
 
-async function callGemini(apiKey: string, body: Record<string, unknown>): Promise<Response> {
-  const model = String(body.model || "gemini-2.5-flash").replace("google/", "");
-  const url = `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`;
+async function callDeepSeek(apiKey: string, body: Record<string, unknown>): Promise<Response> {
+  const url = `https://api.deepseek.com/chat/completions`;
   
   // Retry with exponential backoff for rate limits
   for (let attempt = 0; attempt < 4; attempt++) {
-    await throttleGemini();
+    await throttleAI();
     
     const resp = await fetch(url, {
       method: "POST",
@@ -60,7 +59,7 @@ async function callGemini(apiKey: string, body: Record<string, unknown>): Promis
         "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ ...body, model }),
+      body: JSON.stringify({ ...body, model: "deepseek-chat" }),
     });
     
     if (resp.status === 429 || resp.status === 503) {
@@ -71,11 +70,11 @@ async function callGemini(apiKey: string, body: Record<string, unknown>): Promis
     }
     if (!resp.ok) {
       const errText = await resp.text().catch(() => "");
-      throw new AICreditsError(resp.status, `Gemini API error (${resp.status}): ${errText.slice(0, 200)}`);
+      throw new AICreditsError(resp.status, `DeepSeek API error (${resp.status}): ${errText.slice(0, 200)}`);
     }
     return resp;
   }
-  throw new AICreditsError(429, "Gemini rate limit exceeded after 4 retries. Will retry on next cron run.");
+  throw new AICreditsError(429, "DeepSeek rate limit exceeded after 4 retries. Will retry on next cron run.");
 }
 
 function normalizeDomain(domain: string): string {
@@ -225,7 +224,7 @@ serve(async (req) => {
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY")!;;
+    const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY")!;;
     const GMAIL_APP_PASSWORD = Deno.env.get("GMAIL_APP_PASSWORD")!;
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -323,8 +322,8 @@ VERIFICATION: Before returning each job, mentally verify:
 
 Return JSON with: title, company, location, salary_range, description, url, hiring_manager, hiring_email, sponsorship (boolean), careers_page_url`;
 
-    const searchResponse = await callGemini(GEMINI_API_KEY, {
-      model: "google/gemini-2.5-flash",
+    const searchResponse = await callDeepSeek(DEEPSEEK_API_KEY, {
+      model: "deepseek-chat",
       messages: [
         { role: "system", content: "You are a job search assistant. Find real job listings matching the criteria. Return structured results." },
         { role: "user", content: searchPrompt },
@@ -568,8 +567,8 @@ TAILORING INSTRUCTIONS:
 
 Return the complete tailored CV text and cover letter.`;
 
-        const cvResponse = await callGemini(GEMINI_API_KEY, {
-            model: "google/gemini-2.5-flash",
+        const cvResponse = await callDeepSeek(DEEPSEEK_API_KEY, {
+            model: "deepseek-chat",
             messages: [
               { role: "system", content: "You are a professional CV writer. Return tailored CV content maintaining the exact same professional format." },
               { role: "user", content: cvTailorPrompt },
@@ -611,8 +610,8 @@ Return the complete tailored CV text and cover letter.`;
 
         // Generate email — short professional intro only (CV attached as file)
         console.log(`✉️ Generating email for: ${job.company}`);
-        const emailResponse = await callGemini(GEMINI_API_KEY, {
-            model: "google/gemini-2.5-flash",
+        const emailResponse = await callDeepSeek(DEEPSEEK_API_KEY, {
+            model: "deepseek-chat",
             messages: [
               {
                 role: "system",
