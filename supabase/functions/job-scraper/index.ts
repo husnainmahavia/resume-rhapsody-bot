@@ -188,7 +188,7 @@ CRITICAL: Only return companies you are confident are real. Return valid JSON ar
       }
 
       if (!response.ok) {
-        console.error("Gemini search error:", response.status);
+        console.error("DeepSeek search error:", response.status);
         await response.text();
         return [];
       }
