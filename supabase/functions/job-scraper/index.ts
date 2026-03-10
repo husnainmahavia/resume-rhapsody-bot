@@ -113,7 +113,7 @@ async function generateCvAndCoverLetter(company: string, category: string, descr
       method: "POST",
       headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "gemini-2.5-flash-lite",
+        model: "deepseek-chat",
         messages: [{
           role: "user",
           content: `Tailor this CV for a cold outreach to ${company} (a ${categoryLabel} company: ${description || ""}).
