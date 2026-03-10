@@ -15,6 +15,7 @@ import LinkedInTool from "@/components/LinkedInTool";
 import ReviewQueue from "@/components/ReviewQueue";
 import CSVUpload from "@/components/CSVUpload";
 import ApplicantProfileForm from "@/components/ApplicantProfileForm";
+import AuthGate from "@/components/AuthGate";
 import EmailEngineDashboard from "@/components/EmailEngineDashboard";
 import CronMonitorPanel from "@/components/CronMonitorPanel";
 import EmailOpenTracker from "@/components/EmailOpenTracker";
@@ -117,7 +118,7 @@ const Index = () => {
       profile: {
         icon: UserCog, title: "Applicant Profile", subtitle: "editable",
         description: "Edit your name, skills, experience, and CV content. The auto-apply pipeline uses this profile for personalized emails and CV tailoring.",
-        component: <ApplicantProfileForm />,
+        component: <AuthGate><ApplicantProfileForm /></AuthGate>,
       },
       cron: {
         icon: Timer, title: "Cron Job Monitor", subtitle: "24/7 automation",
