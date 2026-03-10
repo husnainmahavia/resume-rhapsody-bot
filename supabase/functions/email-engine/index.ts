@@ -96,47 +96,54 @@ CRITICAL RULES:
 - Avoid companies that are too small (freelancers) or too large (Fortune 500)
 - Each opportunity should reference a specific Visuosofts service relevant to their business`;
 
-      const searchResponse = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${GEMINI_API_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "gemini-2.5-flash",
-          messages: [
-            { role: "system", content: "You are a B2B lead researcher. Return only real, verified companies. Return valid JSON only." },
-            { role: "user", content: discoverPrompt },
-          ],
-          tools: [{
-            type: "function",
-            function: {
-              name: "return_leads",
-              description: "Return discovered company leads",
-              parameters: {
-                type: "object",
-                properties: {
-                  leads: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        company_name: { type: "string" },
-                        website: { type: "string" },
-                        contact_email: { type: "string" },
-                        description: { type: "string" },
-                        opportunity: { type: "string" },
+      let searchResponse: Response | null = null;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        searchResponse = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${GEMINI_API_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "gemini-2.5-flash-lite",
+            messages: [
+              { role: "system", content: "You are a B2B lead researcher. Return only real, verified companies. Return valid JSON only." },
+              { role: "user", content: discoverPrompt },
+            ],
+            tools: [{
+              type: "function",
+              function: {
+                name: "return_leads",
+                description: "Return discovered company leads",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    leads: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          company_name: { type: "string" },
+                          website: { type: "string" },
+                          contact_email: { type: "string" },
+                          description: { type: "string" },
+                          opportunity: { type: "string" },
+                        },
+                        required: ["company_name", "website", "contact_email", "description", "opportunity"],
                       },
-                      required: ["company_name", "website", "contact_email", "description", "opportunity"],
                     },
                   },
+                  required: ["leads"],
                 },
-                required: ["leads"],
               },
-            },
-          }],
-          tool_choice: { type: "function", function: { name: "return_leads" } },
-        }),
-      });
+            }],
+            tool_choice: { type: "function", function: { name: "return_leads" } },
+          }),
+        });
+        if (searchResponse && searchResponse.status !== 429 && searchResponse.status !== 503) break;
+        const waitMs = (attempt + 1) * 15000 + Math.random() * 5000;
+        console.log(`⚠️ Discovery ${searchResponse?.status}, retry ${attempt + 1}/4 in ${Math.round(waitMs / 1000)}s`);
+        await new Promise(r => setTimeout(r, waitMs));
+      }
 
-      if (!searchResponse.ok) throw new Error(`Discovery failed: ${searchResponse.status}`);
+      if (!searchResponse || !searchResponse.ok) throw new Error(`Discovery failed: ${searchResponse?.status}`);
       const searchData = await searchResponse.json();
       const toolCall = searchData.choices?.[0]?.message?.tool_calls?.[0];
       const leads = toolCall?.function?.arguments
