@@ -53,14 +53,14 @@ Return ONLY valid JSON array.`;
 
       let response: Response | null = null;
       for (let attempt = 0; attempt < 4; attempt++) {
-        response = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
+        response = await fetch("https://api.deepseek.com/chat/completions", {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${GEMINI_API_KEY}`,
+            Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "gemini-2.5-flash-lite",
+            model: "deepseek-chat",
             messages: [
               { role: "system", content: "Return only valid JSON arrays. No markdown." },
               { role: "user", content: prompt },
