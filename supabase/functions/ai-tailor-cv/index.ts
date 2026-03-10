@@ -102,7 +102,7 @@ Tailor the CV and write a cover letter.`,
         body: requestBody,
       });
 
-      if (response.status !== 429) break;
+      if (response.status !== 429 && response.status !== 503) break;
 
       const waitMs = (attempt + 1) * 20000 + Math.random() * 10000;
       console.log(`Rate limited, retrying in ${Math.round(waitMs / 1000)}s (attempt ${attempt + 1}/4)`);
