@@ -155,11 +155,11 @@ async function aiSearchEmails(query: string, apiKey: string, retries = 3): Promi
         await new Promise(r => setTimeout(r, backoff));
       }
 
-      const response = await fetch(GEMINI_URL, {
+      const response = await fetch(DEEPSEEK_URL, {
         method: "POST",
         headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "gemini-2.5-flash-lite",
+          model: "deepseek-chat",
           messages: [{
             role: "user",
             content: `You are a job research assistant. Search for real companies matching: "${query}"
