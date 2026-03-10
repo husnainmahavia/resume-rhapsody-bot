@@ -610,8 +610,8 @@ Return the complete tailored CV text and cover letter.`;
 
         // Generate email — short professional intro only (CV attached as file)
         console.log(`✉️ Generating email for: ${job.company}`);
-        const emailResponse = await callGemini(GEMINI_API_KEY, {
-            model: "google/gemini-2.5-flash",
+        const emailResponse = await callDeepSeek(DEEPSEEK_API_KEY, {
+            model: "deepseek-chat",
             messages: [
               {
                 role: "system",
