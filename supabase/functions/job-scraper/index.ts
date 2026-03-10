@@ -194,7 +194,7 @@ CRITICAL: Only return companies you are confident are real. Return valid JSON ar
       }
 
       const rawText = await response.text();
-      console.log("Gemini response status:", response.status, "length:", rawText.length);
+      console.log("DeepSeek response status:", response.status, "length:", rawText.length);
       
       let data;
       try {
