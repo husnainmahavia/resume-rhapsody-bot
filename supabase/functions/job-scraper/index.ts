@@ -274,7 +274,7 @@ serve(async (req) => {
           const fullQuery = `${query} ${locationFilter}`;
           console.log(`Scraping: ${fullQuery}`);
           
-          const companies = await aiSearchEmails(fullQuery, geminiKey);
+          const companies = await aiSearchEmails(fullQuery, deepseekKey);
           catFound += companies.length;
 
           for (const company of companies) {
