@@ -33,7 +33,7 @@ serve(async (req) => {
     const baseCV = CV_VERSIONS[cvVersion] || CV_VERSIONS.fullstack;
 
     const requestBody = JSON.stringify({
-      model: "gemini-2.5-flash-lite",
+      model: "deepseek-chat",
       messages: [
         {
           role: "system",
