@@ -39,61 +39,71 @@ For each job, provide:
 
 Return ONLY valid JSON array. No markdown, no explanation.`;
 
-    const response = await fetch(GEMINI_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${GEMINI_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gemini-2.5-flash",
-        messages: [
-          { role: "system", content: "You are a job search API. Return only valid JSON arrays of job objects. No markdown formatting." },
-          { role: "user", content: prompt },
-        ],
-        tools: [{
-          type: "function",
-          function: {
-            name: "return_jobs",
-            description: "Return found job listings",
-            parameters: {
-              type: "object",
-              properties: {
-                jobs: {
-                  type: "array",
-                  items: {
-                    type: "object",
-                    properties: {
-                      title: { type: "string" },
-                      company: { type: "string" },
-                      location: { type: "string" },
-                      salary_range: { type: "string" },
-                      description: { type: "string" },
-                      url: { type: "string" },
-                      hiring_manager: { type: "string" },
-                      hiring_email: { type: "string" },
+    // Retry with exponential backoff for rate limits
+    let response: Response | null = null;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      response = await fetch(GEMINI_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${GEMINI_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gemini-2.5-flash",
+          messages: [
+            { role: "system", content: "You are a job search API. Return only valid JSON arrays of job objects. No markdown formatting." },
+            { role: "user", content: prompt },
+          ],
+          tools: [{
+            type: "function",
+            function: {
+              name: "return_jobs",
+              description: "Return found job listings",
+              parameters: {
+                type: "object",
+                properties: {
+                  jobs: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        title: { type: "string" },
+                        company: { type: "string" },
+                        location: { type: "string" },
+                        salary_range: { type: "string" },
+                        description: { type: "string" },
+                        url: { type: "string" },
+                        hiring_manager: { type: "string" },
+                        hiring_email: { type: "string" },
+                      },
+                      required: ["title", "company", "location", "description"],
                     },
-                    required: ["title", "company", "location", "description"],
                   },
                 },
+                required: ["jobs"],
               },
-              required: ["jobs"],
             },
-          },
-        }],
-        tool_choice: { type: "function", function: { name: "return_jobs" } },
-      }),
-    });
+          }],
+          tool_choice: { type: "function", function: { name: "return_jobs" } },
+        }),
+      });
 
-    if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limited. Please try again shortly." }), {
+      if (!response || response.status !== 429) break;
+
+      const waitMs = (attempt + 1) * 20000 + Math.random() * 10000;
+      console.log(`Rate limited, retrying in ${Math.round(waitMs / 1000)}s (attempt ${attempt + 1}/4)`);
+      await new Promise(r => setTimeout(r, waitMs));
+    }
+
+    if (!response || !response.ok) {
+      if (response?.status === 429) {
+        return new Response(JSON.stringify({ error: "Rate limited after retries. Please wait a minute and try again." }), {
           status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      const t = await response.text();
-      console.error("Gemini error:", response.status, t);
-      throw new Error(`Gemini API error: ${response.status}`);
+      const t = await response?.text() || "";
+      console.error("Gemini error:", response?.status, t);
+      throw new Error(`Gemini API error: ${response?.status}`);
     }
 
     const data = await response.json();
