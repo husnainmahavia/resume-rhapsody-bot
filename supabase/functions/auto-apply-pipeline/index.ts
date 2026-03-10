@@ -31,28 +31,51 @@ class AICreditsError extends Error {
   }
 }
 
+// Throttle: wait between AI calls to stay under 15 RPM free tier
+let lastGeminiCallTime = 0;
+const GEMINI_CALL_INTERVAL_MS = 5000; // 5 seconds between calls = max 12 RPM (under 15 RPM limit)
+
+async function throttleGemini(): Promise<void> {
+  const now = Date.now();
+  const elapsed = now - lastGeminiCallTime;
+  if (elapsed < GEMINI_CALL_INTERVAL_MS) {
+    const waitMs = GEMINI_CALL_INTERVAL_MS - elapsed;
+    console.log(`⏱ Throttling AI call: waiting ${Math.round(waitMs / 1000)}s...`);
+    await new Promise((r) => setTimeout(r, waitMs));
+  }
+  lastGeminiCallTime = Date.now();
+}
+
 async function callGemini(apiKey: string, body: Record<string, unknown>): Promise<Response> {
-  // Use Google's OpenAI-compatible endpoint for Gemini
   const model = String(body.model || "gemini-2.5-flash").replace("google/", "");
   const url = `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`;
   
-  const resp = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ ...body, model }),
-  });
-  
-  if (resp.status === 429) {
-    throw new AICreditsError(429, "Gemini rate limit exceeded. Please wait and try again.");
+  // Retry with exponential backoff for rate limits
+  for (let attempt = 0; attempt < 4; attempt++) {
+    await throttleGemini();
+    
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ ...body, model }),
+    });
+    
+    if (resp.status === 429) {
+      const waitMs = (attempt + 1) * 15000 + Math.random() * 5000;
+      console.log(`⚠️ Rate limited (attempt ${attempt + 1}/4), waiting ${Math.round(waitMs / 1000)}s...`);
+      await new Promise((r) => setTimeout(r, waitMs));
+      continue;
+    }
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => "");
+      throw new AICreditsError(resp.status, `Gemini API error (${resp.status}): ${errText.slice(0, 200)}`);
+    }
+    return resp;
   }
-  if (!resp.ok) {
-    const errText = await resp.text().catch(() => "");
-    throw new AICreditsError(resp.status, `Gemini API error (${resp.status}): ${errText.slice(0, 200)}`);
-  }
-  return resp;
+  throw new AICreditsError(429, "Gemini rate limit exceeded after 4 retries. Will retry on next cron run.");
 }
 
 function normalizeDomain(domain: string): string {
