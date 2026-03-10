@@ -241,7 +241,7 @@ serve(async (req) => {
         const hasMX = await checkMX(domain);
         
         // Use AI to analyze
-        const aiResult = await aiEmailLookup(GEMINI_API_KEY, 
+        const aiResult = await aiEmailLookup(DEEPSEEK_API_KEY, 
           `Verify this email address: ${email}
 Domain: ${domain}
 MX Records exist: ${hasMX}
