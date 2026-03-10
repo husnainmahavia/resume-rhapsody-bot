@@ -119,14 +119,14 @@ async function aiEmailLookup(
 ): Promise<Record<string, unknown>> {
   let resp: Response | null = null;
   for (let attempt = 0; attempt < 4; attempt++) {
-    resp = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
+    resp = await fetch("https://api.deepseek.com/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gemini-2.5-flash-lite",
+        model: "deepseek-chat",
         messages: [
           {
             role: "system",
