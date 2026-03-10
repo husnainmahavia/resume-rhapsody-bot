@@ -15,6 +15,7 @@ import LinkedInTool from "@/components/LinkedInTool";
 import ReviewQueue from "@/components/ReviewQueue";
 import CSVUpload from "@/components/CSVUpload";
 import ApplicantProfileForm from "@/components/ApplicantProfileForm";
+import AuthGate from "@/components/AuthGate";
 import EmailEngineDashboard from "@/components/EmailEngineDashboard";
 import CronMonitorPanel from "@/components/CronMonitorPanel";
 import EmailOpenTracker from "@/components/EmailOpenTracker";
