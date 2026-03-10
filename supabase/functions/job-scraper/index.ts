@@ -109,7 +109,7 @@ function validateBusinessEmail(
 async function generateCvAndCoverLetter(company: string, category: string, description: string, apiKey: string) {
   try {
     const categoryLabel = category.replace(/_/g, " ");
-    const res = await fetch(GEMINI_URL, {
+      const res = await fetch(DEEPSEEK_URL, {
       method: "POST",
       headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
