@@ -35,15 +35,15 @@ class AICreditsError extends Error {
 let lastAICallTime = 0;
 const AI_CALL_INTERVAL_MS = 5000;
 
-async function throttleGemini(): Promise<void> {
+async function throttleAI(): Promise<void> {
   const now = Date.now();
-  const elapsed = now - lastGeminiCallTime;
-  if (elapsed < GEMINI_CALL_INTERVAL_MS) {
-    const waitMs = GEMINI_CALL_INTERVAL_MS - elapsed;
+  const elapsed = now - lastAICallTime;
+  if (elapsed < AI_CALL_INTERVAL_MS) {
+    const waitMs = AI_CALL_INTERVAL_MS - elapsed;
     console.log(`⏱ Throttling AI call: waiting ${Math.round(waitMs / 1000)}s...`);
     await new Promise((r) => setTimeout(r, waitMs));
   }
-  lastGeminiCallTime = Date.now();
+  lastAICallTime = Date.now();
 }
 
 async function callGemini(apiKey: string, body: Record<string, unknown>): Promise<Response> {
