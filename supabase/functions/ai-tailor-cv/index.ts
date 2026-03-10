@@ -92,7 +92,7 @@ Tailor the CV and write a cover letter.`,
 
     // Retry with exponential backoff for rate limits
     let response: Response | null = null;
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < 4; attempt++) {
       response = await fetch(GEMINI_URL, {
         method: "POST",
         headers: {
@@ -104,8 +104,8 @@ Tailor the CV and write a cover letter.`,
 
       if (response.status !== 429) break;
 
-      const waitMs = (attempt + 1) * 15000 + Math.random() * 5000;
-      console.log(`Rate limited, retrying in ${Math.round(waitMs / 1000)}s (attempt ${attempt + 1}/3)`);
+      const waitMs = (attempt + 1) * 20000 + Math.random() * 10000;
+      console.log(`Rate limited, retrying in ${Math.round(waitMs / 1000)}s (attempt ${attempt + 1}/4)`);
       await new Promise(r => setTimeout(r, waitMs));
     }
 
