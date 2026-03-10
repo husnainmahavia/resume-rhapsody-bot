@@ -117,18 +117,20 @@ async function aiEmailLookup(
   apiKey: string,
   prompt: string
 ): Promise<Record<string, unknown>> {
-  const resp = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "gemini-2.5-flash",
-      messages: [
-        {
-          role: "system",
-          content: `You are an email intelligence agent. You analyze company domains and email addresses to determine deliverability and find real contact emails.
+  let resp: Response | null = null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    resp = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gemini-2.5-flash-lite",
+        messages: [
+          {
+            role: "system",
+            content: `You are an email intelligence agent. You analyze company domains and email addresses to determine deliverability and find real contact emails.
 
 RULES:
 - For email verification: analyze the domain, check if it's a real company domain, assess the email pattern
@@ -138,36 +140,43 @@ RULES:
 - Rate confidence 0-100 based on how likely the email is real
 - NEVER make up personal names or specific employee emails - only suggest pattern-based emails
 - Always return valid JSON`,
-        },
-        { role: "user", content: prompt },
-      ],
-      tools: [
-        {
-          type: "function",
-          function: {
-            name: "return_result",
-            description: "Return the email analysis result",
-            parameters: {
-              type: "object",
-              properties: {
-                result: {
-                  type: "object",
-                  description: "The analysis result as a JSON object",
+          },
+          { role: "user", content: prompt },
+        ],
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: "return_result",
+              description: "Return the email analysis result",
+              parameters: {
+                type: "object",
+                properties: {
+                  result: {
+                    type: "object",
+                    description: "The analysis result as a JSON object",
+                  },
                 },
+                required: ["result"],
               },
-              required: ["result"],
             },
           },
-        },
-      ],
-      tool_choice: { type: "function", function: { name: "return_result" } },
-    }),
-  });
+        ],
+        tool_choice: { type: "function", function: { name: "return_result" } },
+      }),
+    });
 
-  if (!resp.ok) {
-    const errText = await resp.text();
-    console.error("AI lookup error:", resp.status, errText);
-    throw new Error(`AI lookup failed: ${resp.status}`);
+    if (resp && resp.status !== 429 && resp.status !== 503) break;
+
+    const waitMs = (attempt + 1) * 15000 + Math.random() * 5000;
+    console.log(`AI lookup ${resp?.status}, retrying in ${Math.round(waitMs / 1000)}s (${attempt + 1}/4)`);
+    await new Promise((r) => setTimeout(r, waitMs));
+  }
+
+  if (!resp || !resp.ok) {
+    const errText = await resp?.text().catch(() => "") || "";
+    console.error("AI lookup error:", resp?.status, errText);
+    throw new Error(`AI lookup failed: ${resp?.status}`);
   }
 
   const data = await resp.json();
