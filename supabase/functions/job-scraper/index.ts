@@ -357,9 +357,9 @@ serve(async (req) => {
 
           const recipientEmail = validation.normalized;
           const categoryLabel = company.category.replace(/_/g, " ");
-          const emailResponse = await fetch(GEMINI_URL, {
+          const emailResponse = await fetch(DEEPSEEK_URL, {
             method: "POST",
-            headers: { "Authorization": `Bearer ${geminiKey}`, "Content-Type": "application/json" },
+            headers: { "Authorization": `Bearer ${deepseekKey}`, "Content-Type": "application/json" },
             body: JSON.stringify({
               model: "gemini-2.5-flash-lite",
               messages: [{
