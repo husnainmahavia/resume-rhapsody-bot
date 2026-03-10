@@ -88,7 +88,7 @@ Return ONLY valid JSON array. No markdown, no explanation.`;
         }),
       });
 
-      if (!response || response.status !== 429) break;
+      if (!response || (response.status !== 429 && response.status !== 503)) break;
 
       const waitMs = (attempt + 1) * 20000 + Math.random() * 10000;
       console.log(`Rate limited, retrying in ${Math.round(waitMs / 1000)}s (attempt ${attempt + 1}/4)`);
