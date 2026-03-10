@@ -31,9 +31,9 @@ class AICreditsError extends Error {
   }
 }
 
-// Throttle: wait between AI calls to stay under 15 RPM free tier
-let lastGeminiCallTime = 0;
-const GEMINI_CALL_INTERVAL_MS = 5000; // 5 seconds between calls = max 12 RPM (under 15 RPM limit)
+// Throttle: wait between AI calls to stay under rate limits
+let lastAICallTime = 0;
+const AI_CALL_INTERVAL_MS = 5000;
 
 async function throttleGemini(): Promise<void> {
   const now = Date.now();
