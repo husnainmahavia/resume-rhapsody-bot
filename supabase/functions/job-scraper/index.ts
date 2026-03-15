@@ -15,7 +15,7 @@ const CATEGORIES = [
   { name: "software_development", queries: ["software development company hiring email UK", "SaaS startup careers contact email", "tech company recruitment email Manchester", "software agency contact email"] },
 ];
 
-const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
+const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 const CV_BASE = `HUSNAIN MAHAVIA | Full-Stack Developer & AI Specialist
 8+ years in custom WordPress development, AI/ML integration, automation systems. 50+ WordPress sites, 15+ e-commerce platforms. ChatGPT, Gemini, MidJourney integration. Custom lead management, API integrations. Scaled team 1→10+, 50% YoY growth.
@@ -109,11 +109,11 @@ function validateBusinessEmail(
 async function generateCvAndCoverLetter(company: string, category: string, description: string, apiKey: string) {
   try {
     const categoryLabel = category.replace(/_/g, " ");
-      const res = await fetch(DEEPSEEK_URL, {
+      const res = await fetch(OPENROUTER_URL, {
       method: "POST",
       headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "deepseek-chat",
+        model: "openrouter/free",
         messages: [{
           role: "user",
           content: `Tailor this CV for a cold outreach to ${company} (a ${categoryLabel} company: ${description || ""}).
@@ -155,11 +155,11 @@ async function aiSearchEmails(query: string, apiKey: string, retries = 3): Promi
         await new Promise(r => setTimeout(r, backoff));
       }
 
-      const response = await fetch(DEEPSEEK_URL, {
+      const response = await fetch(OPENROUTER_URL, {
         method: "POST",
         headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "deepseek-chat",
+          model: "openrouter/free",
           messages: [{
             role: "user",
             content: `You are a job research assistant. Search for real companies matching: "${query}"
@@ -182,25 +182,25 @@ CRITICAL: Only return companies you are confident are real. Return valid JSON ar
       });
 
       if (response.status === 429 || response.status === 503) {
-        console.warn(`  ⚠️ DeepSeek ${response.status} on attempt ${attempt + 1}`);
+        console.warn(`  ⚠️ OpenRouter ${response.status} on attempt ${attempt + 1}`);
         await response.text();
         continue;
       }
 
       if (!response.ok) {
-        console.error("DeepSeek search error:", response.status);
+        console.error("OpenRouter search error:", response.status);
         await response.text();
         return [];
       }
 
       const rawText = await response.text();
-      console.log("DeepSeek response status:", response.status, "length:", rawText.length);
+      console.log("OpenRouter response status:", response.status, "length:", rawText.length);
       
       let data;
       try {
         data = JSON.parse(rawText);
       } catch {
-        console.error("Failed to parse DeepSeek response:", rawText.substring(0, 200));
+        console.error("Failed to parse OpenRouter response:", rawText.substring(0, 200));
         return [];
       }
       
@@ -231,7 +231,7 @@ serve(async (req) => {
     
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const deepseekKey = Deno.env.get("DEEPSEEK_API_KEY")!;
+    const openrouterKey = Deno.env.get("OPENROUTER_API_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     if (action === "status") {
@@ -274,7 +274,7 @@ serve(async (req) => {
           const fullQuery = `${query} ${locationFilter}`;
           console.log(`Scraping: ${fullQuery}`);
           
-          const companies = await aiSearchEmails(fullQuery, deepseekKey);
+          const companies = await aiSearchEmails(fullQuery, openrouterKey);
           catFound += companies.length;
 
           for (const company of companies) {
@@ -357,11 +357,11 @@ serve(async (req) => {
 
           const recipientEmail = validation.normalized;
           const categoryLabel = company.category.replace(/_/g, " ");
-          const emailResponse = await fetch(DEEPSEEK_URL, {
+          const emailResponse = await fetch(OPENROUTER_URL, {
             method: "POST",
-            headers: { "Authorization": `Bearer ${deepseekKey}`, "Content-Type": "application/json" },
+            headers: { "Authorization": `Bearer ${openrouterKey}`, "Content-Type": "application/json" },
             body: JSON.stringify({
-              model: "deepseek-chat",
+              model: "openrouter/free",
               messages: [{
                 role: "user",
                 content: `Write a professional cold outreach email from Husnain Mahavia (Full-Stack Developer & AI Specialist, 8+ years experience) to ${company.company_name} (${categoryLabel} company).
@@ -401,7 +401,7 @@ Return ONLY a JSON object with "subject" and "body" fields. No markdown, no code
           const { subject, body } = JSON.parse(jsonMatch[0]);
 
           // Generate tailored CV and cover letter
-          const cvData = await generateCvAndCoverLetter(company.company_name, company.category, company.description || "", deepseekKey);
+          const cvData = await generateCvAndCoverLetter(company.company_name, company.category, company.description || "", openrouterKey);
           
           const attachments: Array<{ filename: string; content: string; contentType: string }> = [];
           if (cvData?.tailored_cv) {

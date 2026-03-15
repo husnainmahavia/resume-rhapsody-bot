@@ -5,15 +5,15 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
+const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     const { skills, location, jobType } = await req.json();
-    const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
-    if (!DEEPSEEK_API_KEY) throw new Error("DEEPSEEK_API_KEY not configured");
+    const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
+    if (!OPENROUTER_API_KEY) throw new Error("OPENROUTER_API_KEY not configured");
 
     const prompt = `You are a job search assistant. Find 5-8 REAL job listings from REAL companies that are actively hiring in ${location || "Manchester, UK"} for someone with these skills: ${skills.join(", ")}.
 
@@ -42,14 +42,14 @@ Return ONLY valid JSON array. No markdown, no explanation.`;
     // Retry with exponential backoff for rate limits
     let response: Response | null = null;
     for (let attempt = 0; attempt < 4; attempt++) {
-      response = await fetch(DEEPSEEK_URL, {
+      response = await fetch(OPENROUTER_URL, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "deepseek-chat",
+          model: "openrouter/free",
           messages: [
             { role: "system", content: "You are a job search API. Return only valid JSON arrays of job objects. No markdown formatting." },
             { role: "user", content: prompt },
@@ -102,8 +102,8 @@ Return ONLY valid JSON array. No markdown, no explanation.`;
         });
       }
       const t = await response?.text() || "";
-      console.error("DeepSeek error:", response?.status, t);
-      throw new Error(`DeepSeek API error: ${response?.status}`);
+      console.error("OpenRouter error:", response?.status, t);
+      throw new Error(`OpenRouter API error: ${response?.status}`);
     }
 
     const data = await response.json();

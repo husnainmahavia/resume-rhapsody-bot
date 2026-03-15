@@ -46,8 +46,8 @@ async function throttleAI(): Promise<void> {
   lastAICallTime = Date.now();
 }
 
-async function callDeepSeek(apiKey: string, body: Record<string, unknown>): Promise<Response> {
-  const url = `https://api.deepseek.com/chat/completions`;
+async function callOpenRouter(apiKey: string, body: Record<string, unknown>): Promise<Response> {
+  const url = `https://openrouter.ai/api/v1/chat/completions`;
   
   // Retry with exponential backoff for rate limits
   for (let attempt = 0; attempt < 4; attempt++) {
@@ -59,7 +59,7 @@ async function callDeepSeek(apiKey: string, body: Record<string, unknown>): Prom
         "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ ...body, model: "deepseek-chat" }),
+      body: JSON.stringify({ ...body, model: "openrouter/free" }),
     });
     
     if (resp.status === 429 || resp.status === 503) {
@@ -70,11 +70,11 @@ async function callDeepSeek(apiKey: string, body: Record<string, unknown>): Prom
     }
     if (!resp.ok) {
       const errText = await resp.text().catch(() => "");
-      throw new AICreditsError(resp.status, `DeepSeek API error (${resp.status}): ${errText.slice(0, 200)}`);
+      throw new AICreditsError(resp.status, `OpenRouter API error (${resp.status}): ${errText.slice(0, 200)}`);
     }
     return resp;
   }
-  throw new AICreditsError(429, "DeepSeek rate limit exceeded after 4 retries. Will retry on next cron run.");
+  throw new AICreditsError(429, "OpenRouter rate limit exceeded after 4 retries. Will retry on next cron run.");
 }
 
 function normalizeDomain(domain: string): string {
@@ -224,7 +224,7 @@ serve(async (req) => {
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY")!;;
+    const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY")!;
     const GMAIL_APP_PASSWORD = Deno.env.get("GMAIL_APP_PASSWORD")!;
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -322,8 +322,8 @@ VERIFICATION: Before returning each job, mentally verify:
 
 Return JSON with: title, company, location, salary_range, description, url, hiring_manager, hiring_email, sponsorship (boolean), careers_page_url`;
 
-    const searchResponse = await callDeepSeek(DEEPSEEK_API_KEY, {
-      model: "deepseek-chat",
+    const searchResponse = await callOpenRouter(OPENROUTER_API_KEY, {
+      model: "openrouter/free",
       messages: [
         { role: "system", content: "You are a job search assistant. Find real job listings matching the criteria. Return structured results." },
         { role: "user", content: searchPrompt },
@@ -567,8 +567,8 @@ TAILORING INSTRUCTIONS:
 
 Return the complete tailored CV text and cover letter.`;
 
-        const cvResponse = await callDeepSeek(DEEPSEEK_API_KEY, {
-            model: "deepseek-chat",
+        const cvResponse = await callOpenRouter(OPENROUTER_API_KEY, {
+            model: "openrouter/free",
             messages: [
               { role: "system", content: "You are a professional CV writer. Return tailored CV content maintaining the exact same professional format." },
               { role: "user", content: cvTailorPrompt },
@@ -610,8 +610,8 @@ Return the complete tailored CV text and cover letter.`;
 
         // Generate email — short professional intro only (CV attached as file)
         console.log(`✉️ Generating email for: ${job.company}`);
-        const emailResponse = await callDeepSeek(DEEPSEEK_API_KEY, {
-            model: "deepseek-chat",
+        const emailResponse = await callOpenRouter(OPENROUTER_API_KEY, {
+            model: "openrouter/free",
             messages: [
               {
                 role: "system",
