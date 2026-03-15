@@ -357,9 +357,9 @@ serve(async (req) => {
 
           const recipientEmail = validation.normalized;
           const categoryLabel = company.category.replace(/_/g, " ");
-          const emailResponse = await fetch(DEEPSEEK_URL, {
+          const emailResponse = await fetch(OPENROUTER_URL, {
             method: "POST",
-            headers: { "Authorization": `Bearer ${deepseekKey}`, "Content-Type": "application/json" },
+            headers: { "Authorization": `Bearer ${openrouterKey}`, "Content-Type": "application/json" },
             body: JSON.stringify({
               model: "deepseek-chat",
               messages: [{
