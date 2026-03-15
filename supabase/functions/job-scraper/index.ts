@@ -15,7 +15,7 @@ const CATEGORIES = [
   { name: "software_development", queries: ["software development company hiring email UK", "SaaS startup careers contact email", "tech company recruitment email Manchester", "software agency contact email"] },
 ];
 
-const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
+const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 const CV_BASE = `HUSNAIN MAHAVIA | Full-Stack Developer & AI Specialist
 8+ years in custom WordPress development, AI/ML integration, automation systems. 50+ WordPress sites, 15+ e-commerce platforms. ChatGPT, Gemini, MidJourney integration. Custom lead management, API integrations. Scaled team 1→10+, 50% YoY growth.
