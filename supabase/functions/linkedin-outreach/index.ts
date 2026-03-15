@@ -60,7 +60,7 @@ Return ONLY valid JSON array.`;
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "deepseek-chat",
+            model: "openrouter/free",
             messages: [
               { role: "system", content: "Return only valid JSON arrays. No markdown." },
               { role: "user", content: prompt },
