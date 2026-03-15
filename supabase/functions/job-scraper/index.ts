@@ -155,11 +155,11 @@ async function aiSearchEmails(query: string, apiKey: string, retries = 3): Promi
         await new Promise(r => setTimeout(r, backoff));
       }
 
-      const response = await fetch(DEEPSEEK_URL, {
+      const response = await fetch(OPENROUTER_URL, {
         method: "POST",
         headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "deepseek-chat",
+          model: "openrouter/free",
           messages: [{
             role: "user",
             content: `You are a job research assistant. Search for real companies matching: "${query}"
