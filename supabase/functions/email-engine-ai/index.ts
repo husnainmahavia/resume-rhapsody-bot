@@ -261,7 +261,7 @@ Return JSON with: email, status (valid/invalid/risky/unknown), score (0-100), re
         const hasMX = await checkMX(domain);
         
         // Use AI to find likely emails
-        const aiResult = await aiEmailLookup(DEEPSEEK_API_KEY,
+        const aiResult = await aiEmailLookup(OPENROUTER_API_KEY,
           `Find real email addresses for this company:
 Company: ${companyName}
 Domain: ${domain}
