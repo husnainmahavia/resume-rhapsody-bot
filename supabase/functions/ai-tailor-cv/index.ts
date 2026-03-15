@@ -93,10 +93,10 @@ Tailor the CV and write a cover letter.`,
     // Retry with exponential backoff for rate limits
     let response: Response | null = null;
     for (let attempt = 0; attempt < 4; attempt++) {
-      response = await fetch(DEEPSEEK_URL, {
+      response = await fetch(OPENROUTER_URL, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: requestBody,
