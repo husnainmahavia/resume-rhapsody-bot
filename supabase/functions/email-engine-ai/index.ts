@@ -412,10 +412,10 @@ Return JSON: { suggested_email: string, confidence: number (0-100), reason: stri
     for (let round = 0; round < MAX_ROUNDS; round++) {
       let resp: Response | null = null;
       for (let attempt = 0; attempt < 4; attempt++) {
-        resp = await fetch("https://api.deepseek.com/chat/completions", {
+        resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+            Authorization: `Bearer ${OPENROUTER_API_KEY}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
