@@ -70,11 +70,11 @@ async function callOpenRouter(apiKey: string, body: Record<string, unknown>): Pr
     }
     if (!resp.ok) {
       const errText = await resp.text().catch(() => "");
-      throw new AICreditsError(resp.status, `DeepSeek API error (${resp.status}): ${errText.slice(0, 200)}`);
+      throw new AICreditsError(resp.status, `OpenRouter API error (${resp.status}): ${errText.slice(0, 200)}`);
     }
     return resp;
   }
-  throw new AICreditsError(429, "DeepSeek rate limit exceeded after 4 retries. Will retry on next cron run.");
+  throw new AICreditsError(429, "OpenRouter rate limit exceeded after 4 retries. Will retry on next cron run.");
 }
 
 function normalizeDomain(domain: string): string {
