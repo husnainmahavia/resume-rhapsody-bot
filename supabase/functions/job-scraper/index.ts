@@ -109,11 +109,11 @@ function validateBusinessEmail(
 async function generateCvAndCoverLetter(company: string, category: string, description: string, apiKey: string) {
   try {
     const categoryLabel = category.replace(/_/g, " ");
-      const res = await fetch(DEEPSEEK_URL, {
+      const res = await fetch(OPENROUTER_URL, {
       method: "POST",
       headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "deepseek-chat",
+        model: "openrouter/free",
         messages: [{
           role: "user",
           content: `Tailor this CV for a cold outreach to ${company} (a ${categoryLabel} company: ${description || ""}).
