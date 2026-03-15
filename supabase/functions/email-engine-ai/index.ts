@@ -119,14 +119,14 @@ async function aiEmailLookup(
 ): Promise<Record<string, unknown>> {
   let resp: Response | null = null;
   for (let attempt = 0; attempt < 4; attempt++) {
-    resp = await fetch("https://api.deepseek.com/chat/completions", {
+    resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "deepseek-chat",
+        model: "openrouter/free",
         messages: [
           {
             role: "system",
