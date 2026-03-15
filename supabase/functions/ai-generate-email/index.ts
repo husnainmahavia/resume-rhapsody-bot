@@ -76,7 +76,7 @@ Description: ${jobDescription}`,
           status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      throw new Error(`DeepSeek error: ${response?.status}`);
+      throw new Error(`OpenRouter error: ${response?.status}`);
     }
 
     const data = await response.json();

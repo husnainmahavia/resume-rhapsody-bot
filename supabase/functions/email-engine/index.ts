@@ -252,11 +252,11 @@ REQUIREMENTS:
 
           let emailResponse: Response | null = null;
           for (let attempt = 0; attempt < 4; attempt++) {
-            emailResponse = await fetch("https://api.deepseek.com/chat/completions", {
+            emailResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
               method: "POST",
-              headers: { Authorization: `Bearer ${DEEPSEEK_API_KEY}`, "Content-Type": "application/json" },
+              headers: { Authorization: `Bearer ${OPENROUTER_API_KEY}`, "Content-Type": "application/json" },
               body: JSON.stringify({
-                model: "deepseek-chat",
+                model: "openrouter/free",
                 messages: [
                   { role: "system", content: "You write professional B2B cold outreach emails. Every email must be unique and company-specific." },
                   { role: "user", content: emailPrompt },

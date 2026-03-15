@@ -181,7 +181,7 @@ Return JSON with keys: connection_message, inmail_message, post_comment`;
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "deepseek-chat",
+            model: "openrouter/free",
             messages: [
               { role: "system", content: "Return only valid JSON. No markdown." },
               { role: "user", content: prompt },

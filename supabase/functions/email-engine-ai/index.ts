@@ -419,7 +419,7 @@ Return JSON: { suggested_email: string, confidence: number (0-100), reason: stri
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "deepseek-chat",
+            model: "openrouter/free",
             messages: allMessages,
             tools: TOOLS,
             tool_choice: "auto",

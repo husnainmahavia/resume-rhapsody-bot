@@ -102,8 +102,8 @@ Return ONLY valid JSON array. No markdown, no explanation.`;
         });
       }
       const t = await response?.text() || "";
-      console.error("DeepSeek error:", response?.status, t);
-      throw new Error(`DeepSeek API error: ${response?.status}`);
+      console.error("OpenRouter error:", response?.status, t);
+      throw new Error(`OpenRouter API error: ${response?.status}`);
     }
 
     const data = await response.json();
