@@ -182,7 +182,7 @@ CRITICAL: Only return companies you are confident are real. Return valid JSON ar
       });
 
       if (response.status === 429 || response.status === 503) {
-        console.warn(`  ⚠️ DeepSeek ${response.status} on attempt ${attempt + 1}`);
+        console.warn(`  ⚠️ OpenRouter ${response.status} on attempt ${attempt + 1}`);
         await response.text();
         continue;
       }
