@@ -231,7 +231,7 @@ serve(async (req) => {
     
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const deepseekKey = Deno.env.get("DEEPSEEK_API_KEY")!;
+    const openrouterKey = Deno.env.get("OPENROUTER_API_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     if (action === "status") {
