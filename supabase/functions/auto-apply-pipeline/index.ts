@@ -322,8 +322,8 @@ VERIFICATION: Before returning each job, mentally verify:
 
 Return JSON with: title, company, location, salary_range, description, url, hiring_manager, hiring_email, sponsorship (boolean), careers_page_url`;
 
-    const searchResponse = await callDeepSeek(DEEPSEEK_API_KEY, {
-      model: "deepseek-chat",
+    const searchResponse = await callOpenRouter(OPENROUTER_API_KEY, {
+      model: "openrouter/free",
       messages: [
         { role: "system", content: "You are a job search assistant. Find real job listings matching the criteria. Return structured results." },
         { role: "user", content: searchPrompt },
