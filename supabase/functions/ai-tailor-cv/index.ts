@@ -33,7 +33,7 @@ serve(async (req) => {
     const baseCV = CV_VERSIONS[cvVersion] || CV_VERSIONS.fullstack;
 
     const requestBody = JSON.stringify({
-      model: "deepseek-chat",
+      model: "openrouter/free",
       messages: [
         {
           role: "system",
