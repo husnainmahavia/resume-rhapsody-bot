@@ -200,7 +200,7 @@ CRITICAL: Only return companies you are confident are real. Return valid JSON ar
       try {
         data = JSON.parse(rawText);
       } catch {
-        console.error("Failed to parse DeepSeek response:", rawText.substring(0, 200));
+        console.error("Failed to parse OpenRouter response:", rawText.substring(0, 200));
         return [];
       }
       
