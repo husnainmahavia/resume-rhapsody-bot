@@ -42,14 +42,14 @@ Return ONLY valid JSON array. No markdown, no explanation.`;
     // Retry with exponential backoff for rate limits
     let response: Response | null = null;
     for (let attempt = 0; attempt < 4; attempt++) {
-      response = await fetch(DEEPSEEK_URL, {
+      response = await fetch(OPENROUTER_URL, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "deepseek-chat",
+          model: "openrouter/free",
           messages: [
             { role: "system", content: "You are a job search API. Return only valid JSON arrays of job objects. No markdown formatting." },
             { role: "user", content: prompt },
