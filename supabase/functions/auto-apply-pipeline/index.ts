@@ -46,8 +46,8 @@ async function throttleAI(): Promise<void> {
   lastAICallTime = Date.now();
 }
 
-async function callDeepSeek(apiKey: string, body: Record<string, unknown>): Promise<Response> {
-  const url = `https://api.deepseek.com/chat/completions`;
+async function callOpenRouter(apiKey: string, body: Record<string, unknown>): Promise<Response> {
+  const url = `https://openrouter.ai/api/v1/chat/completions`;
   
   // Retry with exponential backoff for rate limits
   for (let attempt = 0; attempt < 4; attempt++) {
@@ -59,7 +59,7 @@ async function callDeepSeek(apiKey: string, body: Record<string, unknown>): Prom
         "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ ...body, model: "deepseek-chat" }),
+      body: JSON.stringify({ ...body, model: "openrouter/free" }),
     });
     
     if (resp.status === 429 || resp.status === 503) {
