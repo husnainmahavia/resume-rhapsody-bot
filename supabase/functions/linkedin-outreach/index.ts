@@ -174,10 +174,10 @@ Return JSON with keys: connection_message, inmail_message, post_comment`;
 
       let response: Response | null = null;
       for (let attempt = 0; attempt < 4; attempt++) {
-        response = await fetch("https://api.deepseek.com/chat/completions", {
+        response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+            Authorization: `Bearer ${OPENROUTER_API_KEY}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
