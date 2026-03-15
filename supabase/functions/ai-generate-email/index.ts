@@ -18,14 +18,14 @@ serve(async (req) => {
 
     let response: Response | null = null;
     for (let attempt = 0; attempt < 4; attempt++) {
-      response = await fetch(DEEPSEEK_URL, {
+      response = await fetch(OPENROUTER_URL, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "deepseek-chat",
+          model: "openrouter/free",
           messages: [
             {
               role: "system",
