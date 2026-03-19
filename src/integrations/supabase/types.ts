@@ -484,6 +484,42 @@ export type Database = {
         }
         Relationships: []
       }
+      sent_emails: {
+        Row: {
+          application_id: string | null
+          created_at: string
+          id: string
+          lead_id: string | null
+          message_id: string | null
+          recipient_email: string
+          sender: string
+          sent_at: string
+          subject: string | null
+        }
+        Insert: {
+          application_id?: string | null
+          created_at?: string
+          id?: string
+          lead_id?: string | null
+          message_id?: string | null
+          recipient_email: string
+          sender?: string
+          sent_at?: string
+          subject?: string | null
+        }
+        Update: {
+          application_id?: string | null
+          created_at?: string
+          id?: string
+          lead_id?: string | null
+          message_id?: string | null
+          recipient_email?: string
+          sender?: string
+          sent_at?: string
+          subject?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
