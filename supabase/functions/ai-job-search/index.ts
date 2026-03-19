@@ -49,7 +49,7 @@ Return ONLY valid JSON array. No markdown, no explanation.`;
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "qwen/qwen3-8b:free",
+          model: "qwen/qwen3-4b:free",
           messages: [
             { role: "system", content: "You are a job search API. Return ONLY a valid JSON object with a 'jobs' key containing an array. No markdown, no code fences, no explanation. Example: {\"jobs\":[{\"title\":\"...\",\"company\":\"...\",\"location\":\"...\",\"description\":\"...\"}]}" },
             { role: "user", content: prompt },
