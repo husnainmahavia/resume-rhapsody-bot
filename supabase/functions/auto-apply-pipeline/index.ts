@@ -46,11 +46,36 @@ async function throttleAI(): Promise<void> {
   lastAICallTime = Date.now();
 }
 
+// Parse JSON from free model responses (handles markdown fences, thinking tags, etc.)
+function parseAIJson(content: string): any {
+  const cleaned = content
+    .replace(/<think>[\s\S]*?<\/think>/g, "")
+    .replace(/```json?\s*/g, "")
+    .replace(/```\s*/g, "")
+    .trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    // Try to find JSON object or array
+    const objMatch = cleaned.match(/\{[\s\S]*\}/);
+    if (objMatch) {
+      try { return JSON.parse(objMatch[0]); } catch { /* ignore */ }
+    }
+    const arrMatch = cleaned.match(/\[[\s\S]*\]/);
+    if (arrMatch) {
+      try { return JSON.parse(arrMatch[0]); } catch { /* ignore */ }
+    }
+    return null;
+  }
+}
+
 async function callOpenRouter(apiKey: string, body: Record<string, unknown>): Promise<Response> {
   const url = `https://openrouter.ai/api/v1/chat/completions`;
   
-  // Retry with exponential backoff for rate limits
-  for (let attempt = 0; attempt < 4; attempt++) {
+  // Strip tool_choice and tools — not supported on free models
+  const { tools, tool_choice, ...cleanBody } = body as any;
+  
+  for (let attempt = 0; attempt < 3; attempt++) {
     await throttleAI();
     
     const resp = await fetch(url, {
@@ -59,12 +84,12 @@ async function callOpenRouter(apiKey: string, body: Record<string, unknown>): Pr
         "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ ...body, model: "openrouter/free" }),
+      body: JSON.stringify({ ...cleanBody, model: "qwen/qwen3-4b:free", max_tokens: 4000 }),
     });
     
     if (resp.status === 429 || resp.status === 503) {
-      const waitMs = (attempt + 1) * 15000 + Math.random() * 5000;
-      console.log(`⚠️ ${resp.status === 429 ? 'Rate limited' : 'Server overloaded'} (attempt ${attempt + 1}/4), waiting ${Math.round(waitMs / 1000)}s...`);
+      const waitMs = (attempt + 1) * 5000 + Math.random() * 3000;
+      console.log(`⚠️ ${resp.status === 429 ? 'Rate limited' : 'Server overloaded'} (attempt ${attempt + 1}/3), waiting ${Math.round(waitMs / 1000)}s...`);
       await new Promise((r) => setTimeout(r, waitMs));
       continue;
     }
@@ -74,7 +99,7 @@ async function callOpenRouter(apiKey: string, body: Record<string, unknown>): Pr
     }
     return resp;
   }
-  throw new AICreditsError(429, "OpenRouter rate limit exceeded after 4 retries. Will retry on next cron run.");
+  throw new AICreditsError(429, "OpenRouter rate limit exceeded after 3 retries. Will retry on next cron run.");
 }
 
 function normalizeDomain(domain: string): string {
