@@ -348,50 +348,17 @@ VERIFICATION: Before returning each job, mentally verify:
 Return JSON with: title, company, location, salary_range, description, url, hiring_manager, hiring_email, sponsorship (boolean), careers_page_url`;
 
     const searchResponse = await callOpenRouter(OPENROUTER_API_KEY, {
-      model: "openrouter/free",
       messages: [
-        { role: "system", content: "You are a job search assistant. Find real job listings matching the criteria. Return structured results." },
+        { role: "system", content: "You are a job search API. Return ONLY a JSON object with a 'jobs' array. No markdown, no code fences, no thinking, no explanation. Example: {\"jobs\":[{\"title\":\"...\",\"company\":\"...\",\"location\":\"...\",\"description\":\"...\"}]}" },
         { role: "user", content: searchPrompt },
       ],
-      tools: [{
-        type: "function",
-        function: {
-          name: "return_jobs",
-          description: "Return found job listings",
-          parameters: {
-            type: "object",
-            properties: {
-              jobs: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    title: { type: "string" },
-                    company: { type: "string" },
-                    location: { type: "string" },
-                    salary_range: { type: "string" },
-                    description: { type: "string" },
-                    url: { type: "string" },
-                    hiring_manager: { type: "string" },
-                    hiring_email: { type: "string" },
-                    sponsorship: { type: "boolean" },
-                    careers_page_url: { type: "string" },
-                  },
-                  required: ["title", "company", "location"],
-                },
-              },
-            },
-            required: ["jobs"],
-          },
-        },
-      }],
-      tool_choice: { type: "function", function: { name: "return_jobs" } },
     });
 
     if (!searchResponse.ok) throw new Error(`Search failed: ${searchResponse.status}`);
     const searchData = await searchResponse.json();
-    const toolCall = searchData.choices?.[0]?.message?.tool_calls?.[0];
-    const jobs = toolCall?.function?.arguments ? JSON.parse(toolCall.function.arguments).jobs || [] : [];
+    const content = searchData.choices?.[0]?.message?.content || "";
+    const parsed = parseAIJson(content);
+    const jobs = Array.isArray(parsed) ? parsed : (parsed?.jobs || []);
 
     console.log(`Found ${jobs.length} jobs`);
     const results: any[] = [];
