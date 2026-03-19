@@ -357,6 +357,19 @@ REQUIREMENTS:
 
       for (const lead of leads) {
         try {
+          // Dedup check: skip if already sent to this email
+          const { data: alreadySent } = await supabase
+            .from("sent_emails")
+            .select("id")
+            .eq("recipient_email", lead.contact_email!.toLowerCase())
+            .eq("sender", "visuosofts")
+            .limit(1);
+
+          if (alreadySent && alreadySent.length > 0) {
+            console.log(`⏭ Already sent to ${lead.contact_email} — skipping`);
+            continue;
+          }
+
           const htmlBody = lead.email_body!.replace(/\n/g, "<br>");
 
           const info = await transporter.sendMail({
@@ -375,6 +388,16 @@ REQUIREMENTS:
           }).eq("id", lead.id);
           sent++;
           console.log(`  ✅ Sent to: ${lead.contact_email} — MessageId: ${info.messageId}`);
+
+          // Log to sent_emails for dedup
+          await supabase.from("sent_emails").upsert({
+            recipient_email: lead.contact_email!.toLowerCase(),
+            sender: "visuosofts",
+            subject: lead.email_subject,
+            lead_id: lead.id,
+            message_id: info.messageId,
+            sent_at: new Date().toISOString(),
+          }, { onConflict: "recipient_email,sender" }).catch((e: any) => console.error("Dedup log error:", e));
 
           // Human-like pacing: random 3-5 minute delay between sends
           const delay = 180000 + Math.floor(Math.random() * 120000); // 180s-300s (3-5 min)
