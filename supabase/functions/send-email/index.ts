@@ -128,6 +128,18 @@ serve(async (req) => {
     const info = await transporter.sendMail(mailOptions);
     console.log(`📧 Email SENT to ${to} - Subject: ${subject} - MessageId: ${info.messageId} - Tracking: ${trackingPixelId}`);
 
+    // Log to sent_emails for dedup
+    await supabase.from("sent_emails").upsert({
+      recipient_email: to.toLowerCase(),
+      sender: "gmail",
+      subject,
+      application_id: appId || null,
+      message_id: info.messageId,
+      sent_at: new Date().toISOString(),
+    }, { onConflict: "recipient_email,sender" }).then(() => {
+      console.log(`📋 Dedup record saved for ${to}`);
+    }).catch((e: any) => console.error("Dedup log error:", e));
+
     // Create tracking record if we have an application_id
     if (appId) {
       try {
