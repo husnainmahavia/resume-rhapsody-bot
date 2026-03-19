@@ -60,10 +60,25 @@ serve(async (req) => {
       }
     }
 
+    // Check if we already sent to this recipient (dedup)
+    const { data: alreadySent } = await supabase
+      .from("sent_emails")
+      .select("id, sent_at")
+      .eq("recipient_email", to.toLowerCase())
+      .eq("sender", "gmail")
+      .limit(1);
+
+    if (alreadySent && alreadySent.length > 0) {
+      console.log(`⏭ Already sent to ${to} on ${alreadySent[0].sent_at} — skipping duplicate`);
+      return new Response(JSON.stringify({
+        success: false, sent: false, duplicate: true,
+        error: `Already emailed ${to} on ${new Date(alreadySent[0].sent_at).toLocaleDateString()}`,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     // Find or create application_id for tracking
     let appId = applicationId;
     if (!appId) {
-      // Try to find application by email
       const { data: matchApp } = await supabase
         .from("job_applications")
         .select("id")
