@@ -557,37 +557,19 @@ TAILORING INSTRUCTIONS:
 7. The tailored CV should be the complete CV text, ready to be formatted as a PDF
 8. Also write a personalized cover letter (max 250 words) referencing something specific about the company
 
-Return the complete tailored CV text and cover letter.`;
+Return the complete tailored CV text and cover letter as JSON: {"tailored_cv":"...","cover_letter":"..."}`;
 
         const cvResponse = await callOpenRouter(OPENROUTER_API_KEY, {
-            model: "openrouter/free",
             messages: [
-              { role: "system", content: "You are a professional CV writer. Return tailored CV content maintaining the exact same professional format." },
+              { role: "system", content: "You are a professional CV writer. Return ONLY a JSON object with 'tailored_cv' and 'cover_letter' keys. No markdown, no code fences, no thinking." },
               { role: "user", content: cvTailorPrompt },
             ],
-            tools: [{
-              type: "function",
-              function: {
-                name: "return_documents",
-                description: "Return tailored CV and cover letter",
-                parameters: {
-                  type: "object",
-                  properties: {
-                    tailored_cv: { type: "string", description: "Complete tailored CV text" },
-                    cover_letter: { type: "string", description: "Personalized cover letter" },
-                  },
-                  required: ["tailored_cv", "cover_letter"],
-                },
-              },
-            }],
-            tool_choice: { type: "function", function: { name: "return_documents" } },
         });
 
         if (!cvResponse.ok) throw new Error("CV tailoring failed");
         const cvData = await cvResponse.json();
-        const cvResult = cvData.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments
-          ? JSON.parse(cvData.choices[0].message.tool_calls[0].function.arguments)
-          : { tailored_cv: "", cover_letter: "" };
+        const cvContent = cvData.choices?.[0]?.message?.content || "";
+        const cvResult = parseAIJson(cvContent) || { tailored_cv: "", cover_letter: "" };
 
         await supabase.from("job_applications").update({
           tailored_cv: cvResult.tailored_cv,
