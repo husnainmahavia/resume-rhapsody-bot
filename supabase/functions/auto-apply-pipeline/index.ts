@@ -584,51 +584,43 @@ Return the complete tailored CV text and cover letter as JSON: {"tailored_cv":".
 
         // Generate email — short professional intro only (CV attached as file)
         console.log(`✉️ Generating email for: ${job.company}`);
+        const managerName = job.hiring_manager || "Hiring Team";
         const emailResponse = await callOpenRouter(OPENROUTER_API_KEY, {
-            model: "openrouter/free",
             messages: [
               {
                 role: "system",
-                content: `You write professional job application emails. The candidate is ${APPLICANT_NAME}, ${APPLICANT_TITLE}${APPLICANT_SUMMARY ? `. ${APPLICANT_SUMMARY}` : ''}.
+                content: `You write job application emails. Return ONLY a JSON object: {"subject":"...","body":"..."}.
+No markdown, no code fences, no thinking, no explanation.
 
-Write a SHORT, professional email (NOT the CV — the CV will be attached as a PDF separately).
-Structure:
-1. Address the hiring manager by name
-2. State which role you're applying for  
-3. 2-3 sentences highlighting your most relevant experience for THIS specific role
-4. Mention that your tailored CV is attached
-5. Professional sign-off with contact details (${APPLICANT_PHONE}, ${APPLICANT_EMAIL})
-
-Keep it under 150 words. Professional but warm. NOT generic — reference something specific about the company.`,
+CRITICAL RULES:
+- NEVER use placeholder brackets like [Company Name] or [mention something] or [Link to...] or [Contact Person]
+- NEVER include "[" or "]" anywhere in the email
+- Use the ACTUAL names provided — address "${managerName}" directly
+- Write the COMPLETE email — no blanks to fill in
+- Do NOT mention Calendly or scheduling links
+- Keep under 150 words. Professional but warm.`,
               },
               {
                 role: "user",
-                content: `Job: ${job.title} at ${job.company}\nHiring Manager: ${job.hiring_manager || "Hiring Team"}\nDescription: ${job.description}\n\nWrite the email.`,
+                content: `Write a short application email for:
+Job: ${job.title} at ${job.company}
+Hiring Manager: ${managerName}
+Description: ${job.description}
+
+Candidate: ${APPLICANT_NAME}, ${APPLICANT_TITLE}. CV is attached as PDF.
+Sign off with: ${APPLICANT_NAME}, ${APPLICANT_PHONE}, ${APPLICANT_EMAIL}`,
               },
             ],
-            tools: [{
-              type: "function",
-              function: {
-                name: "return_email",
-                description: "Return email subject and body",
-                parameters: {
-                  type: "object",
-                  properties: {
-                    subject: { type: "string" },
-                    body: { type: "string" },
-                  },
-                  required: ["subject", "body"],
-                },
-              },
-            }],
-            tool_choice: { type: "function", function: { name: "return_email" } },
         });
 
         if (!emailResponse.ok) throw new Error("Email generation failed");
         const emailData = await emailResponse.json();
-        const emailResult = emailData.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments
-          ? JSON.parse(emailData.choices[0].message.tool_calls[0].function.arguments)
-          : { subject: "", body: "" };
+        const emailContent = emailData.choices?.[0]?.message?.content || "";
+        const emailResult = parseAIJson(emailContent) || { subject: "", body: "" };
+        
+        // Strip any remaining bracket placeholders
+        emailResult.subject = (emailResult.subject || "").replace(/\[.*?\]/g, "").trim();
+        emailResult.body = (emailResult.body || "").replace(/\[.*?\]/g, "").trim();
 
         await supabase.from("job_applications").update({
           email_subject: emailResult.subject,
