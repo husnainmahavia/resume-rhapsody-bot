@@ -389,6 +389,16 @@ REQUIREMENTS:
           sent++;
           console.log(`  ✅ Sent to: ${lead.contact_email} — MessageId: ${info.messageId}`);
 
+          // Log to sent_emails for dedup
+          await supabase.from("sent_emails").upsert({
+            recipient_email: lead.contact_email!.toLowerCase(),
+            sender: "visuosofts",
+            subject: lead.email_subject,
+            lead_id: lead.id,
+            message_id: info.messageId,
+            sent_at: new Date().toISOString(),
+          }, { onConflict: "recipient_email,sender" }).catch((e: any) => console.error("Dedup log error:", e));
+
           // Human-like pacing: random 3-5 minute delay between sends
           const delay = 180000 + Math.floor(Math.random() * 120000); // 180s-300s (3-5 min)
           console.log(`  ⏱ Waiting ${Math.round(delay / 1000)}s before next send...`);
