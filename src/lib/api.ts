@@ -269,3 +269,23 @@ export async function rejectReviewItem(id: string, reason?: string) {
     .eq("id", id);
   if (error) throw error;
 }
+
+// Sent emails dedup
+export async function getSentEmails() {
+  const { data, error } = await supabase
+    .from("sent_emails")
+    .select("*")
+    .order("sent_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function isEmailAlreadySent(recipientEmail: string, sender: string = "gmail"): Promise<boolean> {
+  const { data } = await supabase
+    .from("sent_emails")
+    .select("id")
+    .eq("recipient_email", recipientEmail.toLowerCase())
+    .eq("sender", sender)
+    .limit(1);
+  return (data && data.length > 0);
+}
