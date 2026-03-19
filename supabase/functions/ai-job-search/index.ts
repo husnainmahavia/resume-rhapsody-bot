@@ -41,7 +41,7 @@ Return ONLY valid JSON array. No markdown, no explanation.`;
 
     // Retry with exponential backoff for rate limits
     let response: Response | null = null;
-    for (let attempt = 0; attempt < 4; attempt++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
       response = await fetch(OPENROUTER_URL, {
         method: "POST",
         headers: {
@@ -49,55 +49,24 @@ Return ONLY valid JSON array. No markdown, no explanation.`;
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "openrouter/free",
+          model: "qwen/qwen3-8b:free",
           messages: [
-            { role: "system", content: "You are a job search API. Return only valid JSON arrays of job objects. No markdown formatting." },
+            { role: "system", content: "You are a job search API. Return ONLY a valid JSON object with a 'jobs' key containing an array. No markdown, no code fences, no explanation. Example: {\"jobs\":[{\"title\":\"...\",\"company\":\"...\",\"location\":\"...\",\"description\":\"...\"}]}" },
             { role: "user", content: prompt },
           ],
-          tools: [{
-            type: "function",
-            function: {
-              name: "return_jobs",
-              description: "Return found job listings",
-              parameters: {
-                type: "object",
-                properties: {
-                  jobs: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        title: { type: "string" },
-                        company: { type: "string" },
-                        location: { type: "string" },
-                        salary_range: { type: "string" },
-                        description: { type: "string" },
-                        url: { type: "string" },
-                        hiring_manager: { type: "string" },
-                        hiring_email: { type: "string" },
-                      },
-                      required: ["title", "company", "location", "description"],
-                    },
-                  },
-                },
-                required: ["jobs"],
-              },
-            },
-          }],
-          tool_choice: { type: "function", function: { name: "return_jobs" } },
         }),
       });
 
       if (!response || (response.status !== 429 && response.status !== 503)) break;
 
-      const waitMs = (attempt + 1) * 20000 + Math.random() * 10000;
-      console.log(`Rate limited, retrying in ${Math.round(waitMs / 1000)}s (attempt ${attempt + 1}/4)`);
+      const waitMs = (attempt + 1) * 5000 + Math.random() * 3000;
+      console.log(`Rate limited, retrying in ${Math.round(waitMs / 1000)}s (attempt ${attempt + 1}/3)`);
       await new Promise(r => setTimeout(r, waitMs));
     }
 
     if (!response || !response.ok) {
       if (response?.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limited after retries. Please wait a minute and try again." }), {
+        return new Response(JSON.stringify({ error: "Rate limited. Please wait a minute and try again." }), {
           status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -107,11 +76,19 @@ Return ONLY valid JSON array. No markdown, no explanation.`;
     }
 
     const data = await response.json();
-    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
     let jobs = [];
-    if (toolCall?.function?.arguments) {
-      const parsed = JSON.parse(toolCall.function.arguments);
-      jobs = parsed.jobs || [];
+    const content = data.choices?.[0]?.message?.content || "";
+    // Try parsing content as JSON - handle markdown fences
+    const cleaned = content.replace(/```json?\s*/g, "").replace(/```\s*/g, "").trim();
+    try {
+      const parsed = JSON.parse(cleaned);
+      jobs = Array.isArray(parsed) ? parsed : (parsed.jobs || []);
+    } catch {
+      // Try to find JSON array in content
+      const match = cleaned.match(/\[[\s\S]*\]/);
+      if (match) {
+        try { jobs = JSON.parse(match[0]); } catch { /* ignore */ }
+      }
     }
 
     return new Response(JSON.stringify({ jobs }), {
