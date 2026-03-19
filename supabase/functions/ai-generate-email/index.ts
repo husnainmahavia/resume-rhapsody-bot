@@ -16,8 +16,10 @@ serve(async (req) => {
     const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
     if (!OPENROUTER_API_KEY) throw new Error("OPENROUTER_API_KEY not configured");
 
+    const managerName = hiringManager || "Hiring Team";
+
     let response: Response | null = null;
-    for (let attempt = 0; attempt < 4; attempt++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
       response = await fetch(OPENROUTER_URL, {
         method: "POST",
         headers: {
@@ -25,66 +27,81 @@ serve(async (req) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "openrouter/free",
+          model: "qwen/qwen3-4b:free",
+          max_tokens: 2000,
           messages: [
             {
               role: "system",
-              content: `You are an expert at writing cold outreach emails to hiring managers. 
-Write personalized, concise, compelling emails that get responses. 
-The candidate is Husnain Mahavia, a Full-Stack Developer with 8+ years experience, 150+ projects, based in Manchester UK.
+              content: `You write job application emails. Return ONLY a JSON object with "subject" and "body" keys. No markdown, no code fences, no thinking, no explanation.
 
-IMPORTANT: Include the tailored CV summary and cover letter highlights in the email body so the recipient has everything they need without attachments.
-Make the email feel personal and genuine, not templated.`,
+CRITICAL RULES:
+- NEVER use placeholder brackets like [Company Name] or [mention something] or [Link to...] or [Contact Person Name]
+- NEVER include "[" or "]" anywhere in the email
+- Use the ACTUAL company name, job title, and hiring manager name provided
+- Write the COMPLETE email with real content — no blanks to fill in
+- Do NOT mention Calendly or scheduling links
+- Sign off as: Husnain Mahavia, Manchester, UK, +44 7387 055617, husnainmahavia.1@gmail.com`,
             },
             {
               role: "user",
-              content: `Write a cold email to apply for this job:
+              content: `Write a cold application email for:
 Job: ${jobTitle} at ${company}
-Hiring Manager: ${hiringManager || "Hiring Team"}
-Description: ${jobDescription}`,
+Hiring Manager: ${managerName}
+Job Description: ${jobDescription}
+
+The candidate is Husnain Mahavia, a Full-Stack Developer & AR Specialist with 8+ years experience, 150+ projects delivered, 100+ AR experiences. Based in Manchester UK. Skills: Unity, ARKit, ARCore, React, TypeScript, Python, AI/ML, WordPress.
+
+Write a SHORT (under 150 words), professional email. Address "${managerName}" directly. Reference something specific about ${company} — do not use generic praise. Mention 2-3 relevant skills from the job description.
+
+Return JSON: {"subject":"...","body":"..."}`,
             },
           ],
-          tools: [{
-            type: "function",
-            function: {
-              name: "return_email",
-              description: "Return email subject and body",
-              parameters: {
-                type: "object",
-                properties: {
-                  subject: { type: "string", description: "Email subject line" },
-                  body: { type: "string", description: "Email body text" },
-                },
-                required: ["subject", "body"],
-              },
-            },
-          }],
-          tool_choice: { type: "function", function: { name: "return_email" } },
         }),
       });
 
       if (!response || (response.status !== 429 && response.status !== 503)) break;
 
-      const waitMs = (attempt + 1) * 20000 + Math.random() * 10000;
-      console.log(`Rate limited, retrying in ${Math.round(waitMs / 1000)}s (attempt ${attempt + 1}/4)`);
+      const waitMs = (attempt + 1) * 5000 + Math.random() * 3000;
+      console.log(`Rate limited, retrying in ${Math.round(waitMs / 1000)}s (attempt ${attempt + 1}/3)`);
       await new Promise(r => setTimeout(r, waitMs));
     }
 
     if (!response || !response.ok) {
       if (response?.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limited after retries. Please wait a minute and try again." }), {
+        return new Response(JSON.stringify({ error: "Rate limited. Please wait a minute and try again." }), {
           status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      const t = await response?.text() || "";
+      console.error("OpenRouter error:", response?.status, t);
       throw new Error(`OpenRouter error: ${response?.status}`);
     }
 
     const data = await response.json();
-    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+    const content = data.choices?.[0]?.message?.content || "";
+    const cleaned = content.replace(/```json?\s*/g, "").replace(/```\s*/g, "").trim();
+    
     let result = { subject: "", body: "" };
-    if (toolCall?.function?.arguments) {
-      result = JSON.parse(toolCall.function.arguments);
+    try {
+      // Try to find JSON object in content
+      const jsonMatch = cleaned.match(/\{[\s\S]*"subject"[\s\S]*"body"[\s\S]*\}/);
+      if (jsonMatch) {
+        result = JSON.parse(jsonMatch[0]);
+      } else {
+        result = JSON.parse(cleaned);
+      }
+    } catch {
+      console.error("Failed to parse email JSON:", cleaned.slice(0, 200));
+      // Fallback: try to extract subject and body from text
+      const subjectMatch = cleaned.match(/"subject"\s*:\s*"([^"]+)"/);
+      const bodyMatch = cleaned.match(/"body"\s*:\s*"([\s\S]+?)"\s*\}/);
+      if (subjectMatch) result.subject = subjectMatch[1];
+      if (bodyMatch) result.body = bodyMatch[1].replace(/\\n/g, "\n");
     }
+
+    // Strip any remaining bracket placeholders
+    result.subject = result.subject.replace(/\[.*?\]/g, "").trim();
+    result.body = result.body.replace(/\[.*?\]/g, "").trim();
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

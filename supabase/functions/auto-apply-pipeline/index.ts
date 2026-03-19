@@ -46,11 +46,36 @@ async function throttleAI(): Promise<void> {
   lastAICallTime = Date.now();
 }
 
+// Parse JSON from free model responses (handles markdown fences, thinking tags, etc.)
+function parseAIJson(content: string): any {
+  const cleaned = content
+    .replace(/<think>[\s\S]*?<\/think>/g, "")
+    .replace(/```json?\s*/g, "")
+    .replace(/```\s*/g, "")
+    .trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    // Try to find JSON object or array
+    const objMatch = cleaned.match(/\{[\s\S]*\}/);
+    if (objMatch) {
+      try { return JSON.parse(objMatch[0]); } catch { /* ignore */ }
+    }
+    const arrMatch = cleaned.match(/\[[\s\S]*\]/);
+    if (arrMatch) {
+      try { return JSON.parse(arrMatch[0]); } catch { /* ignore */ }
+    }
+    return null;
+  }
+}
+
 async function callOpenRouter(apiKey: string, body: Record<string, unknown>): Promise<Response> {
   const url = `https://openrouter.ai/api/v1/chat/completions`;
   
-  // Retry with exponential backoff for rate limits
-  for (let attempt = 0; attempt < 4; attempt++) {
+  // Strip tool_choice and tools — not supported on free models
+  const { tools, tool_choice, ...cleanBody } = body as any;
+  
+  for (let attempt = 0; attempt < 3; attempt++) {
     await throttleAI();
     
     const resp = await fetch(url, {
@@ -59,12 +84,12 @@ async function callOpenRouter(apiKey: string, body: Record<string, unknown>): Pr
         "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ ...body, model: "openrouter/free" }),
+      body: JSON.stringify({ ...cleanBody, model: "qwen/qwen3-4b:free", max_tokens: 4000 }),
     });
     
     if (resp.status === 429 || resp.status === 503) {
-      const waitMs = (attempt + 1) * 15000 + Math.random() * 5000;
-      console.log(`⚠️ ${resp.status === 429 ? 'Rate limited' : 'Server overloaded'} (attempt ${attempt + 1}/4), waiting ${Math.round(waitMs / 1000)}s...`);
+      const waitMs = (attempt + 1) * 5000 + Math.random() * 3000;
+      console.log(`⚠️ ${resp.status === 429 ? 'Rate limited' : 'Server overloaded'} (attempt ${attempt + 1}/3), waiting ${Math.round(waitMs / 1000)}s...`);
       await new Promise((r) => setTimeout(r, waitMs));
       continue;
     }
@@ -74,7 +99,7 @@ async function callOpenRouter(apiKey: string, body: Record<string, unknown>): Pr
     }
     return resp;
   }
-  throw new AICreditsError(429, "OpenRouter rate limit exceeded after 4 retries. Will retry on next cron run.");
+  throw new AICreditsError(429, "OpenRouter rate limit exceeded after 3 retries. Will retry on next cron run.");
 }
 
 function normalizeDomain(domain: string): string {
@@ -323,50 +348,17 @@ VERIFICATION: Before returning each job, mentally verify:
 Return JSON with: title, company, location, salary_range, description, url, hiring_manager, hiring_email, sponsorship (boolean), careers_page_url`;
 
     const searchResponse = await callOpenRouter(OPENROUTER_API_KEY, {
-      model: "openrouter/free",
       messages: [
-        { role: "system", content: "You are a job search assistant. Find real job listings matching the criteria. Return structured results." },
+        { role: "system", content: "You are a job search API. Return ONLY a JSON object with a 'jobs' array. No markdown, no code fences, no thinking, no explanation. Example: {\"jobs\":[{\"title\":\"...\",\"company\":\"...\",\"location\":\"...\",\"description\":\"...\"}]}" },
         { role: "user", content: searchPrompt },
       ],
-      tools: [{
-        type: "function",
-        function: {
-          name: "return_jobs",
-          description: "Return found job listings",
-          parameters: {
-            type: "object",
-            properties: {
-              jobs: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    title: { type: "string" },
-                    company: { type: "string" },
-                    location: { type: "string" },
-                    salary_range: { type: "string" },
-                    description: { type: "string" },
-                    url: { type: "string" },
-                    hiring_manager: { type: "string" },
-                    hiring_email: { type: "string" },
-                    sponsorship: { type: "boolean" },
-                    careers_page_url: { type: "string" },
-                  },
-                  required: ["title", "company", "location"],
-                },
-              },
-            },
-            required: ["jobs"],
-          },
-        },
-      }],
-      tool_choice: { type: "function", function: { name: "return_jobs" } },
     });
 
     if (!searchResponse.ok) throw new Error(`Search failed: ${searchResponse.status}`);
     const searchData = await searchResponse.json();
-    const toolCall = searchData.choices?.[0]?.message?.tool_calls?.[0];
-    const jobs = toolCall?.function?.arguments ? JSON.parse(toolCall.function.arguments).jobs || [] : [];
+    const content = searchData.choices?.[0]?.message?.content || "";
+    const parsed = parseAIJson(content);
+    const jobs = Array.isArray(parsed) ? parsed : (parsed?.jobs || []);
 
     console.log(`Found ${jobs.length} jobs`);
     const results: any[] = [];
@@ -565,37 +557,19 @@ TAILORING INSTRUCTIONS:
 7. The tailored CV should be the complete CV text, ready to be formatted as a PDF
 8. Also write a personalized cover letter (max 250 words) referencing something specific about the company
 
-Return the complete tailored CV text and cover letter.`;
+Return the complete tailored CV text and cover letter as JSON: {"tailored_cv":"...","cover_letter":"..."}`;
 
         const cvResponse = await callOpenRouter(OPENROUTER_API_KEY, {
-            model: "openrouter/free",
             messages: [
-              { role: "system", content: "You are a professional CV writer. Return tailored CV content maintaining the exact same professional format." },
+              { role: "system", content: "You are a professional CV writer. Return ONLY a JSON object with 'tailored_cv' and 'cover_letter' keys. No markdown, no code fences, no thinking." },
               { role: "user", content: cvTailorPrompt },
             ],
-            tools: [{
-              type: "function",
-              function: {
-                name: "return_documents",
-                description: "Return tailored CV and cover letter",
-                parameters: {
-                  type: "object",
-                  properties: {
-                    tailored_cv: { type: "string", description: "Complete tailored CV text" },
-                    cover_letter: { type: "string", description: "Personalized cover letter" },
-                  },
-                  required: ["tailored_cv", "cover_letter"],
-                },
-              },
-            }],
-            tool_choice: { type: "function", function: { name: "return_documents" } },
         });
 
         if (!cvResponse.ok) throw new Error("CV tailoring failed");
         const cvData = await cvResponse.json();
-        const cvResult = cvData.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments
-          ? JSON.parse(cvData.choices[0].message.tool_calls[0].function.arguments)
-          : { tailored_cv: "", cover_letter: "" };
+        const cvContent = cvData.choices?.[0]?.message?.content || "";
+        const cvResult = parseAIJson(cvContent) || { tailored_cv: "", cover_letter: "" };
 
         await supabase.from("job_applications").update({
           tailored_cv: cvResult.tailored_cv,
@@ -610,51 +584,43 @@ Return the complete tailored CV text and cover letter.`;
 
         // Generate email — short professional intro only (CV attached as file)
         console.log(`✉️ Generating email for: ${job.company}`);
+        const managerName = job.hiring_manager || "Hiring Team";
         const emailResponse = await callOpenRouter(OPENROUTER_API_KEY, {
-            model: "openrouter/free",
             messages: [
               {
                 role: "system",
-                content: `You write professional job application emails. The candidate is ${APPLICANT_NAME}, ${APPLICANT_TITLE}${APPLICANT_SUMMARY ? `. ${APPLICANT_SUMMARY}` : ''}.
+                content: `You write job application emails. Return ONLY a JSON object: {"subject":"...","body":"..."}.
+No markdown, no code fences, no thinking, no explanation.
 
-Write a SHORT, professional email (NOT the CV — the CV will be attached as a PDF separately).
-Structure:
-1. Address the hiring manager by name
-2. State which role you're applying for  
-3. 2-3 sentences highlighting your most relevant experience for THIS specific role
-4. Mention that your tailored CV is attached
-5. Professional sign-off with contact details (${APPLICANT_PHONE}, ${APPLICANT_EMAIL})
-
-Keep it under 150 words. Professional but warm. NOT generic — reference something specific about the company.`,
+CRITICAL RULES:
+- NEVER use placeholder brackets like [Company Name] or [mention something] or [Link to...] or [Contact Person]
+- NEVER include "[" or "]" anywhere in the email
+- Use the ACTUAL names provided — address "${managerName}" directly
+- Write the COMPLETE email — no blanks to fill in
+- Do NOT mention Calendly or scheduling links
+- Keep under 150 words. Professional but warm.`,
               },
               {
                 role: "user",
-                content: `Job: ${job.title} at ${job.company}\nHiring Manager: ${job.hiring_manager || "Hiring Team"}\nDescription: ${job.description}\n\nWrite the email.`,
+                content: `Write a short application email for:
+Job: ${job.title} at ${job.company}
+Hiring Manager: ${managerName}
+Description: ${job.description}
+
+Candidate: ${APPLICANT_NAME}, ${APPLICANT_TITLE}. CV is attached as PDF.
+Sign off with: ${APPLICANT_NAME}, ${APPLICANT_PHONE}, ${APPLICANT_EMAIL}`,
               },
             ],
-            tools: [{
-              type: "function",
-              function: {
-                name: "return_email",
-                description: "Return email subject and body",
-                parameters: {
-                  type: "object",
-                  properties: {
-                    subject: { type: "string" },
-                    body: { type: "string" },
-                  },
-                  required: ["subject", "body"],
-                },
-              },
-            }],
-            tool_choice: { type: "function", function: { name: "return_email" } },
         });
 
         if (!emailResponse.ok) throw new Error("Email generation failed");
         const emailData = await emailResponse.json();
-        const emailResult = emailData.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments
-          ? JSON.parse(emailData.choices[0].message.tool_calls[0].function.arguments)
-          : { subject: "", body: "" };
+        const emailContent = emailData.choices?.[0]?.message?.content || "";
+        const emailResult = parseAIJson(emailContent) || { subject: "", body: "" };
+        
+        // Strip any remaining bracket placeholders
+        emailResult.subject = (emailResult.subject || "").replace(/\[.*?\]/g, "").trim();
+        emailResult.body = (emailResult.body || "").replace(/\[.*?\]/g, "").trim();
 
         await supabase.from("job_applications").update({
           email_subject: emailResult.subject,
