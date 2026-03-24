@@ -9,6 +9,7 @@ const corsHeaders = {
 
 const senderEmail = "husnainmahavia.1@gmail.com";
 const senderName = "Husnain Mahavia";
+const senderPhone = "+44 7387 055617";
 
 // Rate limiting rules per PDF strategy (Layer 5)
 const RATE_LIMITS = {
@@ -18,6 +19,133 @@ const RATE_LIMITS = {
   maxBouncesBeforePause: 5,
   verifyBeforeSending: true,
 };
+
+type ApplicationAttachmentSource = {
+  company: string | null;
+  job_title: string;
+  tailored_cv: string | null;
+  cover_letter: string | null;
+};
+
+type MailAttachment = {
+  filename: string;
+  content: string;
+  contentType: string;
+};
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function makeSafeFilePart(value: string) {
+  return value.replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "application";
+}
+
+function stripTrailingSignature(body: string) {
+  return body.replace(/\n+(?:best regards|kind regards|regards|warm regards|sincerely|thanks),?[\s\S]*$/i, "").trim();
+}
+
+function collapseBlankLines(body: string) {
+  return body.replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function sanitizeGeneratedEmail(body: string) {
+  const withoutPlaceholders = body
+    .replace(/\r\n/g, "\n")
+    .replace(/\[.*?\]/g, "")
+    .split("\n")
+    .filter((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return true;
+      if (/(placeholder|replace this|insert .*link)/i.test(trimmed)) return false;
+      if (/(calendly|calendar link|booking link|schedule link)/i.test(trimmed)) return false;
+      if (/please find my (cv|resume|cover letter).*attached/i.test(trimmed)) return false;
+      return true;
+    })
+    .join("\n");
+
+  const contentOnly = collapseBlankLines(stripTrailingSignature(withoutPlaceholders));
+  return `${contentOnly}\n\nBest regards,\n${senderName}\n${senderPhone}\n${senderEmail}`;
+}
+
+function generateCvHtml(cvText: string, jobTitle: string, company: string) {
+  const lines = cvText.split("\n").map((line) => line.trim()).filter(Boolean);
+  const formatted = lines.map((line) => `<p>${escapeHtml(line)}</p>`).join("");
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    body { font-family: Calibri, 'Segoe UI', Arial, sans-serif; color: #1f2937; margin: 0; padding: 32px 40px; line-height: 1.45; }
+    .header { border-bottom: 2px solid #1e3a8a; margin-bottom: 18px; padding-bottom: 12px; }
+    .name { font-size: 28px; font-weight: 700; color: #0f172a; margin: 0 0 4px; }
+    .meta { font-size: 13px; color: #475569; margin: 0; }
+    .title { font-size: 14px; color: #1e3a8a; margin: 8px 0 0; }
+    .context { font-size: 12px; color: #64748b; margin: 14px 0 18px; }
+    p { font-size: 13px; margin: 0 0 8px; white-space: pre-wrap; }
+  </style></head><body>
+    <div class="header">
+      <p class="name">${escapeHtml(senderName)}</p>
+      <p class="meta">${escapeHtml(senderPhone)} • ${escapeHtml(senderEmail)}</p>
+      <p class="title">Full-Stack Developer & AI Specialist</p>
+    </div>
+    <p class="context">Tailored CV for ${escapeHtml(jobTitle)} at ${escapeHtml(company)}</p>
+    ${formatted}
+  </body></html>`;
+}
+
+function generateCoverLetterHtml(coverLetter: string, company: string, jobTitle: string) {
+  const paragraphs = coverLetter
+    .split(/\n\s*\n/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => `<p>${escapeHtml(part).replace(/\n/g, "<br>")}</p>`)
+    .join("");
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    body { font-family: Calibri, 'Segoe UI', Arial, sans-serif; color: #1f2937; margin: 0; padding: 36px 40px; line-height: 1.6; }
+    .header { margin-bottom: 24px; }
+    .name { font-size: 24px; font-weight: 700; color: #0f172a; margin: 0 0 4px; }
+    .meta { font-size: 13px; color: #475569; margin: 0; }
+    .subject { margin: 22px 0 18px; font-size: 13px; color: #1e3a8a; }
+    p { font-size: 13px; margin: 0 0 14px; }
+  </style></head><body>
+    <div class="header">
+      <p class="name">${escapeHtml(senderName)}</p>
+      <p class="meta">${escapeHtml(senderPhone)} • ${escapeHtml(senderEmail)}</p>
+    </div>
+    <p class="subject">Cover letter for ${escapeHtml(jobTitle)} at ${escapeHtml(company)}</p>
+    ${paragraphs}
+  </body></html>`;
+}
+
+function buildApplicationAttachments(application: ApplicationAttachmentSource | null): MailAttachment[] {
+  if (!application) return [];
+
+  const company = application.company || "Company";
+  const safeCompany = makeSafeFilePart(company);
+  const attachments: MailAttachment[] = [];
+
+  if (application.tailored_cv?.trim()) {
+    attachments.push({
+      filename: `Husnain_Mahavia_CV_${safeCompany}.html`,
+      content: generateCvHtml(application.tailored_cv.trim(), application.job_title, company),
+      contentType: "text/html",
+    });
+  }
+
+  if (application.cover_letter?.trim()) {
+    attachments.push({
+      filename: `Husnain_Mahavia_Cover_Letter_${safeCompany}.html`,
+      content: generateCoverLetterHtml(application.cover_letter.trim(), company, application.job_title),
+      contentType: "text/html",
+    });
+  }
+
+  return attachments;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -59,6 +187,23 @@ async function handleSend(payload: Record<string, unknown>) {
   }
 
   const supabase = serviceClient();
+
+  const { data: alreadySent } = await supabase
+    .from("sent_emails")
+    .select("id, sent_at")
+    .eq("recipient_email", to.toLowerCase())
+    .eq("sender", "gmail")
+    .limit(1)
+    .maybeSingle();
+
+  if (alreadySent) {
+    return json({
+      success: false,
+      sent: false,
+      duplicate: true,
+      error: `Already emailed ${to}`,
+    });
+  }
 
   // Rate limit check: daily limit
   const today = new Date().toISOString().split("T")[0];
@@ -123,19 +268,45 @@ async function handleSend(payload: Record<string, unknown>) {
     auth: { user: senderEmail, pass: password },
   });
 
-  const info = await transporter.sendMail({
+  const appId = applicationId ?? (await findLatestApplicationByEmail(supabase, to));
+  const applicationSource = appId ? await getApplicationAttachmentSource(supabase, appId) : null;
+  const attachments = buildApplicationAttachments(applicationSource);
+  const sanitizedBody = sanitizeGeneratedEmail(body);
+
+  const mailOptions: {
+    from: string;
+    to: string;
+    subject: string;
+    text: string;
+    html: string;
+    attachments?: MailAttachment[];
+  } = {
     from: `${senderName} <${senderEmail}>`,
     to,
     subject,
-    text: body,
-    html: body.replace(/\n/g, "<br>"),
-  });
+    text: sanitizedBody,
+    html: sanitizedBody.replace(/\n/g, "<br>"),
+  };
+
+  if (attachments.length > 0) {
+    mailOptions.attachments = attachments;
+  }
+
+  const info = await transporter.sendMail(mailOptions);
 
   // Upsert tracking record
-  const appId = applicationId ?? (await findLatestApplicationByEmail(supabase, to));
   if (appId) {
     await upsertTrackingRecord(supabase, appId);
   }
+
+  await supabase.from("sent_emails").upsert({
+    recipient_email: to.toLowerCase(),
+    sender: "gmail",
+    subject,
+    application_id: appId,
+    message_id: info.messageId,
+    sent_at: new Date().toISOString(),
+  }, { onConflict: "recipient_email,sender" });
 
   console.log(`📧 SMTP sent to ${to} (${info.messageId})`);
   return json({
@@ -310,6 +481,20 @@ async function findLatestApplicationByEmail(supabase: ReturnType<typeof serviceC
     .limit(1)
     .maybeSingle();
   return data?.id ?? null;
+}
+
+async function getApplicationAttachmentSource(
+  supabase: ReturnType<typeof serviceClient>,
+  applicationId: string,
+): Promise<ApplicationAttachmentSource | null> {
+  const { data } = await supabase
+    .from("job_applications")
+    .select("company, job_title, tailored_cv, cover_letter")
+    .eq("id", applicationId)
+    .limit(1)
+    .maybeSingle();
+
+  return data ?? null;
 }
 
 async function upsertTrackingRecord(supabase: ReturnType<typeof serviceClient>, applicationId: string) {

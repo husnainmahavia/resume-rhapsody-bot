@@ -69,6 +69,25 @@ function parseAIJson(content: string): any {
   }
 }
 
+function sanitizeEmailText(text: string): string {
+  const cleaned = text
+    .replace(/\r\n/g, "\n")
+    .replace(/\[.*?\]/g, "")
+    .split("\n")
+    .filter((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return true;
+      if (/(placeholder|replace this|insert .*link)/i.test(trimmed)) return false;
+      if (/(calendly|calendar link|booking link|schedule link)/i.test(trimmed)) return false;
+      return true;
+    })
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  return cleaned;
+}
+
 async function callOpenRouter(apiKey: string, body: Record<string, unknown>): Promise<Response> {
   const url = `https://openrouter.ai/api/v1/chat/completions`;
   
@@ -620,7 +639,11 @@ Sign off with: ${APPLICANT_NAME}, ${APPLICANT_PHONE}, ${APPLICANT_EMAIL}`,
         
         // Strip any remaining bracket placeholders
         emailResult.subject = (emailResult.subject || "").replace(/\[.*?\]/g, "").trim();
-        emailResult.body = (emailResult.body || "").replace(/\[.*?\]/g, "").trim();
+        emailResult.body = sanitizeEmailText((emailResult.body || "").replace(/\[.*?\]/g, "").trim());
+
+        if (!emailResult.subject || !emailResult.body || /placeholder|insert .*link|calendly/i.test(emailResult.body)) {
+          throw new Error("Generated email contained invalid placeholder content");
+        }
 
         await supabase.from("job_applications").update({
           email_subject: emailResult.subject,
