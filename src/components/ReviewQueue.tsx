@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 
 interface QueueItem {
   id: string;
+  application_id?: string | null;
   recipient_email: string;
   recipient_name: string | null;
   company: string;
@@ -127,13 +128,19 @@ export default function ReviewQueue() {
       for (const item of (toSend || []) as QueueItem[]) {
         if (!item.email_subject || !item.email_body) continue;
         try {
-          await sendEmail(item.recipient_email, item.email_subject, item.email_body, item.recipient_name || undefined);
-          if ((item as any).application_id) {
+          await sendEmail(
+            item.recipient_email,
+            item.email_subject,
+            item.email_body,
+            item.recipient_name || undefined,
+            item.application_id || undefined,
+          );
+          if (item.application_id) {
             await supabase.from("job_applications").update({
               status: "applied",
               applied_at: new Date().toISOString(),
               follow_up_scheduled_at: new Date(Date.now() + 3 * 86400000).toISOString(),
-            }).eq("id", (item as any).application_id);
+            }).eq("id", item.application_id);
           }
           await supabase.from("email_review_queue").delete().eq("id", item.id);
           sent++;
