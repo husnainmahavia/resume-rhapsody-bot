@@ -118,7 +118,7 @@ async function callOpenRouter(apiKey: string, body: Record<string, unknown>): Pr
     }
     return resp;
   }
-  throw new AICreditsError(429, "OpenRouter rate limit exceeded after 3 retries. Will retry on next cron run.");
+  throw new AICreditsError(429, "OpenRouter rate limit exceeded after 5 retries. Will retry on next cron run.");
 }
 
 function normalizeDomain(domain: string): string {
