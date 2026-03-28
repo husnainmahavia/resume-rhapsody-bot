@@ -33,7 +33,7 @@ class AICreditsError extends Error {
 
 // Throttle: wait between AI calls to stay under rate limits
 let lastAICallTime = 0;
-const AI_CALL_INTERVAL_MS = 5000;
+const AI_CALL_INTERVAL_MS = 15000; // 15s between AI calls for free-tier safety
 
 async function throttleAI(): Promise<void> {
   const now = Date.now();
@@ -94,7 +94,7 @@ async function callOpenRouter(apiKey: string, body: Record<string, unknown>): Pr
   // Strip tool_choice and tools — not supported on free models
   const { tools, tool_choice, ...cleanBody } = body as any;
   
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 5; attempt++) {
     await throttleAI();
     
     const resp = await fetch(url, {
@@ -107,8 +107,8 @@ async function callOpenRouter(apiKey: string, body: Record<string, unknown>): Pr
     });
     
     if (resp.status === 429 || resp.status === 503) {
-      const waitMs = (attempt + 1) * 5000 + Math.random() * 3000;
-      console.log(`⚠️ ${resp.status === 429 ? 'Rate limited' : 'Server overloaded'} (attempt ${attempt + 1}/3), waiting ${Math.round(waitMs / 1000)}s...`);
+      const waitMs = Math.min(60000, (attempt + 1) * 12000 + Math.random() * 5000);
+      console.log(`⚠️ ${resp.status === 429 ? 'Rate limited' : 'Server overloaded'} (attempt ${attempt + 1}/5), waiting ${Math.round(waitMs / 1000)}s...`);
       await new Promise((r) => setTimeout(r, waitMs));
       continue;
     }
@@ -118,7 +118,7 @@ async function callOpenRouter(apiKey: string, body: Record<string, unknown>): Pr
     }
     return resp;
   }
-  throw new AICreditsError(429, "OpenRouter rate limit exceeded after 3 retries. Will retry on next cron run.");
+  throw new AICreditsError(429, "OpenRouter rate limit exceeded after 5 retries. Will retry on next cron run.");
 }
 
 function normalizeDomain(domain: string): string {
