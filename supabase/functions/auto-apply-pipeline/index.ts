@@ -33,7 +33,7 @@ class AICreditsError extends Error {
 
 // Throttle: wait between AI calls to stay under rate limits
 let lastAICallTime = 0;
-const AI_CALL_INTERVAL_MS = 5000;
+const AI_CALL_INTERVAL_MS = 15000; // 15s between AI calls for free-tier safety
 
 async function throttleAI(): Promise<void> {
   const now = Date.now();
