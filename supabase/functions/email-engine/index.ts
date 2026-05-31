@@ -65,7 +65,7 @@ serve(async (req) => {
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY")!;
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
     const VISUOSOFTS_EMAIL_PASSWORD = Deno.env.get("VISUOSOFTS_EMAIL_PASSWORD");
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -98,11 +98,11 @@ CRITICAL RULES:
 
       let searchResponse: Response | null = null;
       for (let attempt = 0; attempt < 4; attempt++) {
-        searchResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        searchResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
           method: "POST",
-          headers: { Authorization: `Bearer ${OPENROUTER_API_KEY}`, "Content-Type": "application/json" },
+          headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
           body: JSON.stringify({
-            model: "openrouter/free",
+            model: "google/gemini-2.5-flash",
             messages: [
               { role: "system", content: "You are a B2B lead researcher. Return only real, verified companies. Return valid JSON only." },
               { role: "user", content: discoverPrompt },
@@ -248,15 +248,16 @@ REQUIREMENTS:
 5. End with a soft CTA (suggest a 15-min call, not a hard sell)
 6. Sign off as: Husnain Mahavia, CEO, Visuosofts | info@visuosofts.com | visuosofts.com
 7. Tone: professional, warm, knowledgeable — NOT salesy or pushy
-8. Do NOT use "Dear Sir/Madam" — use "Dear [Company Name] Team" or find a better greeting`;
+8. Do NOT use "Dear Sir/Madam" — greet using the ACTUAL company name like "Dear ${lead.company_name} Team" (never use square brackets, never write the literal words "Company Name")
+9. CRITICAL: Never output square brackets [ or ] anywhere. Use real values only.`;
 
           let emailResponse: Response | null = null;
           for (let attempt = 0; attempt < 4; attempt++) {
-            emailResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            emailResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
               method: "POST",
-              headers: { Authorization: `Bearer ${OPENROUTER_API_KEY}`, "Content-Type": "application/json" },
+              headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
               body: JSON.stringify({
-                model: "openrouter/free",
+                model: "google/gemini-2.5-flash",
                 messages: [
                   { role: "system", content: "You write professional B2B cold outreach emails. Every email must be unique and company-specific." },
                   { role: "user", content: emailPrompt },

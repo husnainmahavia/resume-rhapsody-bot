@@ -12,7 +12,7 @@ Deno.serve(async (req) => {
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY")!;
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
     const GMAIL_APP_PASSWORD = Deno.env.get("GMAIL_APP_PASSWORD")!;
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -58,11 +58,11 @@ Deno.serve(async (req) => {
         // Generate follow-up email via AI
         let response: Response | null = null;
         for (let attempt = 0; attempt < 4; attempt++) {
-          response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
             method: "POST",
-            headers: { Authorization: `Bearer ${OPENROUTER_API_KEY}`, "Content-Type": "application/json" },
+            headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
             body: JSON.stringify({
-              model: "openrouter/free",
+              model: "google/gemini-2.5-flash",
               messages: [
                 { role: "system", content: "Write a brief, polite follow-up email (under 100 words). Reference the original application. Be warm but professional. Sign off as Husnain Mahavia, +44 7387 055617." },
                 { role: "user", content: `Following up on my application for ${app.job_title} at ${app.company}. Original email subject: ${app.email_subject}. Hiring manager: ${app.hiring_manager_name || "Hiring Team"}.` },
