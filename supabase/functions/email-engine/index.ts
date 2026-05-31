@@ -248,7 +248,8 @@ REQUIREMENTS:
 5. End with a soft CTA (suggest a 15-min call, not a hard sell)
 6. Sign off as: Husnain Mahavia, CEO, Visuosofts | info@visuosofts.com | visuosofts.com
 7. Tone: professional, warm, knowledgeable — NOT salesy or pushy
-8. Do NOT use "Dear Sir/Madam" — use "Dear [Company Name] Team" or find a better greeting`;
+8. Do NOT use "Dear Sir/Madam" — greet using the ACTUAL company name like "Dear ${lead.company_name} Team" (never use square brackets, never write the literal words "Company Name")
+9. CRITICAL: Never output square brackets [ or ] anywhere. Use real values only.`;
 
           let emailResponse: Response | null = null;
           for (let attempt = 0; attempt < 4; attempt++) {
