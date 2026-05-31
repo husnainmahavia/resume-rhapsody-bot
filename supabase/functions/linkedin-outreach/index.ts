@@ -20,8 +20,8 @@ serve(async (req) => {
 
   try {
     const { action, skills, location, jobType, jobTitle, company, jobDescription, hiringManagerName } = await req.json();
-    const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
-    if (!OPENROUTER_API_KEY) throw new Error("OPENROUTER_API_KEY not configured");
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -53,14 +53,14 @@ Return ONLY valid JSON array.`;
 
       let response: Response | null = null;
       for (let attempt = 0; attempt < 4; attempt++) {
-        response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+            Authorization: `Bearer ${LOVABLE_API_KEY}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "openrouter/free",
+            model: "google/gemini-2.5-flash",
             messages: [
               { role: "system", content: "Return only valid JSON arrays. No markdown." },
               { role: "user", content: prompt },
@@ -174,14 +174,14 @@ Return JSON with keys: connection_message, inmail_message, post_comment`;
 
       let response: Response | null = null;
       for (let attempt = 0; attempt < 4; attempt++) {
-        response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+            Authorization: `Bearer ${LOVABLE_API_KEY}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "openrouter/free",
+            model: "google/gemini-2.5-flash",
             messages: [
               { role: "system", content: "Return only valid JSON. No markdown." },
               { role: "user", content: prompt },

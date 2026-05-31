@@ -15,7 +15,7 @@ const CATEGORIES = [
   { name: "software_development", queries: ["software development company hiring email UK", "SaaS startup careers contact email", "tech company recruitment email Manchester", "software agency contact email"] },
 ];
 
-const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+const OPENROUTER_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
 const CV_BASE = `HUSNAIN MAHAVIA | Full-Stack Developer & AI Specialist
 8+ years in custom WordPress development, AI/ML integration, automation systems. 50+ WordPress sites, 15+ e-commerce platforms. ChatGPT, Gemini, MidJourney integration. Custom lead management, API integrations. Scaled team 1→10+, 50% YoY growth.
@@ -113,7 +113,7 @@ async function generateCvAndCoverLetter(company: string, category: string, descr
       method: "POST",
       headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "openrouter/free",
+        model: "google/gemini-2.5-flash",
         messages: [{
           role: "user",
           content: `Tailor this CV for a cold outreach to ${company} (a ${categoryLabel} company: ${description || ""}).
@@ -159,7 +159,7 @@ async function aiSearchEmails(query: string, apiKey: string, retries = 3): Promi
         method: "POST",
         headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "openrouter/free",
+          model: "google/gemini-2.5-flash",
           messages: [{
             role: "user",
             content: `You are a job research assistant. Search for real companies matching: "${query}"
@@ -231,7 +231,7 @@ serve(async (req) => {
     
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const openrouterKey = Deno.env.get("OPENROUTER_API_KEY")!;
+    const lovableKey = Deno.env.get("LOVABLE_API_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     if (action === "status") {
@@ -274,7 +274,7 @@ serve(async (req) => {
           const fullQuery = `${query} ${locationFilter}`;
           console.log(`Scraping: ${fullQuery}`);
           
-          const companies = await aiSearchEmails(fullQuery, openrouterKey);
+          const companies = await aiSearchEmails(fullQuery, lovableKey);
           catFound += companies.length;
 
           for (const company of companies) {
@@ -359,9 +359,9 @@ serve(async (req) => {
           const categoryLabel = company.category.replace(/_/g, " ");
           const emailResponse = await fetch(OPENROUTER_URL, {
             method: "POST",
-            headers: { "Authorization": `Bearer ${openrouterKey}`, "Content-Type": "application/json" },
+            headers: { "Authorization": `Bearer ${lovableKey}`, "Content-Type": "application/json" },
             body: JSON.stringify({
-              model: "openrouter/free",
+              model: "google/gemini-2.5-flash",
               messages: [{
                 role: "user",
                 content: `Write a professional cold outreach email from Husnain Mahavia (Full-Stack Developer & AI Specialist, 8+ years experience) to ${company.company_name} (${categoryLabel} company).
@@ -401,7 +401,7 @@ Return ONLY a JSON object with "subject" and "body" fields. No markdown, no code
           const { subject, body } = JSON.parse(jsonMatch[0]);
 
           // Generate tailored CV and cover letter
-          const cvData = await generateCvAndCoverLetter(company.company_name, company.category, company.description || "", openrouterKey);
+          const cvData = await generateCvAndCoverLetter(company.company_name, company.category, company.description || "", lovableKey);
           
           const attachments: Array<{ filename: string; content: string; contentType: string }> = [];
           if (cvData?.tailored_cv) {
