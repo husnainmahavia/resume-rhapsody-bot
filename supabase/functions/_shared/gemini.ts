@@ -109,12 +109,12 @@ export async function callGemini(apiKey: string, body: Record<string, unknown>):
 
   const { contents, systemInstruction } = buildContents((body.messages as ChatMessage[]) || []);
   const forcedFunctionName = (body.tool_choice as any)?.function?.name;
-  const tools = toGeminiTools(body.tools);
+  const tools = forcedFunctionName ? undefined : toGeminiTools(body.tools);
   const url = `${GEMINI_API_BASE}/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
   const wantsForcedTool = Boolean((body.tool_choice as any)?.function?.name);
   const lastContent = contents[contents.length - 1];
 
-  if (wantsForcedTool && !tools && lastContent?.parts && Array.isArray(lastContent.parts)) {
+  if (wantsForcedTool && lastContent?.parts && Array.isArray(lastContent.parts)) {
     (lastContent.parts as any[]).push({ text: buildJsonInstruction(body) });
   }
 
