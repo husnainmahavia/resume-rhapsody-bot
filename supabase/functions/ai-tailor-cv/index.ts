@@ -1,11 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callGemini } from "../_shared/gemini.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
-
-const OPENROUTER_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
 const CV_VERSIONS: Record<string, string> = {
   fullstack: `HUSNAIN MAHAVIA | Full-Stack Developer | WordPress & AI Integration Specialist | Tech Lead
@@ -27,13 +26,12 @@ serve(async (req) => {
 
   try {
     const { jobTitle, company, jobDescription, cvVersion } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not configured");
 
     const baseCV = CV_VERSIONS[cvVersion] || CV_VERSIONS.fullstack;
 
     const requestBody = JSON.stringify({
-      model: "google/gemini-2.5-flash",
       messages: [
         {
           role: "system",
@@ -67,40 +65,15 @@ Title: ${jobTitle}
 Company: ${company}
 Description: ${jobDescription}
 
-Tailor the CV and write a cover letter.`,
+Tailor the CV and write a cover letter. Return ONLY valid JSON with keys: tailored_cv, cover_letter, key_changes, recommended_cv_type.`,
         },
       ],
-      tools: [{
-        type: "function",
-        function: {
-          name: "return_documents",
-          description: "Return tailored CV and cover letter",
-          parameters: {
-            type: "object",
-            properties: {
-              tailored_cv: { type: "string", description: "The full tailored CV text, well-formatted" },
-              cover_letter: { type: "string", description: "The personalized cover letter" },
-              key_changes: { type: "string", description: "Brief summary of what was changed and why" },
-              recommended_cv_type: { type: "string", description: "Which CV version was best suited: fullstack, aiSpecialist, digitalMarketing, or webDeveloper" },
-            },
-            required: ["tailored_cv", "cover_letter", "key_changes", "recommended_cv_type"],
-          },
-        },
-      }],
-      tool_choice: { type: "function", function: { name: "return_documents" } },
     });
 
     // Retry with exponential backoff for rate limits
     let response: Response | null = null;
     for (let attempt = 0; attempt < 4; attempt++) {
-      response = await fetch(OPENROUTER_URL, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: requestBody,
-      });
+      response = await callGemini(GEMINI_API_KEY, JSON.parse(requestBody));
 
       if (response.status !== 429 && response.status !== 503) break;
 
@@ -111,14 +84,16 @@ Tailor the CV and write a cover letter.`,
 
     if (!response || !response.ok) {
       if (response?.status === 429) return new Response(JSON.stringify({ error: "Rate limited after retries. Please wait a minute and try again." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      throw new Error(`OpenRouter error: ${response?.status}`);
+      throw new Error(`Gemini error: ${response?.status}`);
     }
 
     const data = await response.json();
-    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
     let result = { tailored_cv: "", cover_letter: "", key_changes: "", recommended_cv_type: "fullstack" };
-    if (toolCall?.function?.arguments) {
-      result = JSON.parse(toolCall.function.arguments);
+    const content = data.choices?.[0]?.message?.content || "";
+    const cleaned = content.replace(/```json?\s*/g, "").replace(/```\s*/g, "").trim();
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    if (match) {
+      result = JSON.parse(match[0]);
     }
 
     return new Response(JSON.stringify(result), {

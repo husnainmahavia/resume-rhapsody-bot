@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import nodemailer from "npm:nodemailer@6.9.8";
+import { callGemini } from "../_shared/gemini.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -65,7 +66,7 @@ serve(async (req) => {
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY")!;
     const VISUOSOFTS_EMAIL_PASSWORD = Deno.env.get("VISUOSOFTS_EMAIL_PASSWORD");
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -98,11 +99,7 @@ CRITICAL RULES:
 
       let searchResponse: Response | null = null;
       for (let attempt = 0; attempt < 4; attempt++) {
-        searchResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: "google/gemini-2.5-flash",
+        searchResponse = await callGemini(GEMINI_API_KEY, {
             messages: [
               { role: "system", content: "You are a B2B lead researcher. Return only real, verified companies. Return valid JSON only." },
               { role: "user", content: discoverPrompt },
@@ -135,7 +132,6 @@ CRITICAL RULES:
               },
             }],
             tool_choice: { type: "function", function: { name: "return_leads" } },
-          }),
         });
         if (searchResponse && searchResponse.status !== 429 && searchResponse.status !== 503) break;
         const waitMs = (attempt + 1) * 15000 + Math.random() * 5000;
@@ -253,11 +249,7 @@ REQUIREMENTS:
 
           let emailResponse: Response | null = null;
           for (let attempt = 0; attempt < 4; attempt++) {
-            emailResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-              method: "POST",
-              headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-              body: JSON.stringify({
-                model: "google/gemini-2.5-flash",
+            emailResponse = await callGemini(GEMINI_API_KEY, {
                 messages: [
                   { role: "system", content: "You write professional B2B cold outreach emails. Every email must be unique and company-specific." },
                   { role: "user", content: emailPrompt },
@@ -278,7 +270,6 @@ REQUIREMENTS:
                   },
                 }],
                 tool_choice: { type: "function", function: { name: "return_email" } },
-              }),
             });
             if (emailResponse && emailResponse.status !== 429 && emailResponse.status !== 503) break;
             const waitMs = (attempt + 1) * 15000 + Math.random() * 5000;

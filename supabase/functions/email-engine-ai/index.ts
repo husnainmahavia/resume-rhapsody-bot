@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { callGemini } from "../_shared/gemini.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -119,14 +120,7 @@ async function aiEmailLookup(
 ): Promise<Record<string, unknown>> {
   let resp: Response | null = null;
   for (let attempt = 0; attempt < 4; attempt++) {
-    resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+    resp = await callGemini(apiKey, {
         messages: [
           {
             role: "system",
@@ -163,7 +157,6 @@ RULES:
           },
         ],
         tool_choice: { type: "function", function: { name: "return_result" } },
-      }),
     });
 
     if (resp && resp.status !== 429 && resp.status !== 503) break;
@@ -207,7 +200,7 @@ serve(async (req) => {
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY")!;
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -241,7 +234,7 @@ serve(async (req) => {
         const hasMX = await checkMX(domain);
         
         // Use AI to analyze
-        const aiResult = await aiEmailLookup(LOVABLE_API_KEY, 
+        const aiResult = await aiEmailLookup(GEMINI_API_KEY, 
           `Verify this email address: ${email}
 Domain: ${domain}
 MX Records exist: ${hasMX}
@@ -261,7 +254,7 @@ Return JSON with: email, status (valid/invalid/risky/unknown), score (0-100), re
         const hasMX = await checkMX(domain);
         
         // Use AI to find likely emails
-        const aiResult = await aiEmailLookup(LOVABLE_API_KEY,
+        const aiResult = await aiEmailLookup(GEMINI_API_KEY,
           `Find real email addresses for this company:
 Company: ${companyName}
 Domain: ${domain}
@@ -325,7 +318,7 @@ Rate confidence based on how common that pattern is for companies.`
 
             // Verify current email via AI
             if (lead.contact_email) {
-              const verifyResult = await aiEmailLookup(LOVABLE_API_KEY,
+              const verifyResult = await aiEmailLookup(GEMINI_API_KEY,
                 `Quick verify: Is "${lead.contact_email}" likely deliverable for company "${lead.company_name}" (domain: ${domain})?
 MX records exist: true.
 Return JSON: { status: "valid"|"invalid"|"risky", score: 0-100, reason: string }`
@@ -344,7 +337,7 @@ Return JSON: { status: "valid"|"invalid"|"risky", score: 0-100, reason: string }
             }
 
             // Find better email via AI
-            const findResult = await aiEmailLookup(LOVABLE_API_KEY,
+            const findResult = await aiEmailLookup(GEMINI_API_KEY,
               `Find the best B2B outreach email for company "${lead.company_name}" at domain "${domain}".
 Current email "${lead.contact_email || 'none'}" may be invalid.
 Return JSON: { suggested_email: string, confidence: number (0-100), reason: string }`
@@ -412,18 +405,10 @@ Return JSON: { suggested_email: string, confidence: number (0-100), reason: stri
     for (let round = 0; round < MAX_ROUNDS; round++) {
       let resp: Response | null = null;
       for (let attempt = 0; attempt < 4; attempt++) {
-        resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: "google/gemini-2.5-flash",
+        resp = await callGemini(GEMINI_API_KEY, {
             messages: allMessages,
             tools: TOOLS,
             tool_choice: "auto",
-          }),
         });
 
         if (resp && resp.status !== 429 && resp.status !== 503) break;

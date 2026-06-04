@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { callGemini } from "../_shared/gemini.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,8 +15,6 @@ const CATEGORIES = [
   { name: "ecommerce", queries: ["ecommerce agency hiring email contact UK", "Shopify development company careers email", "online retail technology company email"] },
   { name: "software_development", queries: ["software development company hiring email UK", "SaaS startup careers contact email", "tech company recruitment email Manchester", "software agency contact email"] },
 ];
-
-const OPENROUTER_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
 const CV_BASE = `HUSNAIN MAHAVIA | Full-Stack Developer & AI Specialist
 8+ years in custom WordPress development, AI/ML integration, automation systems. 50+ WordPress sites, 15+ e-commerce platforms. ChatGPT, Gemini, MidJourney integration. Custom lead management, API integrations. Scaled team 1→10+, 50% YoY growth.
@@ -109,11 +108,7 @@ function validateBusinessEmail(
 async function generateCvAndCoverLetter(company: string, category: string, description: string, apiKey: string) {
   try {
     const categoryLabel = category.replace(/_/g, " ");
-      const res = await fetch(OPENROUTER_URL, {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+      const res = await callGemini(apiKey, {
         messages: [{
           role: "user",
           content: `Tailor this CV for a cold outreach to ${company} (a ${categoryLabel} company: ${description || ""}).
@@ -129,8 +124,7 @@ No markdown, no code fences. JSON only.`
         }],
         temperature: 0.5,
         max_tokens: 2000,
-      }),
-    });
+      });
     if (!res.ok) { console.error("CV gen failed:", res.status); return null; }
     const raw = await res.text();
     let data;
@@ -155,11 +149,7 @@ async function aiSearchEmails(query: string, apiKey: string, retries = 3): Promi
         await new Promise(r => setTimeout(r, backoff));
       }
 
-      const response = await fetch(OPENROUTER_URL, {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
+      const response = await callGemini(apiKey, {
           messages: [{
             role: "user",
             content: `You are a job research assistant. Search for real companies matching: "${query}"
@@ -178,29 +168,28 @@ CRITICAL: Only return companies you are confident are real. Return valid JSON ar
           }],
           temperature: 0.3,
           max_tokens: 2000,
-        }),
-      });
+        });
 
       if (response.status === 429 || response.status === 503) {
-        console.warn(`  ⚠️ OpenRouter ${response.status} on attempt ${attempt + 1}`);
+        console.warn(`  ⚠️ Gemini ${response.status} on attempt ${attempt + 1}`);
         await response.text();
         continue;
       }
 
       if (!response.ok) {
-        console.error("OpenRouter search error:", response.status);
+        console.error("Gemini search error:", response.status);
         await response.text();
         return [];
       }
 
       const rawText = await response.text();
-      console.log("OpenRouter response status:", response.status, "length:", rawText.length);
+      console.log("Gemini response status:", response.status, "length:", rawText.length);
       
       let data;
       try {
         data = JSON.parse(rawText);
       } catch {
-        console.error("Failed to parse OpenRouter response:", rawText.substring(0, 200));
+        console.error("Failed to parse Gemini response:", rawText.substring(0, 200));
         return [];
       }
       
@@ -231,7 +220,7 @@ serve(async (req) => {
     
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const lovableKey = Deno.env.get("LOVABLE_API_KEY")!;
+    const geminiKey = Deno.env.get("GEMINI_API_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     if (action === "status") {
@@ -274,7 +263,7 @@ serve(async (req) => {
           const fullQuery = `${query} ${locationFilter}`;
           console.log(`Scraping: ${fullQuery}`);
           
-          const companies = await aiSearchEmails(fullQuery, lovableKey);
+          const companies = await aiSearchEmails(fullQuery, geminiKey);
           catFound += companies.length;
 
           for (const company of companies) {
@@ -357,11 +346,7 @@ serve(async (req) => {
 
           const recipientEmail = validation.normalized;
           const categoryLabel = company.category.replace(/_/g, " ");
-          const emailResponse = await fetch(OPENROUTER_URL, {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${lovableKey}`, "Content-Type": "application/json" },
-            body: JSON.stringify({
-              model: "google/gemini-2.5-flash",
+          const emailResponse = await callGemini(geminiKey, {
               messages: [{
                 role: "user",
                 content: `Write a professional cold outreach email from Husnain Mahavia (Full-Stack Developer & AI Specialist, 8+ years experience) to ${company.company_name} (${categoryLabel} company).
@@ -379,8 +364,7 @@ Return ONLY a JSON object with "subject" and "body" fields. No markdown, no code
               }],
               temperature: 0.7,
               max_tokens: 800,
-            }),
-          });
+            });
 
           const emailRaw = await emailResponse.text();
           let emailData;
@@ -401,7 +385,7 @@ Return ONLY a JSON object with "subject" and "body" fields. No markdown, no code
           const { subject, body } = JSON.parse(jsonMatch[0]);
 
           // Generate tailored CV and cover letter
-          const cvData = await generateCvAndCoverLetter(company.company_name, company.category, company.description || "", lovableKey);
+          const cvData = await generateCvAndCoverLetter(company.company_name, company.category, company.description || "", geminiKey);
           
           const attachments: Array<{ filename: string; content: string; contentType: string }> = [];
           if (cvData?.tailored_cv) {
