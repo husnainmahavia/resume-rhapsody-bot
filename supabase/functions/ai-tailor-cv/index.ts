@@ -96,6 +96,15 @@ Tailor the CV and write a cover letter. Return ONLY valid JSON with keys: tailor
       result = JSON.parse(match[0]);
     }
 
+    if (!result.tailored_cv || !result.cover_letter) {
+      result = {
+        tailored_cv: `${baseCV}\n\nTARGET ROLE ALIGNMENT\nRole: ${jobTitle} at ${company}\nRelevant focus: React, TypeScript, API integration, WordPress, AI automation, and full-stack delivery.\n\nEXPERIENCE HIGHLIGHTS\n• Delivered 50+ websites and 15+ e-commerce platforms with strong frontend and backend integration.\n• Built automation and AI-powered systems using Python, APIs, and modern JavaScript tooling.\n• Led Visuosofts from 2017 to 2025, scaling delivery across web, AR, and digital products.`,
+        cover_letter: `Dear Hiring Team,\n\nI am writing to express my interest in the ${jobTitle} role at ${company}. I bring 8+ years of full-stack development experience across React, TypeScript, WordPress, API integrations, AI automation, and client-facing delivery.\n\nAt Visuosofts, I led delivery of 50+ websites, 15+ e-commerce platforms, and automation projects for international clients, combining strong engineering execution with practical business outcomes. I would welcome the opportunity to bring the same hands-on delivery mindset to ${company}.\n\nKind regards,\nHusnain Mahavia`,
+        key_changes: "Generated a safe fallback CV and cover letter because the AI response was empty.",
+        recommended_cv_type: cvVersion || "fullstack",
+      };
+    }
+
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
