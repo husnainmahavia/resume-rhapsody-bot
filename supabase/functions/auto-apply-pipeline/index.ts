@@ -259,7 +259,7 @@ serve(async (req) => {
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY")!;
+    const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY")!;
     const GMAIL_APP_PASSWORD = Deno.env.get("GMAIL_APP_PASSWORD")!;
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -357,7 +357,7 @@ VERIFICATION: Before returning each job, mentally verify:
 
 Return JSON with: title, company, location, salary_range, description, url, hiring_manager, hiring_email, sponsorship (boolean), careers_page_url`;
 
-    const searchResponse = await callFreeGemini(GEMINI_API_KEY, {
+    const searchResponse = await callFreeGemini(OPENROUTER_API_KEY, {
       messages: [
         { role: "system", content: "You are a job search API. Return ONLY a JSON object with a 'jobs' array. No markdown, no code fences, no thinking, no explanation. Example: {\"jobs\":[{\"title\":\"...\",\"company\":\"...\",\"location\":\"...\",\"description\":\"...\"}]}" },
         { role: "user", content: searchPrompt },
@@ -569,7 +569,7 @@ TAILORING INSTRUCTIONS:
 
 Return the complete tailored CV text and cover letter as JSON: {"tailored_cv":"...","cover_letter":"..."}`;
 
-        const cvResponse = await callFreeGemini(GEMINI_API_KEY, {
+        const cvResponse = await callFreeGemini(OPENROUTER_API_KEY, {
             messages: [
               { role: "system", content: "You are a professional CV writer. Return ONLY a JSON object with 'tailored_cv' and 'cover_letter' keys. No markdown, no code fences, no thinking." },
               { role: "user", content: cvTailorPrompt },
@@ -595,7 +595,7 @@ Return the complete tailored CV text and cover letter as JSON: {"tailored_cv":".
         // Generate email — short professional intro only (CV attached as file)
         console.log(`✉️ Generating email for: ${job.company}`);
         const managerName = job.hiring_manager || "Hiring Team";
-        const emailResponse = await callFreeGemini(GEMINI_API_KEY, {
+        const emailResponse = await callFreeGemini(OPENROUTER_API_KEY, {
             messages: [
               {
                 role: "system",

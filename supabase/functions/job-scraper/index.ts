@@ -220,7 +220,7 @@ serve(async (req) => {
     
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const geminiKey = Deno.env.get("GEMINI_API_KEY")!;
+    const geminiKey = Deno.env.get("OPENROUTER_API_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     if (action === "status") {

@@ -21,8 +21,8 @@ serve(async (req) => {
 
   try {
     const { action, skills, location, jobType, jobTitle, company, jobDescription, hiringManagerName } = await req.json();
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-    if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not configured");
+    const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
+    if (!OPENROUTER_API_KEY) throw new Error("OPENROUTER_API_KEY not configured");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -54,7 +54,7 @@ Return ONLY valid JSON array.`;
 
       let response: Response | null = null;
       for (let attempt = 0; attempt < 4; attempt++) {
-        response = await callGemini(GEMINI_API_KEY, {
+        response = await callGemini(OPENROUTER_API_KEY, {
             messages: [
               { role: "system", content: "Return only valid JSON arrays. No markdown." },
               { role: "user", content: prompt },
@@ -167,7 +167,7 @@ Return JSON with keys: connection_message, inmail_message, post_comment`;
 
       let response: Response | null = null;
       for (let attempt = 0; attempt < 4; attempt++) {
-        response = await callGemini(GEMINI_API_KEY, {
+        response = await callGemini(OPENROUTER_API_KEY, {
             messages: [
               { role: "system", content: "Return only valid JSON. No markdown." },
               { role: "user", content: prompt },

@@ -26,8 +26,8 @@ serve(async (req) => {
 
   try {
     const { jobTitle, company, jobDescription, cvVersion } = await req.json();
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-    if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not configured");
+    const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
+    if (!OPENROUTER_API_KEY) throw new Error("OPENROUTER_API_KEY not configured");
 
     const baseCV = CV_VERSIONS[cvVersion] || CV_VERSIONS.fullstack;
 
@@ -73,7 +73,7 @@ Tailor the CV and write a cover letter. Return ONLY valid JSON with keys: tailor
     // Retry with exponential backoff for rate limits
     let response: Response | null = null;
     for (let attempt = 0; attempt < 4; attempt++) {
-      response = await callGemini(GEMINI_API_KEY, JSON.parse(requestBody));
+      response = await callGemini(OPENROUTER_API_KEY, JSON.parse(requestBody));
 
       if (response.status !== 429 && response.status !== 503) break;
 

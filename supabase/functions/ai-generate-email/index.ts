@@ -12,14 +12,14 @@ serve(async (req) => {
   try {
     const { jobTitle, company, hiringManager, jobDescription } = await req.json();
     
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-    if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not configured");
+    const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
+    if (!OPENROUTER_API_KEY) throw new Error("OPENROUTER_API_KEY not configured");
 
     const managerName = hiringManager || "Hiring Team";
 
     let response: Response | null = null;
     for (let attempt = 0; attempt < 3; attempt++) {
-      response = await callGemini(GEMINI_API_KEY, {
+      response = await callGemini(OPENROUTER_API_KEY, {
         max_tokens: 2000,
         messages: [
           {

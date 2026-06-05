@@ -1,23 +1,22 @@
-const GEMINI_MODEL = "gemini-2.5-flash";
-const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
+// OpenRouter adapter (kept under the `gemini.ts` filename / `callGemini` export
+// so the 9 existing edge functions don't need to change their imports).
+//
+// OpenRouter is OpenAI-compatible, so the request body is passed through
+// nearly as-is. When a caller forces a tool/function call for JSON output we
+// fall back to `response_format: json_object` + a prompt instruction and
+// synthesize a `tool_calls` response shape, mirroring the old adapter so
+// downstream parsing code keeps working.
 
-type ChatMessage = {
-  role?: string;
-  content?: unknown;
-  tool_calls?: Array<{ id?: string; function?: { name?: string; arguments?: string } }>;
-  tool_call_id?: string;
-};
-
-function asText(content: unknown): string {
-  if (typeof content === "string") return content;
-  if (Array.isArray(content)) {
-    return content
-      .map((part) => typeof part === "string" ? part : (part?.text || JSON.stringify(part)))
-      .join("\n");
-  }
-  if (content == null) return "";
-  return JSON.stringify(content);
-}
+const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+const DEFAULT_MODEL = "openai/gpt-oss-120b:free";
+const FALLBACK_MODELS = [
+  "openai/gpt-oss-120b:free",
+  "openai/gpt-oss-20b:free",
+  "nvidia/nemotron-nano-9b-v2:free",
+  "qwen/qwen3-next-80b-a3b-instruct:free",
+  "z-ai/glm-4.5-air:free",
+  "meta-llama/llama-3.3-70b-instruct:free",
+];
 
 function parseJsonFromText(text: string): unknown {
   const cleaned = text
@@ -25,148 +24,97 @@ function parseJsonFromText(text: string): unknown {
     .replace(/```json?\s*/g, "")
     .replace(/```\s*/g, "")
     .trim();
-
-  try {
-    return JSON.parse(cleaned);
-  } catch {
-    const objectMatch = cleaned.match(/\{[\s\S]*\}/);
-    if (objectMatch) {
-      try { return JSON.parse(objectMatch[0]); } catch { /* ignore */ }
-    }
-    const arrayMatch = cleaned.match(/\[[\s\S]*\]/);
-    if (arrayMatch) {
-      try { return JSON.parse(arrayMatch[0]); } catch { /* ignore */ }
-    }
-  }
+  try { return JSON.parse(cleaned); } catch { /* try substrings */ }
+  const obj = cleaned.match(/\{[\s\S]*\}/);
+  if (obj) { try { return JSON.parse(obj[0]); } catch { /* ignore */ } }
+  const arr = cleaned.match(/\[[\s\S]*\]/);
+  if (arr) { try { return JSON.parse(arr[0]); } catch { /* ignore */ } }
   return null;
-}
-
-function buildContents(messages: ChatMessage[]) {
-  const contents: Array<Record<string, unknown>> = [];
-  let systemInstruction = "";
-
-  for (const message of messages || []) {
-    if (message.role === "system") {
-      systemInstruction += `${asText(message.content)}\n`;
-      continue;
-    }
-
-    if (message.role === "assistant" && message.tool_calls?.length) {
-      for (const toolCall of message.tool_calls) {
-        const fn = toolCall.function;
-        if (!fn?.name) continue;
-        let args: Record<string, unknown> = {};
-        try { args = JSON.parse(fn.arguments || "{}"); } catch { args = {}; }
-        contents.push({ role: "model", parts: [{ functionCall: { name: fn.name, args } }] });
-      }
-      continue;
-    }
-
-    const role = message.role === "assistant" ? "model" : "user";
-    const label = message.role === "tool" ? `Tool result (${message.tool_call_id || "tool"}):\n` : "";
-    contents.push({ role, parts: [{ text: `${label}${asText(message.content)}` }] });
-  }
-
-  return { contents, systemInstruction: systemInstruction.trim() };
-}
-
-function toGeminiTools(tools: unknown) {
-  if (!Array.isArray(tools) || tools.length === 0) return undefined;
-  const functionDeclarations = tools
-    .map((tool: any) => tool?.function)
-    .filter((fn: any) => fn?.name)
-    .map((fn: any) => ({
-      name: fn.name,
-      description: fn.description || fn.name,
-      parameters: fn.parameters || { type: "object", properties: {} },
-    }));
-  return functionDeclarations.length ? [{ functionDeclarations }] : undefined;
-}
-
-function toToolConfig(toolChoice: unknown) {
-  if (!toolChoice) return undefined;
-  if (toolChoice === "auto") {
-    return { functionCallingConfig: { mode: "AUTO" } };
-  }
-  const fnName = (toolChoice as any)?.function?.name;
-  if (fnName) {
-    return { functionCallingConfig: { mode: "ANY", allowedFunctionNames: [fnName] } };
-  }
-  return undefined;
 }
 
 function buildJsonInstruction(body: Record<string, unknown>): string {
   const tools = body.tools as any[] | undefined;
   const fn = tools?.[0]?.function;
   if (!fn) return "";
-  return `\n\nReturn ONLY valid JSON for this function: ${fn.name}. Schema: ${JSON.stringify(fn.parameters || {})}`;
+  return `\n\nReturn ONLY valid JSON matching this schema for "${fn.name}": ${JSON.stringify(fn.parameters || {})}. No prose, no markdown.`;
 }
 
 export async function callGemini(apiKey: string, body: Record<string, unknown>): Promise<Response> {
   if (!apiKey) {
-    return new Response(JSON.stringify({ error: "GEMINI_API_KEY not configured" }), { status: 500 });
+    return new Response(JSON.stringify({ error: "OPENROUTER_API_KEY not configured" }), { status: 500 });
   }
 
-  const { contents, systemInstruction } = buildContents((body.messages as ChatMessage[]) || []);
   const forcedFunctionName = (body.tool_choice as any)?.function?.name;
-  const tools = forcedFunctionName ? undefined : toGeminiTools(body.tools);
-  const url = `${GEMINI_API_BASE}/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
-  const wantsForcedTool = Boolean((body.tool_choice as any)?.function?.name);
-  const lastContent = contents[contents.length - 1];
+  const messages = Array.isArray(body.messages) ? [...(body.messages as any[])] : [];
 
-  if (wantsForcedTool && lastContent?.parts && Array.isArray(lastContent.parts)) {
-    (lastContent.parts as any[]).push({ text: buildJsonInstruction(body) });
+  if (forcedFunctionName && messages.length > 0) {
+    const last = messages[messages.length - 1];
+    const extra = buildJsonInstruction(body);
+    if (last && typeof last.content === "string") {
+      messages[messages.length - 1] = { ...last, content: last.content + extra };
+    } else {
+      messages.push({ role: "user", content: extra });
+    }
   }
 
-  const geminiBody: Record<string, unknown> = {
-    contents,
-    generationConfig: {
-      temperature: typeof body.temperature === "number" ? body.temperature : 0.4,
-      maxOutputTokens: Number(body.max_tokens || body.maxOutputTokens || 4000),
-      ...(tools ? {} : { responseMimeType: "application/json" }),
-    },
-    ...(systemInstruction ? { systemInstruction: { parts: [{ text: systemInstruction }] } } : {}),
-    ...(tools ? { tools } : {}),
-    ...(tools ? { toolConfig: toToolConfig(body.tool_choice) || { functionCallingConfig: { mode: "AUTO" } } } : {}),
+  const outBody: Record<string, unknown> = {
+    model: (body.model as string) || DEFAULT_MODEL,
+    messages,
+    temperature: typeof body.temperature === "number" ? body.temperature : 0.4,
+    max_tokens: Number(body.max_tokens || 4000),
   };
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(geminiBody),
-  });
+  if (forcedFunctionName) {
+    outBody.response_format = { type: "json_object" };
+  } else if (Array.isArray(body.tools) && body.tools.length > 0) {
+    outBody.tools = body.tools;
+    if (body.tool_choice) outBody.tool_choice = body.tool_choice;
+  }
 
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => "");
-    return new Response(errorText || JSON.stringify({ error: `Gemini API error: ${response.status}` }), {
-      status: response.status,
+  const headers = {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${apiKey}`,
+    "HTTP-Referer": "https://resume.visuosofts.com",
+    "X-Title": "Resume Rhapsody Bot",
+  };
+
+  let response: Response | null = null;
+  let lastErr = "";
+  for (const model of [outBody.model as string, ...FALLBACK_MODELS.filter(m => m !== outBody.model)]) {
+    response = await fetch(OPENROUTER_URL, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ ...outBody, model }),
+    });
+    if (response.ok) break;
+    lastErr = await response.text().catch(() => "");
+    // Fall through on model-not-found (404/400) AND upstream rate-limits (429),
+    // since free OpenRouter models are frequently saturated.
+    if (response.status !== 404 && response.status !== 400 && response.status !== 429) break;
+    console.warn(`OpenRouter model ${model} failed (${response.status}): ${lastErr.slice(0, 200)}`);
+  }
+
+  if (!response || !response.ok) {
+    return new Response(lastErr || JSON.stringify({ error: `OpenRouter error: ${response?.status}` }), {
+      status: response?.status || 500,
       headers: { "Content-Type": "application/json" },
     });
   }
 
   const data = await response.json();
-  const parts = data.candidates?.[0]?.content?.parts || [];
-  const functionCall = parts.find((part: any) => part.functionCall)?.functionCall;
-  const text = parts.map((part: any) => part.text || "").join("\n").trim();
+  const choice = data.choices?.[0]?.message;
+  const text = (typeof choice?.content === "string" ? choice.content : "") || "";
 
-  let message: Record<string, unknown> = { role: "assistant", content: text };
-  if (functionCall?.name) {
-    message = {
-      role: "assistant",
-      content: "",
-      tool_calls: [{
-        id: `gemini_${Date.now()}`,
-        type: "function",
-        function: { name: functionCall.name, arguments: JSON.stringify(functionCall.args || {}) },
-      }],
-    };
-  } else if (forcedFunctionName) {
+  let message: Record<string, unknown> = choice || { role: "assistant", content: text };
+
+  // Synthesize tool_calls shape when caller forced a function call.
+  if (forcedFunctionName && !choice?.tool_calls?.length) {
     const parsed = parseJsonFromText(text) || {};
     message = {
       role: "assistant",
       content: text,
       tool_calls: [{
-        id: `gemini_${Date.now()}`,
+        id: `or_${Date.now()}`,
         type: "function",
         function: { name: forcedFunctionName, arguments: JSON.stringify(parsed) },
       }],
