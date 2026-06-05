@@ -8,11 +8,12 @@
 // downstream parsing code keeps working.
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const DEFAULT_MODEL = "deepseek/deepseek-chat-v3.1:free";
+const DEFAULT_MODEL = "qwen/qwen3-next-80b-a3b-instruct:free";
 const FALLBACK_MODELS = [
-  "deepseek/deepseek-chat-v3.1:free",
-  "google/gemini-2.0-flash-exp:free",
+  "qwen/qwen3-next-80b-a3b-instruct:free",
+  "z-ai/glm-4.5-air:free",
   "meta-llama/llama-3.3-70b-instruct:free",
+  "openai/gpt-oss-20b:free",
 ];
 
 function parseJsonFromText(text: string): unknown {
