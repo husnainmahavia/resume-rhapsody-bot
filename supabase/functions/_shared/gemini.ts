@@ -88,8 +88,9 @@ export async function callGemini(apiKey: string, body: Record<string, unknown>):
     });
     if (response.ok) break;
     lastErr = await response.text().catch(() => "");
-    // Only fall back on model-specific errors (404 / 400 model not found).
-    if (response.status !== 404 && response.status !== 400) break;
+    // Fall through on model-not-found (404/400) AND upstream rate-limits (429),
+    // since free OpenRouter models are frequently saturated.
+    if (response.status !== 404 && response.status !== 400 && response.status !== 429) break;
     console.warn(`OpenRouter model ${model} failed (${response.status}): ${lastErr.slice(0, 200)}`);
   }
 
