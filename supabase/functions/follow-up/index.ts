@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.98.0";
 import nodemailer from "npm:nodemailer@6.9.8";
+import { callGemini } from "../_shared/gemini.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,7 +13,7 @@ Deno.serve(async (req) => {
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY")!;
     const GMAIL_APP_PASSWORD = Deno.env.get("GMAIL_APP_PASSWORD")!;
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -58,11 +59,7 @@ Deno.serve(async (req) => {
         // Generate follow-up email via AI
         let response: Response | null = null;
         for (let attempt = 0; attempt < 4; attempt++) {
-          response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-            method: "POST",
-            headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-            body: JSON.stringify({
-              model: "google/gemini-2.5-flash",
+          response = await callGemini(GEMINI_API_KEY, {
               messages: [
                 { role: "system", content: "Write a brief, polite follow-up email (under 100 words). Reference the original application. Be warm but professional. Sign off as Husnain Mahavia, +44 7387 055617." },
                 { role: "user", content: `Following up on my application for ${app.job_title} at ${app.company}. Original email subject: ${app.email_subject}. Hiring manager: ${app.hiring_manager_name || "Hiring Team"}.` },
@@ -83,7 +80,6 @@ Deno.serve(async (req) => {
                 },
               }],
               tool_choice: { type: "function", function: { name: "return_followup" } },
-            }),
           });
           if (response && response.status !== 429 && response.status !== 503) break;
           const waitMs = (attempt + 1) * 15000 + Math.random() * 5000;

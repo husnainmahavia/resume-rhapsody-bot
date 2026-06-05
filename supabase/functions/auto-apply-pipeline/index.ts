@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.98.0";
 import nodemailer from "npm:nodemailer@6.9.8";
+import { callGemini } from "../_shared/gemini.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -88,23 +89,13 @@ function sanitizeEmailText(text: string): string {
   return cleaned;
 }
 
-async function callOpenRouter(apiKey: string, body: Record<string, unknown>): Promise<Response> {
-  const url = `https://ai.gateway.lovable.dev/v1/chat/completions`;
-  
+async function callFreeGemini(apiKey: string, body: Record<string, unknown>): Promise<Response> {
   // Strip tool_choice and tools — not supported on free models
   const { tools, tool_choice, ...cleanBody } = body as any;
   
   for (let attempt = 0; attempt < 5; attempt++) {
     await throttleAI();
-    
-    const resp = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ ...cleanBody, model: "google/gemini-2.5-flash", max_tokens: 4000 }),
-    });
+    const resp = await callGemini(apiKey, { ...cleanBody, max_tokens: 4000 });
     
     if (resp.status === 429 || resp.status === 503) {
       const waitMs = Math.min(60000, (attempt + 1) * 12000 + Math.random() * 5000);
@@ -114,11 +105,11 @@ async function callOpenRouter(apiKey: string, body: Record<string, unknown>): Pr
     }
     if (!resp.ok) {
       const errText = await resp.text().catch(() => "");
-      throw new AICreditsError(resp.status, `OpenRouter API error (${resp.status}): ${errText.slice(0, 200)}`);
+      throw new AICreditsError(resp.status, `Gemini API error (${resp.status}): ${errText.slice(0, 200)}`);
     }
     return resp;
   }
-  throw new AICreditsError(429, "OpenRouter rate limit exceeded after 5 retries. Will retry on next cron run.");
+  throw new AICreditsError(429, "Gemini rate limit exceeded after 5 retries. Will retry on next cron run.");
 }
 
 function normalizeDomain(domain: string): string {
@@ -268,7 +259,7 @@ serve(async (req) => {
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY")!;
     const GMAIL_APP_PASSWORD = Deno.env.get("GMAIL_APP_PASSWORD")!;
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -366,7 +357,7 @@ VERIFICATION: Before returning each job, mentally verify:
 
 Return JSON with: title, company, location, salary_range, description, url, hiring_manager, hiring_email, sponsorship (boolean), careers_page_url`;
 
-    const searchResponse = await callOpenRouter(LOVABLE_API_KEY, {
+    const searchResponse = await callFreeGemini(GEMINI_API_KEY, {
       messages: [
         { role: "system", content: "You are a job search API. Return ONLY a JSON object with a 'jobs' array. No markdown, no code fences, no thinking, no explanation. Example: {\"jobs\":[{\"title\":\"...\",\"company\":\"...\",\"location\":\"...\",\"description\":\"...\"}]}" },
         { role: "user", content: searchPrompt },
@@ -578,7 +569,7 @@ TAILORING INSTRUCTIONS:
 
 Return the complete tailored CV text and cover letter as JSON: {"tailored_cv":"...","cover_letter":"..."}`;
 
-        const cvResponse = await callOpenRouter(LOVABLE_API_KEY, {
+        const cvResponse = await callFreeGemini(GEMINI_API_KEY, {
             messages: [
               { role: "system", content: "You are a professional CV writer. Return ONLY a JSON object with 'tailored_cv' and 'cover_letter' keys. No markdown, no code fences, no thinking." },
               { role: "user", content: cvTailorPrompt },
@@ -604,7 +595,7 @@ Return the complete tailored CV text and cover letter as JSON: {"tailored_cv":".
         // Generate email — short professional intro only (CV attached as file)
         console.log(`✉️ Generating email for: ${job.company}`);
         const managerName = job.hiring_manager || "Hiring Team";
-        const emailResponse = await callOpenRouter(LOVABLE_API_KEY, {
+        const emailResponse = await callFreeGemini(GEMINI_API_KEY, {
             messages: [
               {
                 role: "system",

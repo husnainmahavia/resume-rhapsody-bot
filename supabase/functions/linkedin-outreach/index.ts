@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { callGemini } from "../_shared/gemini.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -20,8 +21,8 @@ serve(async (req) => {
 
   try {
     const { action, skills, location, jobType, jobTitle, company, jobDescription, hiringManagerName } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not configured");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -53,14 +54,7 @@ Return ONLY valid JSON array.`;
 
       let response: Response | null = null;
       for (let attempt = 0; attempt < 4; attempt++) {
-        response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: "google/gemini-2.5-flash",
+        response = await callGemini(GEMINI_API_KEY, {
             messages: [
               { role: "system", content: "Return only valid JSON arrays. No markdown." },
               { role: "user", content: prompt },
@@ -97,7 +91,6 @@ Return ONLY valid JSON array.`;
               },
             }],
             tool_choice: { type: "function", function: { name: "return_linkedin_jobs" } },
-          }),
         });
         if (response && response.status !== 429 && response.status !== 503) break;
         const waitMs = (attempt + 1) * 15000 + Math.random() * 5000;
@@ -174,14 +167,7 @@ Return JSON with keys: connection_message, inmail_message, post_comment`;
 
       let response: Response | null = null;
       for (let attempt = 0; attempt < 4; attempt++) {
-        response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: "google/gemini-2.5-flash",
+        response = await callGemini(GEMINI_API_KEY, {
             messages: [
               { role: "system", content: "Return only valid JSON. No markdown." },
               { role: "user", content: prompt },
@@ -203,7 +189,6 @@ Return JSON with keys: connection_message, inmail_message, post_comment`;
               },
             }],
             tool_choice: { type: "function", function: { name: "return_messages" } },
-          }),
         });
         if (response && response.status !== 429 && response.status !== 503) break;
         const waitMs = (attempt + 1) * 15000 + Math.random() * 5000;
