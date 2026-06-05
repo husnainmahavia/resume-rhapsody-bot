@@ -11,8 +11,8 @@ serve(async (req) => {
 
   try {
     const { skills, location, jobType } = await req.json();
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-    if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not configured");
+    const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
+    if (!OPENROUTER_API_KEY) throw new Error("OPENROUTER_API_KEY not configured");
 
     const prompt = `You are a job search assistant. Find 5-8 REAL job listings from REAL companies that are actively hiring in ${location || "Manchester, UK"} for someone with these skills: ${skills.join(", ")}.
 
@@ -41,7 +41,7 @@ Return ONLY valid JSON array. No markdown, no explanation.`;
     // Retry with exponential backoff for rate limits
     let response: Response | null = null;
     for (let attempt = 0; attempt < 3; attempt++) {
-      response = await callGemini(GEMINI_API_KEY, {
+      response = await callGemini(OPENROUTER_API_KEY, {
         max_tokens: 4000,
         messages: [
           { role: "system", content: "You are a job search API. Return ONLY a valid JSON object with a 'jobs' key containing an array. No markdown, no code fences, no explanation, no thinking. Example: {\"jobs\":[{\"title\":\"...\",\"company\":\"...\",\"location\":\"...\",\"description\":\"...\"}]}" },

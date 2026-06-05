@@ -66,7 +66,7 @@ serve(async (req) => {
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY")!;
+    const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY")!;
     const VISUOSOFTS_EMAIL_PASSWORD = Deno.env.get("VISUOSOFTS_EMAIL_PASSWORD");
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -99,7 +99,7 @@ CRITICAL RULES:
 
       let searchResponse: Response | null = null;
       for (let attempt = 0; attempt < 4; attempt++) {
-        searchResponse = await callGemini(GEMINI_API_KEY, {
+        searchResponse = await callGemini(OPENROUTER_API_KEY, {
             messages: [
               { role: "system", content: "You are a B2B lead researcher. Return only real, verified companies. Return valid JSON only." },
               { role: "user", content: discoverPrompt },
@@ -249,7 +249,7 @@ REQUIREMENTS:
 
           let emailResponse: Response | null = null;
           for (let attempt = 0; attempt < 4; attempt++) {
-            emailResponse = await callGemini(GEMINI_API_KEY, {
+            emailResponse = await callGemini(OPENROUTER_API_KEY, {
                 messages: [
                   { role: "system", content: "You write professional B2B cold outreach emails. Every email must be unique and company-specific." },
                   { role: "user", content: emailPrompt },
