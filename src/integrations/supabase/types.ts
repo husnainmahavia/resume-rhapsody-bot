@@ -280,6 +280,9 @@ export type Database = {
       job_applications: {
         Row: {
           applied_at: string | null
+          approved_at: string | null
+          ats_missing: string[] | null
+          ats_present: string[] | null
           careers_page_url: string | null
           company: string
           cover_letter: string | null
@@ -296,7 +299,12 @@ export type Database = {
           job_title: string
           job_url: string | null
           location: string | null
+          match_breakdown: Json | null
+          match_score: number | null
           notes: string | null
+          pending_review: boolean
+          rejected_at: string | null
+          rejected_reason: string | null
           salary_range: string | null
           source: string | null
           sponsorship_available: boolean | null
@@ -306,6 +314,9 @@ export type Database = {
         }
         Insert: {
           applied_at?: string | null
+          approved_at?: string | null
+          ats_missing?: string[] | null
+          ats_present?: string[] | null
           careers_page_url?: string | null
           company: string
           cover_letter?: string | null
@@ -322,7 +333,12 @@ export type Database = {
           job_title: string
           job_url?: string | null
           location?: string | null
+          match_breakdown?: Json | null
+          match_score?: number | null
           notes?: string | null
+          pending_review?: boolean
+          rejected_at?: string | null
+          rejected_reason?: string | null
           salary_range?: string | null
           source?: string | null
           sponsorship_available?: boolean | null
@@ -332,6 +348,9 @@ export type Database = {
         }
         Update: {
           applied_at?: string | null
+          approved_at?: string | null
+          ats_missing?: string[] | null
+          ats_present?: string[] | null
           careers_page_url?: string | null
           company?: string
           cover_letter?: string | null
@@ -348,7 +367,12 @@ export type Database = {
           job_title?: string
           job_url?: string | null
           location?: string | null
+          match_breakdown?: Json | null
+          match_score?: number | null
           notes?: string | null
+          pending_review?: boolean
+          rejected_at?: string | null
+          rejected_reason?: string | null
           salary_range?: string | null
           source?: string | null
           sponsorship_available?: boolean | null

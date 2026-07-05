@@ -90,6 +90,24 @@ serve(async (req) => {
       }
     }
 
+    // === Human review gate ===
+    // If linked to an application still pending review, block the send.
+    if (appId) {
+      const { data: reviewCheck } = await supabase
+        .from("job_applications")
+        .select("pending_review, match_score, company")
+        .eq("id", appId)
+        .maybeSingle();
+      if (reviewCheck?.pending_review) {
+        console.log(`🛑 Blocked send to ${to}: application ${appId} pending review`);
+        return new Response(JSON.stringify({
+          success: false, sent: false, blocked: true, pending_review: true,
+          error: `Application for ${reviewCheck.company ?? "role"} is pending your approval (match score ${reviewCheck.match_score ?? "n/a"}/100). Approve it in the Pipeline before sending.`,
+        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+    }
+
+
     // Generate tracking pixel ID
     const trackingPixelId = crypto.randomUUID();
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
