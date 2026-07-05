@@ -17,12 +17,21 @@ import { useToast } from "@/hooks/use-toast";
 
 type PipelineStep = "idle" | "running" | "complete" | "error";
 
+const PIPELINE_RUN_KEY = "autoApplyPipelineRun";
+
 interface PipelineResult {
   job: string;
   company: string;
   status: string;
   email?: string;
   error?: string;
+}
+
+interface PipelineRunSnapshot {
+  startedAt: number;
+  location: string;
+  skillCount: number;
+  searchMode: string;
 }
 
 interface AutoApplyPipelineProps {
@@ -64,11 +73,42 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
   const [showConfig, setShowConfig] = useState(true);
   const [results, setResults] = useState<PipelineResult[]>([]);
   const [pipelineStats, setPipelineStats] = useState({ total: 0, applied: 0, today: 0, dailyLimit: 80 });
+  const [activeRun, setActiveRun] = useState<PipelineRunSnapshot | null>(() => {
+    const raw = localStorage.getItem(PIPELINE_RUN_KEY);
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw) as PipelineRunSnapshot;
+      return Date.now() - parsed.startedAt < 30 * 60 * 1000 ? parsed : null;
+    } catch {
+      return null;
+    }
+  });
   const { toast } = useToast();
 
   useEffect(() => {
     getPipelineStatus().then(setPipelineStats).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!activeRun) return;
+
+    setStatus("running");
+    setShowConfig(false);
+
+    const poll = async () => {
+      try {
+        const stats = await getPipelineStatus();
+        setPipelineStats(stats);
+        onUpdate();
+      } catch {
+        // Watching can fail without stopping the server-side run.
+      }
+    };
+
+    poll();
+    const timer = window.setInterval(poll, 10000);
+    return () => window.clearInterval(timer);
+  }, [activeRun, onUpdate]);
 
   const toggleSkill = (skill: string) => {
     setSelectedSkills((prev) =>
@@ -88,6 +128,14 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
     setStatus("running");
     setResults([]);
     setShowConfig(false);
+    const snapshot: PipelineRunSnapshot = {
+      startedAt: Date.now(),
+      location,
+      skillCount: selectedSkills.length,
+      searchMode,
+    };
+    localStorage.setItem(PIPELINE_RUN_KEY, JSON.stringify(snapshot));
+    setActiveRun(snapshot);
 
     try {
       toast({
@@ -106,25 +154,47 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
       if (result.error) {
         toast({ title: "Pipeline Error", description: result.error, variant: "destructive" });
         setStatus("error");
+        localStorage.removeItem(PIPELINE_RUN_KEY);
+        setActiveRun(null);
         return;
       }
 
       setResults(result.results || []);
-      setStatus("complete");
       onUpdate();
 
       const stats = await getPipelineStatus();
       setPipelineStats(stats);
 
-      toast({
-        title: "✅ Pipeline Complete!",
-        description: `${result.emailsSent} emails sent, ${result.processed} jobs processed`,
-      });
+      if (result.accepted) {
+        toast({
+          title: "Pipeline is running",
+          description: result.message || "Backend accepted the run. You can close or switch tabs; refresh later to see new pipeline rows.",
+        });
+      } else {
+        setStatus("complete");
+        localStorage.removeItem(PIPELINE_RUN_KEY);
+        setActiveRun(null);
+        toast({
+          title: "✅ Pipeline Complete!",
+          description: `${result.emailsSent ?? 0} emails sent, ${result.processed ?? 0} jobs processed`,
+        });
+      }
     } catch (err) {
       setStatus("error");
+      localStorage.removeItem(PIPELINE_RUN_KEY);
+      setActiveRun(null);
       toast({ title: "Pipeline Error", description: String(err), variant: "destructive" });
     }
   }, [location, selectedSkills, cvVersion, jobType, searchMode, onUpdate, toast]);
+
+  const clearActiveRun = () => {
+    localStorage.removeItem(PIPELINE_RUN_KEY);
+    setActiveRun(null);
+    setStatus("idle");
+    setShowConfig(true);
+    getPipelineStatus().then(setPipelineStats).catch(() => {});
+    onUpdate();
+  };
 
   const statusIcon = (s: string) => {
     switch (s) {
@@ -331,6 +401,16 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
           <p className="text-xs text-muted-foreground">
             Safe to switch tabs. The pipeline continues on the server.
           </p>
+          {activeRun && (
+            <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-secondary/30 px-3 py-2 text-xs text-muted-foreground">
+              <span>
+                Started {new Date(activeRun.startedAt).toLocaleTimeString()} · {activeRun.skillCount} skills · {activeRun.location}
+              </span>
+              <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={clearActiveRun}>
+                Stop watching
+              </Button>
+            </div>
+          )}
         </motion.div>
       )}
 
