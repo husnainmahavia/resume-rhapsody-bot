@@ -299,6 +299,10 @@ serve(async (req) => {
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    // Long-running work runs in the background so we return before the 150s
+    // edge idle timeout. Client should poll `?action=status` for progress.
+    const runPipeline = async () => {
+     try {
     const today = new Date().toISOString().split("T")[0];
     const { count: sentToday } = await supabase
       .from("job_applications")
@@ -307,12 +311,10 @@ serve(async (req) => {
       .gte("applied_at", today);
 
     if ((sentToday || 0) >= GMAIL_DAILY_LIMIT) {
-      return new Response(JSON.stringify({
-        error: "Daily email limit reached. Will resume tomorrow.",
-        sentToday,
-        limit: GMAIL_DAILY_LIMIT,
-      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      console.log(`⛔ Daily limit reached (${sentToday}/${GMAIL_DAILY_LIMIT}) — background run aborting.`);
+      return;
     }
+
 
     // Step 1: Search for REAL jobs with VERIFIED email addresses
     console.log("🔍 Searching for jobs...");
@@ -688,12 +690,20 @@ Sign off with: ${APPLICANT_NAME}, ${APPLICANT_PHONE}, ${APPLICANT_EMAIL}`,
       }
     }
 
+      console.log(`✅ Background run finished. processed=${results.length} emailsSent=${emailsSentThisRun}`);
+     } catch (bgErr) {
+      console.error("Background pipeline error:", bgErr);
+     }
+    };
+
+    // @ts-ignore -- EdgeRuntime is provided by Supabase Edge Runtime
+    (globalThis as any).EdgeRuntime?.waitUntil?.(runPipeline()) ?? runPipeline();
+
     return new Response(JSON.stringify({
       success: true,
-      processed: results.length,
-      emailsSent: emailsSentThisRun,
-      results,
-    }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      accepted: true,
+      message: "Pipeline started in background. Poll ?action=status for progress. Safe to close this tab.",
+    }), { status: 202, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (e) {
     console.error("Pipeline error:", e);
@@ -703,3 +713,4 @@ Sign off with: ${APPLICANT_NAME}, ${APPLICANT_PHONE}, ${APPLICANT_EMAIL}`,
     });
   }
 });
+
