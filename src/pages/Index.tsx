@@ -167,9 +167,9 @@ const Index = () => {
             <div>
               <h1 className="text-xl font-bold">
                 <span className="text-gradient">AutoApply</span>
-                <span className="text-muted-foreground font-normal text-sm ml-2">AI</span>
+                <span className="text-muted-foreground font-normal text-sm ml-2">Copilot</span>
               </h1>
-              <p className="text-xs text-muted-foreground">Autonomous Job Application Assistant</p>
+              <p className="text-xs text-muted-foreground">AI Job Application Copilot — you review, you approve, you send</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -238,8 +238,11 @@ const Index = () => {
         </div>
 
         {/* Footer */}
-        <footer className="text-center text-xs text-muted-foreground py-4 border-t border-border">
-          <p className="font-mono">AutoApply AI • Search → Tailor CV → Generate Email → Send → Track • Fully Autonomous</p>
+        <footer className="text-center text-xs text-muted-foreground py-4 border-t border-border space-x-3">
+          <span className="font-mono">AutoApply Copilot · Discover → Score → Tailor → Review → Send · You approve every application</span>
+          <a href="/" className="hover:text-foreground underline">Home</a>
+          <a href="/privacy" className="hover:text-foreground underline">Privacy</a>
+          <a href="/terms" className="hover:text-foreground underline">Terms</a>
         </footer>
       </div>
     </div>
