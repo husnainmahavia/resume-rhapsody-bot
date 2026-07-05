@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { User, Save, Loader2, Plus, X, Info } from "lucide-react";
+import { User, Save, Loader2, Plus, X, Info, Upload, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,6 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { parseCvFile, extractCvMeta } from "@/lib/cvParser";
+import DangerZone from "./DangerZone";
 
 interface ProfileData {
   id: string;
@@ -27,7 +29,9 @@ export default function ApplicantProfileForm() {
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [parsing, setParsing] = useState(false);
   const [newSkill, setNewSkill] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -94,6 +98,39 @@ export default function ApplicantProfileForm() {
   const update = (field: keyof ProfileData, value: string) => {
     if (!profile) return;
     setProfile({ ...profile, [field]: value });
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !profile) return;
+    if (file.size > 10 * 1024 * 1024) {
+      toast({ title: "File too large", description: "Max 10 MB.", variant: "destructive" });
+      return;
+    }
+    setParsing(true);
+    try {
+      const text = await parseCvFile(file);
+      const meta = extractCvMeta(text);
+      const mergedSkills = Array.from(new Set([...(profile.skills || []), ...meta.skills]));
+      setProfile({
+        ...profile,
+        cv_content: text,
+        name: profile.name || meta.name || "",
+        email: profile.email || meta.email || "",
+        phone: profile.phone || meta.phone || "",
+        summary: profile.summary || meta.summary || "",
+        skills: mergedSkills,
+      });
+      toast({
+        title: "CV parsed",
+        description: `Extracted ${text.length.toLocaleString()} chars, ${meta.skills.length} skills matched. Review and save.`,
+      });
+    } catch (err: any) {
+      toast({ title: "Parse failed", description: err.message, variant: "destructive" });
+    } finally {
+      setParsing(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
   };
 
   if (loading) {
@@ -178,15 +215,42 @@ export default function ApplicantProfileForm() {
         </div>
       </div>
 
-      {/* CV Content */}
+      {/* CV Upload + Content */}
       <div className="space-y-1.5">
-        <Label className="text-xs">Full CV Content (optional — paste your full CV text here for AI tailoring)</Label>
+        <div className="flex items-center justify-between gap-2">
+          <Label className="text-xs">Full CV Content</Label>
+          <div className="flex items-center gap-2">
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".pdf,.docx,.txt,.md"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="gap-1 h-7 text-xs"
+              onClick={() => fileRef.current?.click()}
+              disabled={parsing}
+            >
+              {parsing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
+              {parsing ? "Parsing…" : "Upload PDF / DOCX"}
+            </Button>
+          </div>
+        </div>
         <Textarea
           value={profile.cv_content}
           onChange={e => update("cv_content", e.target.value)}
           className="bg-secondary/30 min-h-[120px] font-mono text-xs"
-          placeholder="Paste your full CV text here. The AI pipeline will use this as the base for tailoring CVs to each job..."
+          placeholder="Upload a PDF/DOCX above, or paste your full CV text here. The AI uses this as the base for every tailored CV."
         />
+        {profile.cv_content && (
+          <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+            <FileText className="h-2.5 w-2.5" /> {profile.cv_content.length.toLocaleString()} chars stored
+          </p>
+        )}
       </div>
 
       {/* Gmail Setup Info */}
@@ -214,6 +278,11 @@ export default function ApplicantProfileForm() {
         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
         Save Profile
       </Button>
+
+      {/* Danger Zone */}
+      <div className="pt-4 border-t border-border">
+        <DangerZone />
+      </div>
     </div>
   );
 }

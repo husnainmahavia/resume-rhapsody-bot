@@ -170,7 +170,10 @@ export default function Landing() {
         {/* Footer */}
         <footer className="border-t border-border py-8 mt-8 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
           <p className="font-mono">© {new Date().getFullYear()} AutoApply Copilot · a Visuosofts product</p>
-          <nav className="flex gap-4">
+          <nav className="flex gap-4 flex-wrap justify-center">
+            <Link to="/faq" className="hover:text-foreground">FAQ</Link>
+            <Link to="/about" className="hover:text-foreground">About</Link>
+            <Link to="/contact" className="hover:text-foreground">Contact</Link>
             <Link to="/privacy" className="hover:text-foreground">Privacy</Link>
             <Link to="/terms" className="hover:text-foreground">Terms</Link>
             <Link to="/app" className="hover:text-foreground">App</Link>
