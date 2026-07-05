@@ -241,6 +241,9 @@ const Index = () => {
         <footer className="text-center text-xs text-muted-foreground py-4 border-t border-border space-x-3">
           <span className="font-mono">AutoApply Copilot · Discover → Score → Tailor → Review → Send · You approve every application</span>
           <a href="/" className="hover:text-foreground underline">Home</a>
+          <a href="/faq" className="hover:text-foreground underline">FAQ</a>
+          <a href="/about" className="hover:text-foreground underline">About</a>
+          <a href="/contact" className="hover:text-foreground underline">Contact</a>
           <a href="/privacy" className="hover:text-foreground underline">Privacy</a>
           <a href="/terms" className="hover:text-foreground underline">Terms</a>
         </footer>
