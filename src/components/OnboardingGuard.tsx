@@ -126,7 +126,7 @@ export default function OnboardingGuard({ children }: Props) {
     );
   }
 
-  if (profileState === "missing") {
+  if (profileState === "missing" && !skipped) {
     return (
       <div className="min-h-[80vh] max-w-2xl mx-auto p-4 space-y-4">
         <Card className="border-warning/40 bg-warning/5">
@@ -142,7 +142,17 @@ export default function OnboardingGuard({ children }: Props) {
           </CardHeader>
         </Card>
         <ApplicantProfileForm />
-        <div className="flex justify-end">
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              sessionStorage.setItem("skipOnboarding", "1");
+              setSkipped(true);
+            }}
+          >
+            Skip for now → back to app
+          </Button>
           <Button size="sm" variant="outline" onClick={checkProfile}>
             I've saved my profile — continue
           </Button>
@@ -150,6 +160,7 @@ export default function OnboardingGuard({ children }: Props) {
       </div>
     );
   }
+
 
   return <>{children}</>;
 }
