@@ -88,18 +88,40 @@ export async function callGemini(apiKey: string, body: Record<string, unknown>):
     });
     if (response.ok) break;
     lastErr = await response.text().catch(() => "");
-    // Fall through on model-not-found (404/400) AND upstream rate-limits (429),
-    // since free OpenRouter models are frequently saturated.
     if (response.status !== 404 && response.status !== 400 && response.status !== 429) break;
     console.warn(`OpenRouter model ${model} failed (${response.status}): ${lastErr.slice(0, 200)}`);
   }
 
+  // Fallback to Lovable AI Gateway when OpenRouter is exhausted / rate-limited.
   if (!response || !response.ok) {
-    return new Response(lastErr || JSON.stringify({ error: `OpenRouter error: ${response?.status}` }), {
+    const LOVABLE_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (LOVABLE_KEY) {
+      console.log("OpenRouter unavailable — falling back to Lovable AI Gateway");
+      const lovableModels = ["google/gemini-2.5-flash", "google/gemini-2.5-flash-lite", "openai/gpt-5-mini"];
+      for (const model of lovableModels) {
+        const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${LOVABLE_KEY}`,
+          },
+          body: JSON.stringify({ ...outBody, model }),
+        });
+        if (r.ok) { response = r; break; }
+        lastErr = await r.text().catch(() => "");
+        console.warn(`Lovable AI model ${model} failed (${r.status}): ${lastErr.slice(0, 200)}`);
+        if (r.status !== 429 && r.status !== 402 && r.status !== 404) break;
+      }
+    }
+  }
+
+  if (!response || !response.ok) {
+    return new Response(lastErr || JSON.stringify({ error: `AI upstream error: ${response?.status}` }), {
       status: response?.status || 500,
       headers: { "Content-Type": "application/json" },
     });
   }
+
 
   const data = await response.json();
   const choice = data.choices?.[0]?.message;
