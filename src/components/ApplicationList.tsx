@@ -74,6 +74,12 @@ export default function ApplicationList({ applications, onUpdate }: ApplicationL
   });
 
   const pendingCount = enriched.filter((e) => (e.app as any).pending_review !== false).length;
+  const approvedUnsent = enriched.filter((e) =>
+    (e.app as any).pending_review === false &&
+    e.app.status !== "applied" &&
+    e.app.status !== "rejected"
+  ).map((e) => e.app);
+  const [bulkSendProgress, setBulkSendProgress] = useState<{ done: number; total: number } | null>(null);
 
   const handleApprove = async (app: JobApplication) => {
     setProcessing(`approve-${app.id}`);
