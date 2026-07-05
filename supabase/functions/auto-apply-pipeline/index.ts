@@ -690,12 +690,20 @@ Sign off with: ${APPLICANT_NAME}, ${APPLICANT_PHONE}, ${APPLICANT_EMAIL}`,
       }
     }
 
+      console.log(`✅ Background run finished. processed=${results.length} emailsSent=${emailsSentThisRun}`);
+     } catch (bgErr) {
+      console.error("Background pipeline error:", bgErr);
+     }
+    };
+
+    // @ts-ignore -- EdgeRuntime is provided by Supabase Edge Runtime
+    (globalThis as any).EdgeRuntime?.waitUntil?.(runPipeline()) ?? runPipeline();
+
     return new Response(JSON.stringify({
       success: true,
-      processed: results.length,
-      emailsSent: emailsSentThisRun,
-      results,
-    }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      accepted: true,
+      message: "Pipeline started in background. Poll ?action=status for progress. Safe to close this tab.",
+    }), { status: 202, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (e) {
     console.error("Pipeline error:", e);
@@ -705,3 +713,4 @@ Sign off with: ${APPLICANT_NAME}, ${APPLICANT_PHONE}, ${APPLICANT_EMAIL}`,
     });
   }
 });
+
