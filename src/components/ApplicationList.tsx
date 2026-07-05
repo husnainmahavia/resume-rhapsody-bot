@@ -74,6 +74,12 @@ export default function ApplicationList({ applications, onUpdate }: ApplicationL
   });
 
   const pendingCount = enriched.filter((e) => (e.app as any).pending_review !== false).length;
+  const approvedUnsent = enriched.filter((e) =>
+    (e.app as any).pending_review === false &&
+    e.app.status !== "applied" &&
+    e.app.status !== "rejected"
+  ).map((e) => e.app);
+  const [bulkSendProgress, setBulkSendProgress] = useState<{ done: number; total: number } | null>(null);
 
   const handleApprove = async (app: JobApplication) => {
     setProcessing(`approve-${app.id}`);
@@ -116,6 +122,92 @@ export default function ApplicationList({ applications, onUpdate }: ApplicationL
     toast({
       title: "Bulk approval complete",
       description: `${ok} approved${failed ? `, ${failed} failed` : ""}.`,
+      variant: failed ? "destructive" : "default",
+    });
+    onUpdate();
+  };
+
+  const handleSendAllApproved = async () => {
+    if (approvedUnsent.length === 0) {
+      toast({ title: "Nothing to send", description: "No approved applications waiting to be sent." });
+      return;
+    }
+    if (!window.confirm(
+      `Start applying to ${approvedUnsent.length} approved job(s)?\n\n` +
+      `For each: CV will be tailored (if missing), email drafted (if missing), then sent. ` +
+      `Rows missing a hiring-manager email will be skipped.`
+    )) return;
+
+    setProcessing("send-all");
+    let sent = 0, skipped = 0, failed = 0;
+    setBulkSendProgress({ done: 0, total: approvedUnsent.length });
+
+    for (let i = 0; i < approvedUnsent.length; i++) {
+      const app = approvedUnsent[i];
+      setBulkSendProgress({ done: i, total: approvedUnsent.length });
+      try {
+        let current = app;
+
+        // 1. Ensure CV is tailored
+        if (!current.tailored_cv) {
+          const fit = computeFit(current);
+          const cvVersion = getProfileKey(current, fit);
+          const r = await tailorCV(current.job_title, current.company, current.job_description || "", cvVersion);
+          if (r?.tailored_cv) {
+            await updateApplication(current.id, {
+              tailored_cv: r.tailored_cv, cover_letter: r.cover_letter,
+              status: "cv_tailored", cv_profile: cvVersion,
+            } as any);
+            current = { ...current, tailored_cv: r.tailored_cv, cover_letter: r.cover_letter };
+          }
+        }
+
+        // 2. Ensure email drafted
+        if (!current.email_body || !current.email_subject) {
+          const r = await generateEmail(
+            current.job_title, current.company,
+            current.hiring_manager_name || "Hiring Team",
+            current.job_description || ""
+          );
+          if (r?.body && r?.subject) {
+            await updateApplication(current.id, {
+              email_subject: r.subject, email_body: r.body,
+            } as any);
+            current = { ...current, email_subject: r.subject, email_body: r.body };
+          }
+        }
+
+        // 3. Validate ready-to-send
+        if (!current.hiring_manager_email || !current.email_subject || !current.email_body) {
+          skipped++;
+          continue;
+        }
+
+        // 4. Send
+        const result = await sendEmail(
+          current.hiring_manager_email, current.email_subject, current.email_body,
+          current.hiring_manager_name || undefined, current.id,
+        );
+        if (result?.sent === false || result?.error) {
+          failed++;
+        } else {
+          await updateApplication(current.id, {
+            status: "applied",
+            applied_at: new Date().toISOString(),
+            follow_up_scheduled_at: new Date(Date.now() + 3 * 86400000).toISOString(),
+          } as any);
+          sent++;
+        }
+      } catch {
+        failed++;
+      }
+    }
+
+    setBulkSendProgress(null);
+    setProcessing(null);
+    toast({
+      title: "Bulk send complete",
+      description: `${sent} sent · ${skipped} skipped (missing recipient) · ${failed} failed`,
       variant: failed ? "destructive" : "default",
     });
     onUpdate();
@@ -243,18 +335,38 @@ export default function ApplicationList({ applications, onUpdate }: ApplicationL
             {f === "pending" ? `Pending review (${pendingCount})` : f === "approved" ? "Approved" : `All (${applications.length})`}
           </button>
         ))}
-        {pendingCount > 0 && (
-          <Button
-            size="sm"
-            className="ml-auto h-7 gap-1 text-xs"
-            onClick={handleApproveAll}
-            disabled={processing === "approve-all"}
-          >
-            {processing === "approve-all" ? <Loader2 className="h-3 w-3 animate-spin" /> : <ShieldCheck className="h-3 w-3" />}
-            Approve all ({pendingCount})
-          </Button>
-        )}
+        <div className="ml-auto flex items-center gap-2">
+          {pendingCount > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1 text-xs"
+              onClick={handleApproveAll}
+              disabled={processing === "approve-all"}
+            >
+              {processing === "approve-all" ? <Loader2 className="h-3 w-3 animate-spin" /> : <ShieldCheck className="h-3 w-3" />}
+              Approve all ({pendingCount})
+            </Button>
+          )}
+          {approvedUnsent.length > 0 && (
+            <Button
+              size="sm"
+              className="h-7 gap-1 text-xs"
+              onClick={handleSendAllApproved}
+              disabled={processing === "send-all"}
+              title="Auto-tailors CV & drafts email if missing, then sends"
+            >
+              {processing === "send-all"
+                ? <Loader2 className="h-3 w-3 animate-spin" />
+                : <Send className="h-3 w-3" />}
+              {processing === "send-all" && bulkSendProgress
+                ? `Applying ${bulkSendProgress.done}/${bulkSendProgress.total}…`
+                : `Start applying (${approvedUnsent.length})`}
+            </Button>
+          )}
+        </div>
       </div>
+
 
       {filtered.map(({ app, fit, score }, i) => {
         const status = STATUS_CONFIG[app.status] || STATUS_CONFIG.discovered;
