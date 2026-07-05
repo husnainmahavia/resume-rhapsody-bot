@@ -438,18 +438,28 @@ VERIFICATION: Before returning each job, mentally verify:
 
 Return JSON with: title, company, location, salary_range, description, url, hiring_manager, hiring_email, sponsorship (boolean), careers_page_url`;
 
-    const searchResponse = await callFreeGemini(OPENROUTER_API_KEY, {
-      messages: [
-        { role: "system", content: "You are a job search API. Return ONLY a JSON object with a 'jobs' array. No markdown, no code fences, no thinking, no explanation. Example: {\"jobs\":[{\"title\":\"...\",\"company\":\"...\",\"location\":\"...\",\"description\":\"...\"}]}" },
-        { role: "user", content: searchPrompt },
-      ],
-    });
+    let jobs: any[] = [];
+    try {
+      const searchResponse = await callFreeGemini(OPENROUTER_API_KEY, {
+        messages: [
+          { role: "system", content: "You are a job search API. Return ONLY a JSON object with a 'jobs' array. No markdown, no code fences, no thinking, no explanation. Example: {\"jobs\":[{\"title\":\"...\",\"company\":\"...\",\"location\":\"...\",\"description\":\"...\"}]}" },
+          { role: "user", content: searchPrompt },
+        ],
+      });
 
-    if (!searchResponse.ok) throw new Error(`Search failed: ${searchResponse.status}`);
-    const searchData = await searchResponse.json();
-    const content = searchData.choices?.[0]?.message?.content || "";
-    const parsed = parseAIJson(content);
-    const jobs = Array.isArray(parsed) ? parsed : (parsed?.jobs || []);
+      if (!searchResponse.ok) throw new Error(`Search failed: ${searchResponse.status}`);
+      const searchData = await searchResponse.json();
+      const content = searchData.choices?.[0]?.message?.content || "";
+      const parsed = parseAIJson(content);
+      jobs = Array.isArray(parsed) ? parsed : (parsed?.jobs || []);
+    } catch (searchErr) {
+      console.warn("AI search unavailable, using fallback job discovery:", searchErr);
+    }
+
+    if (!jobs.length) {
+      jobs = getFallbackJobs(location, 4);
+      console.log(`Using fallback job discovery (${jobs.length} jobs)`);
+    }
 
     console.log(`Found ${jobs.length} jobs`);
     const results: any[] = [];
