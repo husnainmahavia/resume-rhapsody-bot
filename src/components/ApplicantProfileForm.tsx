@@ -100,6 +100,39 @@ export default function ApplicantProfileForm() {
     setProfile({ ...profile, [field]: value });
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !profile) return;
+    if (file.size > 10 * 1024 * 1024) {
+      toast({ title: "File too large", description: "Max 10 MB.", variant: "destructive" });
+      return;
+    }
+    setParsing(true);
+    try {
+      const text = await parseCvFile(file);
+      const meta = extractCvMeta(text);
+      const mergedSkills = Array.from(new Set([...(profile.skills || []), ...meta.skills]));
+      setProfile({
+        ...profile,
+        cv_content: text,
+        name: profile.name || meta.name || "",
+        email: profile.email || meta.email || "",
+        phone: profile.phone || meta.phone || "",
+        summary: profile.summary || meta.summary || "",
+        skills: mergedSkills,
+      });
+      toast({
+        title: "CV parsed",
+        description: `Extracted ${text.length.toLocaleString()} chars, ${meta.skills.length} skills matched. Review and save.`,
+      });
+    } catch (err: any) {
+      toast({ title: "Parse failed", description: err.message, variant: "destructive" });
+    } finally {
+      setParsing(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
