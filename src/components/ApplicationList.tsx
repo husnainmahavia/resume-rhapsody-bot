@@ -45,7 +45,20 @@ export default function ApplicationList({ applications, onUpdate }: ApplicationL
   const [processing, setProcessing] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "pending" | "approved">("all");
   const [profileOverrides, setProfileOverrides] = useState<Record<string, CvProfileKey>>({});
+  const [showDiff, setShowDiff] = useState<Record<string, boolean>>({});
+  const [baseCv, setBaseCv] = useState<string>("");
+  const [candidateName, setCandidateName] = useState<string>("Applicant");
   const { toast } = useToast();
+
+  useEffect(() => {
+    supabase.from("applicant_profile").select("name, cv_content").limit(1).maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          setBaseCv(data.cv_content || "");
+          setCandidateName(data.name || "Applicant");
+        }
+      });
+  }, []);
 
   const enriched = useMemo(() => applications.map((a) => ({
     app: a,
