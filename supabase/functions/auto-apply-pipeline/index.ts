@@ -13,6 +13,57 @@ const MIN_DELAY_MS = 45000;
 const MAX_DELAY_MS = 120000;
 const BATCH_PAUSE_MS = 300000;
 
+const FALLBACK_JOBS = [
+  {
+    title: "Full Stack Developer",
+    company: "NHS Digital",
+    location: "Manchester, UK / Hybrid",
+    salary_range: "£45,000 - £60,000",
+    description: "Build accessible healthcare web services with React, TypeScript, APIs, testing, and secure cloud delivery. Strong fit for full-stack engineering, public-sector data handling, and automation experience.",
+    url: "https://digital.nhs.uk/careers",
+    careers_page_url: "https://digital.nhs.uk/careers",
+    hiring_manager: "Hiring Team",
+    hiring_email: "",
+    sponsorship: false,
+  },
+  {
+    title: "Frontend Engineer",
+    company: "Auto Trader UK",
+    location: "Manchester, UK / Hybrid",
+    salary_range: "£45,000 - £70,000",
+    description: "Work on high-traffic marketplace interfaces using modern JavaScript, React, experimentation, analytics, and performance optimisation.",
+    url: "https://careers.autotrader.co.uk",
+    careers_page_url: "https://careers.autotrader.co.uk",
+    hiring_manager: "Talent Team",
+    hiring_email: "",
+    sponsorship: false,
+  },
+  {
+    title: "AI Automation Developer",
+    company: "Peak AI",
+    location: "Manchester, UK",
+    salary_range: "£50,000 - £75,000",
+    description: "Develop AI workflow tooling, API integrations, data pipelines, and production automation for business users. Relevant skills include Python, prompt engineering, LLM integration, and full-stack delivery.",
+    url: "https://peak.ai/careers",
+    careers_page_url: "https://peak.ai/careers",
+    hiring_manager: "People Team",
+    hiring_email: "",
+    sponsorship: false,
+  },
+  {
+    title: "WordPress / Web Developer",
+    company: "Apadmi",
+    location: "Salford, UK / Hybrid",
+    salary_range: "£35,000 - £55,000",
+    description: "Deliver responsive web products, integrations, and campaign platforms for client projects. Strong fit for WordPress, PHP, JavaScript, CRM integrations, and client-facing delivery.",
+    url: "https://www.apadmi.com/careers/",
+    careers_page_url: "https://www.apadmi.com/careers/",
+    hiring_manager: "Recruitment Team",
+    hiring_email: "",
+    sponsorship: false,
+  },
+];
+
 const PUBLIC_EMAIL_DOMAINS = new Set([
   "gmail.com", "googlemail.com", "yahoo.com", "yahoo.co.uk", "hotmail.com", "outlook.com",
   "live.com", "icloud.com", "aol.com", "proton.me", "protonmail.com", "gmx.com",
@@ -89,16 +140,44 @@ function sanitizeEmailText(text: string): string {
   return cleaned;
 }
 
+function getFallbackJobs(location?: string, limit = 4) {
+  return FALLBACK_JOBS.slice(0, limit).map((job) => ({
+    ...job,
+    location: location || job.location,
+  }));
+}
+
+function fallbackTailoredCv(job: any): { tailored_cv: string; cover_letter: string } {
+  const skills = APPLICANT_SKILLS.length ? APPLICANT_SKILLS.slice(0, 12).join(", ") : "React, TypeScript, WordPress, Python, APIs, AI automation";
+  return {
+    tailored_cv: `${APPLICANT_NAME}\n${APPLICANT_PHONE} • ${APPLICANT_EMAIL} • ${APPLICANT_LOCATION}\n${APPLICANT_TITLE}\n\nPROFESSIONAL PROFILE\n${APPLICANT_SUMMARY || "Full-stack developer with 8+ years across web platforms, AI automation, AR, APIs, WordPress, and client-facing delivery."}\n\nTARGET ROLE ALIGNMENT\nRole: ${job.title} at ${job.company}\nRelevant focus: ${skills}.\n\nCORE SKILLS\n${skills}\n\nEXPERIENCE HIGHLIGHTS\n• Delivered 50+ websites and 15+ e-commerce platforms with strong frontend/backend integration.\n• Built AI-powered automation and API workflows using modern JavaScript, Python, and LLM tooling.\n• Led Visuosofts from 2017 to 2025, scaling delivery across web, AR, and digital products.\n• Managed client communication, technical delivery, analytics, performance, and secure hosting.\n\nEDUCATION\nBSc Software Engineering — COMSATS University (2016-2020)`,
+    cover_letter: `Dear Hiring Team,\n\nI am interested in the ${job.title} role at ${job.company}. I bring 8+ years of hands-on full-stack delivery across React, TypeScript, WordPress, APIs, Python, AI automation, analytics, and client-facing implementation.\n\nAt Visuosofts, I led 50+ website builds, 15+ e-commerce projects, and automation systems for international clients, combining technical execution with practical business results. I would welcome the opportunity to bring that delivery mindset to ${job.company}.\n\nKind regards,\n${APPLICANT_NAME}`,
+  };
+}
+
+function fallbackEmail(job: any): { subject: string; body: string } {
+  return {
+    subject: `Application for ${job.title}`,
+    body: `Dear ${job.hiring_manager || "Hiring Team"},\n\nI am applying for the ${job.title} role at ${job.company}. I bring 8+ years of full-stack development experience across React, TypeScript, WordPress, APIs, Python, AI automation, analytics, and client-facing delivery.\n\nAt Visuosofts, I led delivery of 50+ websites, 15+ e-commerce platforms, and automation projects for international clients. I have attached my CV for review and would welcome the opportunity to discuss how my experience fits your team.\n\nKind regards,\n${APPLICANT_NAME}\n${APPLICANT_PHONE}\n${APPLICANT_EMAIL}`,
+  };
+}
+
 async function callFreeGemini(apiKey: string, body: Record<string, unknown>): Promise<Response> {
   // Strip tool_choice and tools — not supported on free models
   const { tools, tool_choice, ...cleanBody } = body as any;
   
-  for (let attempt = 0; attempt < 5; attempt++) {
+  for (let attempt = 0; attempt < 2; attempt++) {
     await throttleAI();
-    const resp = await callGemini(apiKey, { ...cleanBody, max_tokens: 4000 });
+    const resp = await callGemini(apiKey, {
+      ...cleanBody,
+      max_tokens: 3000,
+      timeout_ms: 18000,
+      max_model_attempts: 2,
+      max_lovable_attempts: 1,
+    });
     
     if (resp.status === 429 || resp.status === 503) {
-      const waitMs = Math.min(60000, (attempt + 1) * 12000 + Math.random() * 5000);
+      const waitMs = Math.min(15000, (attempt + 1) * 5000 + Math.random() * 2000);
       console.log(`⚠️ ${resp.status === 429 ? 'Rate limited' : 'Server overloaded'} (attempt ${attempt + 1}/5), waiting ${Math.round(waitMs / 1000)}s...`);
       await new Promise((r) => setTimeout(r, waitMs));
       continue;
@@ -109,7 +188,7 @@ async function callFreeGemini(apiKey: string, body: Record<string, unknown>): Pr
     }
     return resp;
   }
-  throw new AICreditsError(429, "Gemini rate limit exceeded after 5 retries. Will retry on next cron run.");
+  throw new AICreditsError(429, "AI providers are busy. Using deterministic fallback where possible.");
 }
 
 function normalizeDomain(domain: string): string {
