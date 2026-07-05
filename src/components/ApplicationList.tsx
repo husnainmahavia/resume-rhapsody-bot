@@ -1,14 +1,16 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Briefcase, MapPin, Building2, ChevronDown, FileText, Mail,
-  Loader2, Check, Clock, X, Star, Send
+  Loader2, Check, Clock, X, Star, Send, ShieldCheck, ShieldAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import type { JobApplication } from "@/lib/api";
 import { tailorCV, generateEmail, updateApplication } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { scoreJob, type FitScore } from "@/lib/jobScoring";
+import { ScoreBadge, AtsPanel } from "@/components/AtsPanel";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
   discovered: { label: "Discovered", color: "bg-muted text-muted-foreground", icon: <Clock className="h-3 w-3" /> },
@@ -25,10 +27,56 @@ interface ApplicationListProps {
   onUpdate: () => void;
 }
 
+function computeFit(app: JobApplication): FitScore {
+  return scoreJob(
+    { jobTitle: app.job_title, company: app.company, description: app.job_description || "",
+      location: app.location || undefined, salaryRange: app.salary_range || undefined },
+    { url: app.job_url || undefined },
+  );
+}
+
 export default function ApplicationList({ applications, onUpdate }: ApplicationListProps) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [processing, setProcessing] = useState<string | null>(null);
+  const [filter, setFilter] = useState<"all" | "pending" | "approved">("all");
   const { toast } = useToast();
+
+  const enriched = useMemo(() => applications.map((a) => ({
+    app: a,
+    fit: computeFit(a),
+    score: (a as any).match_score ?? computeFit(a).total,
+  })), [applications]);
+
+  const filtered = enriched.filter((e) => {
+    const pending = (e.app as any).pending_review !== false;
+    if (filter === "pending") return pending;
+    if (filter === "approved") return !pending;
+    return true;
+  });
+
+  const pendingCount = enriched.filter((e) => (e.app as any).pending_review !== false).length;
+
+  const handleApprove = async (app: JobApplication) => {
+    setProcessing(`approve-${app.id}`);
+    try {
+      await updateApplication(app.id, { pending_review: false, approved_at: new Date().toISOString() } as any);
+      toast({ title: "Approved", description: `${app.company} — ready to tailor & send` });
+      onUpdate();
+    } finally { setProcessing(null); }
+  };
+
+  const handleReject = async (app: JobApplication) => {
+    const reason = window.prompt("Reject reason (optional):") ?? undefined;
+    setProcessing(`reject-${app.id}`);
+    try {
+      await updateApplication(app.id, {
+        pending_review: false, status: "rejected",
+        rejected_at: new Date().toISOString(), rejected_reason: reason ?? "Manually rejected",
+      } as any);
+      onUpdate();
+    } finally { setProcessing(null); }
+  };
+
 
   const handleTailorCV = async (app: JobApplication) => {
     setProcessing(`cv-${app.id}`);
