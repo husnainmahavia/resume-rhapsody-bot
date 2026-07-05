@@ -311,14 +311,59 @@ export default function ApplicationList({ applications, onUpdate }: ApplicationL
 
                     {app.tailored_cv && (
                       <div>
-                        <p className="text-xs font-medium text-muted-foreground mb-1">Tailored CV</p>
-                        <pre className="text-xs bg-secondary/50 rounded p-3 max-h-40 overflow-y-auto whitespace-pre-wrap font-mono">{app.tailored_cv}</pre>
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-xs font-medium text-muted-foreground">Tailored CV</p>
+                          <div className="flex items-center gap-1">
+                            {baseCv && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 gap-1 text-[10px]"
+                                onClick={() => setShowDiff(d => ({ ...d, [app.id]: !d[app.id] }))}
+                              >
+                                <GitCompare className="h-3 w-3" />
+                                {showDiff[app.id] ? "Hide diff" : "Compare vs original"}
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 gap-1 text-[10px]"
+                              onClick={() => exportTextAsPdf({
+                                title: `${candidateName} — ${app.job_title}`,
+                                body: app.tailored_cv || "",
+                                filename: `CV_${candidateName.replace(/\s+/g, "_")}_${app.company.replace(/\s+/g, "_")}.pdf`,
+                              })}
+                            >
+                              <Download className="h-3 w-3" /> PDF
+                            </Button>
+                          </div>
+                        </div>
+                        {showDiff[app.id] && baseCv ? (
+                          <CvDiff original={baseCv} tailored={app.tailored_cv} />
+                        ) : (
+                          <pre className="text-xs bg-secondary/50 rounded p-3 max-h-40 overflow-y-auto whitespace-pre-wrap font-mono">{app.tailored_cv}</pre>
+                        )}
                       </div>
                     )}
 
                     {app.cover_letter && (
                       <div>
-                        <p className="text-xs font-medium text-muted-foreground mb-1">Cover Letter</p>
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-xs font-medium text-muted-foreground">Cover Letter</p>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 gap-1 text-[10px]"
+                            onClick={() => exportTextAsPdf({
+                              title: `Cover Letter — ${app.company}`,
+                              body: app.cover_letter || "",
+                              filename: `CoverLetter_${candidateName.replace(/\s+/g, "_")}_${app.company.replace(/\s+/g, "_")}.pdf`,
+                            })}
+                          >
+                            <Download className="h-3 w-3" /> PDF
+                          </Button>
+                        </div>
                         <pre className="text-xs bg-secondary/50 rounded p-3 max-h-40 overflow-y-auto whitespace-pre-wrap font-mono">{app.cover_letter}</pre>
                       </div>
                     )}
