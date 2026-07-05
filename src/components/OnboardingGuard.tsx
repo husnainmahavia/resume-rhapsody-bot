@@ -46,9 +46,12 @@ export default function OnboardingGuard({ children }: Props) {
       .select("id, name, email, cv_content")
       .limit(1)
       .maybeSingle();
-    const ok = data && data.name && data.email && (data.cv_content?.length ?? 0) > 50;
+    // Only require name + email. CV content is optional — features that need it
+    // will prompt inline instead of blocking the entire app.
+    const ok = !!(data && data.name && data.email);
     setProfileState(ok ? "ready" : "missing");
   };
+
 
   useEffect(() => {
     if (session) checkProfile();
