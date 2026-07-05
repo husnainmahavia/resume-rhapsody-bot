@@ -533,6 +533,25 @@ serve(async (req) => {
     }
 
 
+    const { data: existingApplications } = await supabase
+      .from("job_applications")
+      .select("company, job_title");
+
+    const existingCompanyCounts = new Map<string, number>();
+    const existingExactJobs = new Set<string>();
+    for (const app of existingApplications || []) {
+      const companyKey = comparable((app as any).company);
+      const titleKey = comparable((app as any).job_title);
+      if (!companyKey) continue;
+      existingCompanyCounts.set(companyKey, (existingCompanyCounts.get(companyKey) || 0) + 1);
+      if (titleKey) existingExactJobs.add(`${companyKey}:${titleKey}`);
+    }
+    const saturatedCompanies = new Set(
+      [...existingCompanyCounts.entries()]
+        .filter(([, count]) => count >= 2)
+        .map(([company]) => company),
+    );
+
     // Step 1: Search for REAL jobs with VERIFIED email addresses
     console.log("🔍 Searching for jobs...");
     const targetSkills = (skills || (APPLICANT_SKILLS.length > 0 ? APPLICANT_SKILLS : ["JavaScript", "React", "Python", "WordPress", "AI"])).join(", ");
@@ -554,10 +573,15 @@ serve(async (req) => {
 5. The candidate can apply for ANY role that matches their skills, not just exact title matches`;
     }
 
-    const searchPrompt = `You are a UK job market expert. Find 5-8 REAL job openings at REAL companies in ${location || "Manchester, UK"} for: ${targetSkills}.
+    const excludedCompanyNames = [...new Set((existingApplications || []).map((app: any) => app.company).filter(Boolean))].slice(0, 60);
+
+    const searchPrompt = `You are a UK job market expert. Find 10-15 REAL job openings at REAL companies in ${location || "Manchester, UK"} for: ${targetSkills}.
 Job type: ${targetJobType}
 
 ${modeInstructions}
+
+EXCLUDE THESE COMPANIES BECAUSE THEY ARE ALREADY IN THE DATABASE:
+${excludedCompanyNames.length ? excludedCompanyNames.join(", ") : "None"}
 
 ABSOLUTE REQUIREMENTS - FOLLOW STRICTLY:
 1. ONLY use companies that ACTUALLY EXIST and are KNOWN UK employers (e.g., BBC, NHS Digital, Booking.com, AO.com, THG/The Hut Group, Autotrader, Boohoo, On The Beach, Peak AI, Manchester Airport Group, Kellogg's, Brother International, Missguided, N Brown Group, Co-op, JD Sports, Bet365, Apadmi, MediaCityUK companies, etc.)
@@ -594,9 +618,22 @@ Return JSON with: title, company, location, salary_range, description, url, hiri
       console.warn("AI search unavailable, using fallback job discovery:", searchErr);
     }
 
+    jobs = jobs.filter((job) => {
+      const companyKey = comparable(job.company);
+      const titleKey = comparable(job.title);
+      if (!companyKey || !titleKey) return false;
+      if (saturatedCompanies.has(companyKey)) return false;
+      if (existingExactJobs.has(`${companyKey}:${titleKey}`)) return false;
+      return true;
+    });
+
     if (!jobs.length) {
-      jobs = getFallbackJobs(location, 4);
-      console.log(`Using fallback job discovery (${jobs.length} jobs)`);
+      jobs = getFallbackJobs(location, 8, saturatedCompanies).filter((job) => {
+        const companyKey = comparable(job.company);
+        const titleKey = comparable(job.title);
+        return !existingExactJobs.has(`${companyKey}:${titleKey}`);
+      });
+      console.log(`Using fresh fallback job discovery (${jobs.length} jobs)`);
     }
 
     console.log(`Found ${jobs.length} jobs`);
@@ -611,23 +648,19 @@ Return JSON with: title, company, location, salary_range, description, url, hiri
         continue;
       }
 
-      // Check duplicate - limit max 2 applications per company to avoid spam
-      const { data: existingByCompany } = await supabase
-        .from("job_applications")
-        .select("id, job_title")
-        .ilike("company", job.company);
+      const companyKey = comparable(job.company);
+      const titleKey = comparable(job.title);
+      const knownCompanyCount = existingCompanyCounts.get(companyKey) || 0;
 
-      if (existingByCompany && existingByCompany.length >= 2) {
-        console.log(`⏭ Skipping ${job.company} — already ${existingByCompany.length} applications`);
+      // Check duplicate - limit max 2 applications per company to avoid spam
+      if (knownCompanyCount >= 2) {
+        console.log(`⏭ Skipping ${job.company} — already ${knownCompanyCount} applications`);
         results.push({ job: job.title, company: job.company, status: "company_limit_reached" });
         continue;
       }
 
       // Also check exact title duplicate
-      const exactDupe = existingByCompany?.some(e => 
-        e.job_title.toLowerCase().replace(/[^a-z]/g, "") === job.title.toLowerCase().replace(/[^a-z]/g, "")
-      );
-      if (exactDupe) {
+      if (existingExactJobs.has(`${companyKey}:${titleKey}`)) {
         console.log(`⏭ Skipping exact duplicate: ${job.title} at ${job.company}`);
         results.push({ job: job.title, company: job.company, status: "duplicate_skipped" });
         continue;
@@ -709,6 +742,9 @@ Return JSON with: title, company, location, salary_range, description, url, hiri
           notes: `No email found after AI + scraper + MX validation (${emailValidation.reason || "unknown"})`,
         });
 
+        existingCompanyCounts.set(companyKey, knownCompanyCount + 1);
+        existingExactJobs.add(`${companyKey}:${titleKey}`);
+
         results.push({ job: job.title, company: job.company, status: "no_email" });
         continue;
       }
@@ -740,6 +776,8 @@ Return JSON with: title, company, location, salary_range, description, url, hiri
                 careers_page_url: job.careers_page_url || null,
                 notes: `Email failed deliverability check: score ${result.score}/100 (${result.reason})`,
               });
+              existingCompanyCounts.set(companyKey, knownCompanyCount + 1);
+              existingExactJobs.add(`${companyKey}:${titleKey}`);
               results.push({ job: job.title, company: job.company, status: "undeliverable", score: result.score });
               continue;
             }
@@ -774,6 +812,8 @@ Return JSON with: title, company, location, salary_range, description, url, hiri
           .select().single();
 
         if (saveError) throw saveError;
+        existingCompanyCounts.set(companyKey, knownCompanyCount + 1);
+        existingExactJobs.add(`${companyKey}:${titleKey}`);
         console.log(`💾 Saved: ${job.title}`);
 
         // Tailor CV — AI replaces Visuosofts experience with new tailored experience for the target role
