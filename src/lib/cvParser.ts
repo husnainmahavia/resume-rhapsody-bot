@@ -2,7 +2,7 @@
 import mammoth from "mammoth";
 import * as pdfjsLib from "pdfjs-dist";
 // Vite serves the worker as an asset URL.
-// @ts-expect-error - Vite ?url import
+// @ts-ignore - Vite ?url import
 import workerSrc from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
