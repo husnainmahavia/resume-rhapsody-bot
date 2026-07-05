@@ -2,8 +2,10 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Bot, Search, FileText, Zap, Rocket, BarChart3, Globe, Linkedin,
-  ShieldCheck, Upload, UserCog, Mail, Timer, ChevronRight, Eye
+  ShieldCheck, Upload, UserCog, Mail, Timer, ChevronRight, Eye, LogOut
 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
 import StatsBar from "@/components/StatsBar";
 import JobSearch from "@/components/JobSearch";
 import ApplicationList from "@/components/ApplicationList";
