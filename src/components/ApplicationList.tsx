@@ -2,14 +2,15 @@ import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Briefcase, MapPin, Building2, ChevronDown, FileText, Mail,
-  Loader2, Check, Clock, X, Star, Send, ShieldCheck, ShieldAlert,
+  Loader2, Check, Clock, X, Star, Send, ShieldCheck, ShieldAlert, UserSquare2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { JobApplication } from "@/lib/api";
 import { tailorCV, generateEmail, updateApplication } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
-import { scoreJob, type FitScore } from "@/lib/jobScoring";
+import { scoreJob, ROLE_PROFILES, type FitScore, type CvProfileKey } from "@/lib/jobScoring";
 import { ScoreBadge, AtsPanel } from "@/components/AtsPanel";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
@@ -39,6 +40,7 @@ export default function ApplicationList({ applications, onUpdate }: ApplicationL
   const [expanded, setExpanded] = useState<string | null>(null);
   const [processing, setProcessing] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "pending" | "approved">("all");
+  const [profileOverrides, setProfileOverrides] = useState<Record<string, CvProfileKey>>({});
   const { toast } = useToast();
 
   const enriched = useMemo(() => applications.map((a) => ({
@@ -78,10 +80,24 @@ export default function ApplicationList({ applications, onUpdate }: ApplicationL
   };
 
 
-  const handleTailorCV = async (app: JobApplication) => {
+  const getProfileKey = (app: JobApplication, fit: FitScore): CvProfileKey =>
+    (profileOverrides[app.id] ?? ((app as any).cv_profile as CvProfileKey) ?? fit.role.key);
+
+  const handleSelectProfile = async (app: JobApplication, key: CvProfileKey) => {
+    setProfileOverrides((prev) => ({ ...prev, [app.id]: key }));
+    try {
+      await updateApplication(app.id, { cv_profile: key } as any);
+      onUpdate();
+    } catch {
+      toast({ title: "Error", description: "Failed to save CV profile", variant: "destructive" });
+    }
+  };
+
+  const handleTailorCV = async (app: JobApplication, fit: FitScore) => {
     setProcessing(`cv-${app.id}`);
     try {
-      const result = await tailorCV(app.job_title, app.company, app.job_description || "");
+      const cvVersion = getProfileKey(app, fit);
+      const result = await tailorCV(app.job_title, app.company, app.job_description || "", cvVersion);
       if (result.error) {
         toast({ title: "Error", description: result.error, variant: "destructive" });
         return;
@@ -90,8 +106,9 @@ export default function ApplicationList({ applications, onUpdate }: ApplicationL
         tailored_cv: result.tailored_cv,
         cover_letter: result.cover_letter,
         status: "cv_tailored",
-      });
-      toast({ title: "CV Tailored!", description: `CV customized for ${app.company}` });
+        cv_profile: cvVersion,
+      } as any);
+      toast({ title: "CV Tailored!", description: `${app.company} — profile: ${ROLE_PROFILES.find(p => p.key === cvVersion)?.label ?? cvVersion}` });
       onUpdate();
     } catch {
       toast({ title: "Error", description: "Failed to tailor CV", variant: "destructive" });
@@ -224,12 +241,39 @@ export default function ApplicationList({ applications, onUpdate }: ApplicationL
                       </div>
                     )}
 
+                    {/* CV profile switcher */}
+                    <div className="flex items-center gap-2 flex-wrap p-3 rounded-md bg-secondary/40 border border-border">
+                      <UserSquare2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <div className="flex-1 min-w-[200px]">
+                        <p className="text-xs font-medium">CV profile</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Recommended by scorer: <span className="text-foreground">{fit.role.label}</span>
+                        </p>
+                      </div>
+                      <Select
+                        value={getProfileKey(app, fit)}
+                        onValueChange={(v) => handleSelectProfile(app, v as CvProfileKey)}
+                      >
+                        <SelectTrigger className="w-[220px] h-8 text-xs bg-background">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ROLE_PROFILES.map((p) => (
+                            <SelectItem key={p.key} value={p.key} className="text-xs">
+                              {p.label}
+                              {p.key === fit.role.key ? " · recommended" : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
                     <div className="flex gap-2 flex-wrap">
-                      {canSend && app.status === "discovered" && (
-                        <Button size="sm" onClick={() => handleTailorCV(app)}
+                      {canSend && (
+                        <Button size="sm" onClick={() => handleTailorCV(app, fit)}
                           disabled={processing === `cv-${app.id}`} className="gap-1">
                           {processing === `cv-${app.id}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileText className="h-3 w-3" />}
-                          Tailor CV
+                          {app.status === "cv_tailored" ? "Re-tailor CV" : "Tailor CV"}
                         </Button>
                       )}
 

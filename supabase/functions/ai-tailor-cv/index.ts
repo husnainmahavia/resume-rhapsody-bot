@@ -19,6 +19,12 @@ Skills: SEO, Google Ads, Meta Ads, TikTok Ads, Analytics, WordPress, AI Content,
   webDeveloper: `HUSNAIN MAHAVIA | Senior Web Developer | WordPress Specialist
 8+ years custom WordPress development, HTML/CSS, landing pages. 50+ custom sites, 15+ e-commerce platforms, Core Web Vitals 90+.
 Skills: HTML5/CSS3, JavaScript, PHP, WordPress, WooCommerce, Shopify, GTM, CRM Integration`,
+  ar: `HUSNAIN MAHAVIA | AR / Unity Developer
+8+ years building augmented reality and 3D experiences. 100+ AR projects delivered in Unity with ARFoundation, ARKit, ARCore, and Vuforia. Portfolio includes AR campaigns for Pepsi and McAfee. Comfortable across the full 3D pipeline: C# scripting, shaders, performance profiling, mobile deployment (iOS/Android), and integrating AR with backend APIs and analytics.
+Skills: Unity, C#, ARFoundation, ARKit, ARCore, Vuforia, 8th Wall, Shader Graph, Blender, iOS/Android build pipelines`,
+  webar: `HUSNAIN MAHAVIA | WebAR / Lens / Effect Developer
+8+ years across immersive tech with 100+ AR builds. Deep hands-on with WebAR runtimes (8th Wall, WebXR, AR.js) and social AR platforms (Snapchat Lens Studio, TikTok Effect House, Meta Spark). Ships browser-first AR experiences that run on any modern phone — no app install — plus branded lenses/filters for social campaigns. Strong JavaScript/TypeScript, Three.js, GLTF asset optimization, and analytics integration.
+Skills: 8th Wall, WebXR, AR.js, Three.js, Snapchat Lens Studio, TikTok Effect House, Meta Spark AR, JavaScript, TypeScript, GLTF/GLB optimization`,
 };
 
 serve(async (req) => {

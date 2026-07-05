@@ -287,6 +287,7 @@ export type Database = {
           company: string
           cover_letter: string | null
           created_at: string
+          cv_profile: string | null
           email_body: string | null
           email_subject: string | null
           follow_up_scheduled_at: string | null
@@ -321,6 +322,7 @@ export type Database = {
           company: string
           cover_letter?: string | null
           created_at?: string
+          cv_profile?: string | null
           email_body?: string | null
           email_subject?: string | null
           follow_up_scheduled_at?: string | null
@@ -355,6 +357,7 @@ export type Database = {
           company?: string
           cover_letter?: string | null
           created_at?: string
+          cv_profile?: string | null
           email_body?: string | null
           email_subject?: string | null
           follow_up_scheduled_at?: string | null
