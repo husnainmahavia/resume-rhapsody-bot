@@ -8,6 +8,37 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const AI_REQUEST_TIMEOUT_MS = 15_000;
+const MAX_BULK_LEADS_PER_REQUEST = 3;
+const MAX_ROUNDS = 3;
+
+function safeJsonResponse(body: Record<string, unknown>, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+function normalizeDomain(value?: string | null): string {
+  return (value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/\/.*$/, "");
+}
+
+function emailDomain(email?: string | null): string {
+  return (email?.split("@")[1] || "").trim().toLowerCase();
+}
+
+function isLikelyGenericBusinessEmail(email: string | null | undefined, domain: string): boolean {
+  if (!email || emailDomain(email) !== domain) return false;
+  const local = email.split("@")[0].toLowerCase();
+  return ["info", "hello", "contact", "enquiries", "sales", "marketing", "careers", "hr", "support"]
+    .includes(local);
+}
+
 const SYSTEM_PROMPT = `You are the AI Boss of the Visuosofts Email Engine — a B2B outreach system for an AR development and digital marketing agency based in Manchester, UK.
 
 YOUR MISSION:
@@ -118,13 +149,11 @@ async function aiEmailLookup(
   apiKey: string,
   prompt: string
 ): Promise<Record<string, unknown>> {
-  let resp: Response | null = null;
-  for (let attempt = 0; attempt < 4; attempt++) {
-    resp = await callGemini(apiKey, {
-        messages: [
-          {
-            role: "system",
-            content: `You are an email intelligence agent. You analyze company domains and email addresses to determine deliverability and find real contact emails.
+  const resp = await callGemini(apiKey, {
+      messages: [
+        {
+          role: "system",
+          content: `You are an email intelligence agent. You analyze company domains and email addresses to determine deliverability and find real contact emails.
 
 RULES:
 - For email verification: analyze the domain, check if it's a real company domain, assess the email pattern
@@ -134,61 +163,68 @@ RULES:
 - Rate confidence 0-100 based on how likely the email is real
 - NEVER make up personal names or specific employee emails - only suggest pattern-based emails
 - Always return valid JSON`,
-          },
-          { role: "user", content: prompt },
-        ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "return_result",
-              description: "Return the email analysis result",
-              parameters: {
-                type: "object",
-                properties: {
-                  result: {
-                    type: "object",
-                    description: "The analysis result as a JSON object",
-                  },
+        },
+        { role: "user", content: prompt },
+      ],
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "return_result",
+            description: "Return the email analysis result",
+            parameters: {
+              type: "object",
+              properties: {
+                result: {
+                  type: "object",
+                  description: "The analysis result as a JSON object",
                 },
-                required: ["result"],
               },
+              required: ["result"],
             },
           },
-        ],
-        tool_choice: { type: "function", function: { name: "return_result" } },
-    });
+        },
+      ],
+      tool_choice: { type: "function", function: { name: "return_result" } },
+      max_tokens: 800,
+      timeout_ms: AI_REQUEST_TIMEOUT_MS,
+      max_model_attempts: 2,
+      max_lovable_attempts: 1,
+  });
 
-    if (resp && resp.status !== 429 && resp.status !== 503) break;
-
-    const waitMs = (attempt + 1) * 15000 + Math.random() * 5000;
-    console.log(`AI lookup ${resp?.status}, retrying in ${Math.round(waitMs / 1000)}s (${attempt + 1}/4)`);
-    await new Promise((r) => setTimeout(r, waitMs));
-  }
-
-  if (!resp || !resp.ok) {
-    const errText = await resp?.text().catch(() => "") || "";
-    console.error("AI lookup error:", resp?.status, errText);
-    throw new Error(`AI lookup failed: ${resp?.status}`);
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => "") || "";
+    console.error("AI lookup error:", resp.status, errText);
+    throw new Error(`AI lookup failed: ${resp.status}`);
   }
 
   const data = await resp.json();
   const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
   if (toolCall?.function?.arguments) {
-    const parsed = JSON.parse(toolCall.function.arguments);
-    return parsed.result || parsed;
+    try {
+      const parsed = JSON.parse(toolCall.function.arguments);
+      return parsed.result || parsed;
+    } catch {
+      return { error: "AI returned invalid JSON" };
+    }
   }
   return { error: "No result from AI" };
 }
 
 // Simple DNS MX check via DNS-over-HTTPS
 async function checkMX(domain: string): Promise<boolean> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 4_000);
   try {
-    const resp = await fetch(`https://dns.google/resolve?name=${domain}&type=MX`);
+    const resp = await fetch(`https://dns.google/resolve?name=${domain}&type=MX`, {
+      signal: controller.signal,
+    });
     const data = await resp.json();
     return (data.Answer?.length || 0) > 0;
   } catch {
     return false;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -228,7 +264,7 @@ serve(async (req) => {
 
       if (name === "verify_email") {
         const email = args.email as string;
-        const domain = email.split("@")[1];
+        const domain = emailDomain(email);
         
         // Check MX records
         const hasMX = await checkMX(domain);
@@ -247,7 +283,7 @@ Return JSON with: email, status (valid/invalid/risky/unknown), score (0-100), re
       }
 
       if (name === "find_company_email") {
-        const domain = (args.domain as string).replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+        const domain = normalizeDomain(args.domain as string);
         const companyName = (args.company_name as string) || domain;
         
         // Check MX records first
@@ -285,7 +321,11 @@ Rate confidence based on how common that pattern is for companies.`
       }
 
       if (name === "bulk_fix_emails") {
-        const maxLeads = (args.max_leads as number) || 10;
+        const requestedLeads = Number(args.max_leads || 10);
+        const maxLeads = Math.min(
+          Math.max(Number.isFinite(requestedLeads) ? Math.floor(requestedLeads) : 10, 1),
+          MAX_BULK_LEADS_PER_REQUEST,
+        );
         const filter = (args.filter as string) || "unsent";
 
         let query = supabase
@@ -303,7 +343,7 @@ Rate confidence based on how common that pattern is for companies.`
 
         for (const lead of leads) {
           try {
-            const domain = lead.website?.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+            const domain = normalizeDomain(lead.website);
             if (!domain) {
               results.push({ company: lead.company_name, status: "no_domain" });
               continue;
@@ -316,7 +356,19 @@ Rate confidence based on how common that pattern is for companies.`
               continue;
             }
 
-            // Verify current email via AI
+            // Avoid long AI verification for already plausible generic same-domain inboxes.
+            if (isLikelyGenericBusinessEmail(lead.contact_email, domain)) {
+              results.push({
+                company: lead.company_name,
+                email: lead.contact_email,
+                status: "already_valid",
+                score: 70,
+                reason: "Same-domain generic business inbox with MX records",
+              });
+              continue;
+            }
+
+            // Verify current non-generic email via AI.
             if (lead.contact_email) {
               const verifyResult = await aiEmailLookup(OPENROUTER_API_KEY,
                 `Quick verify: Is "${lead.contact_email}" likely deliverable for company "${lead.company_name}" (domain: ${domain})?
@@ -386,6 +438,11 @@ Return JSON: { suggested_email: string, confidence: number (0-100), reason: stri
           fixed,
           already_valid: valid,
           not_found: results.length - fixed - valid,
+          requested: requestedLeads,
+          limited: requestedLeads > maxLeads,
+          note: requestedLeads > maxLeads
+            ? `Processed ${maxLeads} leads now to avoid backend timeouts. Run the action again for the next batch.`
+            : undefined,
           results,
         });
       }
@@ -400,33 +457,30 @@ Return JSON: { suggested_email: string, confidence: number (0-100), reason: stri
     ];
 
     const toolResults: Record<string, unknown>[] = [];
-    const MAX_ROUNDS = 6;
-
     for (let round = 0; round < MAX_ROUNDS; round++) {
-      let resp: Response | null = null;
-      for (let attempt = 0; attempt < 4; attempt++) {
-        resp = await callGemini(OPENROUTER_API_KEY, {
-            messages: allMessages,
-            tools: TOOLS,
-            tool_choice: "auto",
-        });
+      const resp = await callGemini(OPENROUTER_API_KEY, {
+          messages: allMessages,
+          tools: TOOLS,
+          tool_choice: "auto",
+          max_tokens: 900,
+          timeout_ms: AI_REQUEST_TIMEOUT_MS,
+          max_model_attempts: 2,
+          max_lovable_attempts: 1,
+      });
 
-        if (resp && resp.status !== 429 && resp.status !== 503) break;
-
-        const waitMs = (attempt + 1) * 15000 + Math.random() * 5000;
-        console.log(`AI chat ${resp?.status}, retrying in ${Math.round(waitMs / 1000)}s (${attempt + 1}/4)`);
-        await new Promise((r) => setTimeout(r, waitMs));
-      }
-
-      if (!resp || !resp.ok) {
-        const errText = await resp?.text().catch(() => "") || "";
-        console.error(`AI gateway error ${resp?.status}:`, errText);
-        if (resp?.status === 429)
-          return new Response(
-            JSON.stringify({ error: "Rate limited — please try again shortly." }),
-            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        throw new Error(`AI error: ${resp?.status}`);
+      if (!resp.ok) {
+        const errText = await resp.text().catch(() => "") || "";
+        console.error(`AI gateway error ${resp.status}:`, errText);
+        if ([402, 429, 503, 504].includes(resp.status)) {
+          return safeJsonResponse({
+            message: resp.status === 402
+              ? "AI credits are exhausted right now. No changes were made."
+              : "AI providers are busy or rate-limited right now. I stopped early so the request does not time out — retry in a few minutes or run a smaller batch.",
+            toolResults,
+            temporary: true,
+          });
+        }
+        throw new Error(`AI error: ${resp.status}`);
       }
 
       const data = await resp.json();
@@ -436,10 +490,7 @@ Return JSON: { suggested_email: string, confidence: number (0-100), reason: stri
       const toolCalls = choice.message?.tool_calls;
       if (!toolCalls || toolCalls.length === 0) {
         const finalContent = choice.message?.content || "Done — no further action needed.";
-        return new Response(
-          JSON.stringify({ message: finalContent, toolResults }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return safeJsonResponse({ message: finalContent, toolResults });
       }
 
       allMessages.push(choice.message);
@@ -460,18 +511,12 @@ Return JSON: { suggested_email: string, confidence: number (0-100), reason: stri
       }
     }
 
-    return new Response(
-      JSON.stringify({
+    return safeJsonResponse({
         message: "I reached the maximum processing rounds. Here's what I found so far — you can ask me to continue.",
         toolResults,
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+      });
   } catch (e) {
     console.error("email-engine-ai error:", e);
-    return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return safeJsonResponse({ error: e instanceof Error ? e.message : "Unknown error" }, 500);
   }
 });

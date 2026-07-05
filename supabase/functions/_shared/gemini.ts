@@ -9,6 +9,7 @@
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const DEFAULT_MODEL = "openai/gpt-oss-120b:free";
+const DEFAULT_TIMEOUT_MS = 20_000;
 const FALLBACK_MODELS = [
   "openai/gpt-oss-120b:free",
   "openai/gpt-oss-20b:free",
@@ -17,6 +18,33 @@ const FALLBACK_MODELS = [
   "z-ai/glm-4.5-air:free",
   "meta-llama/llama-3.3-70b-instruct:free",
 ];
+
+async function postChatCompletion(
+  url: string,
+  headers: Record<string, string>,
+  body: Record<string, unknown>,
+  timeoutMs: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "AI request timed out";
+    return new Response(JSON.stringify({ error: message }), {
+      status: 504,
+      headers: { "Content-Type": "application/json" },
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 function parseJsonFromText(text: string): unknown {
   const cleaned = text
@@ -46,6 +74,18 @@ export async function callGemini(apiKey: string, body: Record<string, unknown>):
 
   const forcedFunctionName = (body.tool_choice as any)?.function?.name;
   const messages = Array.isArray(body.messages) ? [...(body.messages as any[])] : [];
+  const timeoutMs = Math.min(
+    Math.max(Number(body.timeout_ms || DEFAULT_TIMEOUT_MS), 3_000),
+    45_000,
+  );
+  const maxModelAttempts = Math.min(
+    Math.max(Number(body.max_model_attempts || FALLBACK_MODELS.length + 1), 1),
+    FALLBACK_MODELS.length + 1,
+  );
+  const maxLovableAttempts = Math.min(
+    Math.max(Number(body.max_lovable_attempts ?? 3), 0),
+    3,
+  );
 
   if (forcedFunctionName && messages.length > 0) {
     const last = messages[messages.length - 1];
@@ -80,12 +120,10 @@ export async function callGemini(apiKey: string, body: Record<string, unknown>):
 
   let response: Response | null = null;
   let lastErr = "";
-  for (const model of [outBody.model as string, ...FALLBACK_MODELS.filter(m => m !== outBody.model)]) {
-    response = await fetch(OPENROUTER_URL, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ ...outBody, model }),
-    });
+  const openRouterModels = [outBody.model as string, ...FALLBACK_MODELS.filter(m => m !== outBody.model)]
+    .slice(0, maxModelAttempts);
+  for (const model of openRouterModels) {
+    response = await postChatCompletion(OPENROUTER_URL, headers, { ...outBody, model }, timeoutMs);
     if (response.ok) break;
     lastErr = await response.text().catch(() => "");
     if (response.status !== 404 && response.status !== 400 && response.status !== 429) break;
@@ -95,18 +133,20 @@ export async function callGemini(apiKey: string, body: Record<string, unknown>):
   // Fallback to Lovable AI Gateway when OpenRouter is exhausted / rate-limited.
   if (!response || !response.ok) {
     const LOVABLE_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (LOVABLE_KEY) {
+    if (LOVABLE_KEY && maxLovableAttempts > 0) {
       console.log("OpenRouter unavailable — falling back to Lovable AI Gateway");
-      const lovableModels = ["google/gemini-2.5-flash", "google/gemini-2.5-flash-lite", "openai/gpt-5-mini"];
+      const lovableModels = ["google/gemini-3-flash-preview", "google/gemini-2.5-flash-lite", "openai/gpt-5-mini"]
+        .slice(0, maxLovableAttempts);
       for (const model of lovableModels) {
-        const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: {
+        const r = await postChatCompletion(
+          "https://ai.gateway.lovable.dev/v1/chat/completions",
+          {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${LOVABLE_KEY}`,
+            "Lovable-API-Key": LOVABLE_KEY,
           },
-          body: JSON.stringify({ ...outBody, model }),
-        });
+          { ...outBody, model },
+          timeoutMs,
+        );
         if (r.ok) { response = r; break; }
         lastErr = await r.text().catch(() => "");
         console.warn(`Lovable AI model ${model} failed (${r.status}): ${lastErr.slice(0, 200)}`);
