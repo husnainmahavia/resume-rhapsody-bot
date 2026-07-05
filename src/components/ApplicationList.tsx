@@ -79,7 +79,9 @@ export default function ApplicationList({ applications, onUpdate }: ApplicationL
     e.app.status !== "applied" &&
     e.app.status !== "rejected"
   ).map((e) => e.app);
-  const [bulkSendProgress, setBulkSendProgress] = useState<{ done: number; total: number } | null>(null);
+  const [bulkSendProgress, setBulkSendProgress] = useState<
+    { done: number; total: number; current?: string; step?: string; sent: number; skipped: number; failed: number } | null
+  >(null);
 
   const handleApprove = async (app: JobApplication) => {
     setProcessing(`approve-${app.id}`);
