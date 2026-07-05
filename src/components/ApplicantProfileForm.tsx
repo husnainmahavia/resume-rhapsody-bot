@@ -278,6 +278,11 @@ export default function ApplicantProfileForm() {
         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
         Save Profile
       </Button>
+
+      {/* Danger Zone */}
+      <div className="pt-4 border-t border-border">
+        <DangerZone />
+      </div>
     </div>
   );
 }
