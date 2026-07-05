@@ -579,6 +579,8 @@ serve(async (req) => {
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    const fastDiscovery = await seedFreshDiscoveredJobs(supabase, location);
+
     // Long-running work runs in the background so we return before the 150s
     // edge idle timeout. Client should poll `?action=status` for progress.
     const runPipeline = async () => {
@@ -1046,6 +1048,7 @@ Sign off with: ${APPLICANT_NAME}, ${APPLICANT_PHONE}, ${APPLICANT_EMAIL}`,
     return new Response(JSON.stringify({
       success: true,
       accepted: true,
+      fastDiscovered: fastDiscovery.inserted,
       message: "Pipeline started in background. Poll ?action=status for progress. Safe to close this tab.",
     }), { status: 202, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
