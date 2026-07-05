@@ -96,6 +96,31 @@ export default function ApplicationList({ applications, onUpdate }: ApplicationL
     } finally { setProcessing(null); }
   };
 
+  const handleApproveAll = async () => {
+    const pendingApps = enriched.filter((e) => (e.app as any).pending_review !== false).map((e) => e.app);
+    if (pendingApps.length === 0) {
+      toast({ title: "Nothing to approve", description: "No pending applications." });
+      return;
+    }
+    if (!window.confirm(`Approve all ${pendingApps.length} pending application(s)?`)) return;
+    setProcessing("approve-all");
+    const now = new Date().toISOString();
+    let ok = 0, failed = 0;
+    await Promise.all(pendingApps.map(async (app) => {
+      try {
+        await updateApplication(app.id, { pending_review: false, approved_at: now } as any);
+        ok++;
+      } catch { failed++; }
+    }));
+    setProcessing(null);
+    toast({
+      title: "Bulk approval complete",
+      description: `${ok} approved${failed ? `, ${failed} failed` : ""}.`,
+      variant: failed ? "destructive" : "default",
+    });
+    onUpdate();
+  };
+
 
   const getProfileKey = (app: JobApplication, fit: FitScore): CvProfileKey =>
     (profileOverrides[app.id] ?? ((app as any).cv_profile as CvProfileKey) ?? fit.role.key);
