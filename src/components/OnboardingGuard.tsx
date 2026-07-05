@@ -139,7 +139,12 @@ export default function OnboardingGuard({ children }: Props) {
             </p>
           </CardHeader>
         </Card>
-        <ApplicantProfileForm onSaved={checkProfile} />
+        <ApplicantProfileForm />
+        <div className="flex justify-end">
+          <Button size="sm" variant="outline" onClick={checkProfile}>
+            I've saved my profile — continue
+          </Button>
+        </div>
       </div>
     );
   }
