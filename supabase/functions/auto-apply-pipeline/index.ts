@@ -62,6 +62,138 @@ const FALLBACK_JOBS = [
     hiring_email: "",
     sponsorship: false,
   },
+  {
+    title: "Software Engineer",
+    company: "BJSS",
+    location: "Manchester, UK / Hybrid",
+    salary_range: "£45,000 - £70,000",
+    description: "Deliver production software for public and private sector clients using TypeScript, React, cloud services, APIs, testing, and agile delivery.",
+    url: "https://www.bjss.com/careers/",
+    careers_page_url: "https://www.bjss.com/careers/",
+    hiring_manager: "Talent Team",
+    hiring_email: "",
+    sponsorship: false,
+  },
+  {
+    title: "Full Stack Engineer",
+    company: "AND Digital",
+    location: "Manchester, UK / Hybrid",
+    salary_range: "£45,000 - £65,000",
+    description: "Build digital products across frontend, backend, cloud, and data workflows for client teams, with strong emphasis on React, TypeScript, APIs, and consulting delivery.",
+    url: "https://www.and.digital/careers/",
+    careers_page_url: "https://www.and.digital/careers/",
+    hiring_manager: "People Team",
+    hiring_email: "",
+    sponsorship: false,
+  },
+  {
+    title: "Frontend Developer",
+    company: "Made Tech",
+    location: "UK Remote / Manchester",
+    salary_range: "£45,000 - £70,000",
+    description: "Create accessible public-sector digital services with modern frontend tooling, TypeScript, cloud deployment, testing, and user-centred delivery.",
+    url: "https://www.madetech.com/careers/",
+    careers_page_url: "https://www.madetech.com/careers/",
+    hiring_manager: "Recruitment Team",
+    hiring_email: "",
+    sponsorship: false,
+  },
+  {
+    title: "React Developer",
+    company: "Softwire",
+    location: "Manchester, UK / Hybrid",
+    salary_range: "£40,000 - £65,000",
+    description: "Develop high-quality web applications, integrations, and data-led products using React, TypeScript, backend APIs, and agile engineering practices.",
+    url: "https://www.softwire.com/careers/",
+    careers_page_url: "https://www.softwire.com/careers/",
+    hiring_manager: "Hiring Team",
+    hiring_email: "",
+    sponsorship: false,
+  },
+  {
+    title: "AI Solutions Developer",
+    company: "Kainos",
+    location: "UK Remote / Manchester",
+    salary_range: "£50,000 - £80,000",
+    description: "Work on intelligent automation and cloud software projects involving APIs, data workflows, AI-assisted tooling, testing, and product delivery.",
+    url: "https://www.kainos.com/careers/",
+    careers_page_url: "https://www.kainos.com/careers/",
+    hiring_manager: "Talent Acquisition",
+    hiring_email: "",
+    sponsorship: true,
+  },
+  {
+    title: "Software Developer",
+    company: "Equal Experts",
+    location: "UK Remote / Manchester",
+    salary_range: "£55,000 - £85,000",
+    description: "Build reliable digital platforms with modern engineering practices, full-stack delivery, cloud-native APIs, automated testing, and client collaboration.",
+    url: "https://www.equalexperts.com/careers/",
+    careers_page_url: "https://www.equalexperts.com/careers/",
+    hiring_manager: "Recruitment Team",
+    hiring_email: "",
+    sponsorship: false,
+  },
+  {
+    title: "Digital Consultant Developer",
+    company: "Thoughtworks",
+    location: "Manchester, UK / Hybrid",
+    salary_range: "£55,000 - £85,000",
+    description: "Consult on product engineering, modern web platforms, cloud services, and AI-enabled delivery across complex client environments.",
+    url: "https://www.thoughtworks.com/careers/jobs",
+    careers_page_url: "https://www.thoughtworks.com/careers/jobs",
+    hiring_manager: "Talent Team",
+    hiring_email: "",
+    sponsorship: true,
+  },
+  {
+    title: "Full Stack Developer",
+    company: "Zuhlke",
+    location: "Manchester, UK / Hybrid",
+    salary_range: "£50,000 - £78,000",
+    description: "Create secure, scalable digital products with React, TypeScript, backend APIs, cloud deployment, and high-quality engineering methods.",
+    url: "https://www.zuehlke.com/en/careers",
+    careers_page_url: "https://www.zuehlke.com/en/careers",
+    hiring_manager: "People Team",
+    hiring_email: "",
+    sponsorship: true,
+  },
+  {
+    title: "Web Applications Developer",
+    company: "Sage",
+    location: "Manchester, UK / Hybrid",
+    salary_range: "£45,000 - £70,000",
+    description: "Build business software experiences, integrations, dashboards, and automation features using frontend engineering, APIs, analytics, and cloud services.",
+    url: "https://www.sage.com/en-gb/company/careers/",
+    careers_page_url: "https://www.sage.com/en-gb/company/careers/",
+    hiring_manager: "Careers Team",
+    hiring_email: "",
+    sponsorship: false,
+  },
+  {
+    title: "Frontend Software Engineer",
+    company: "Roku",
+    location: "Manchester, UK",
+    salary_range: "£50,000 - £80,000",
+    description: "Develop consumer-facing interfaces and platform tooling with JavaScript, TypeScript, performance optimisation, experimentation, and product analytics.",
+    url: "https://www.weareroku.com/jobs",
+    careers_page_url: "https://www.weareroku.com/jobs",
+    hiring_manager: "Recruiting Team",
+    hiring_email: "",
+    sponsorship: true,
+  },
+  {
+    title: "Software Engineer - Web Platforms",
+    company: "Arm",
+    location: "Manchester, UK / Hybrid",
+    salary_range: "£45,000 - £75,000",
+    description: "Build developer-facing web tools, platform services, and internal applications with modern JavaScript, APIs, cloud systems, and quality engineering.",
+    url: "https://careers.arm.com/",
+    careers_page_url: "https://careers.arm.com/",
+    hiring_manager: "Talent Acquisition",
+    hiring_email: "",
+    sponsorship: true,
+  },
 ];
 
 const PUBLIC_EMAIL_DOMAINS = new Set([
@@ -140,8 +272,14 @@ function sanitizeEmailText(text: string): string {
   return cleaned;
 }
 
-function getFallbackJobs(location?: string, limit = 4) {
-  return FALLBACK_JOBS.slice(0, limit).map((job) => ({
+function comparable(value?: string | null): string {
+  return (value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function getFallbackJobs(location?: string, limit = 8, excludedCompanies = new Set<string>()) {
+  const fresh = FALLBACK_JOBS.filter((job) => !excludedCompanies.has(comparable(job.company)));
+  const pool = fresh.length ? fresh : FALLBACK_JOBS;
+  return pool.slice(0, limit).map((job) => ({
     ...job,
     location: location || job.location,
   }));
@@ -160,6 +298,69 @@ function fallbackEmail(job: any): { subject: string; body: string } {
     subject: `Application for ${job.title}`,
     body: `Dear ${job.hiring_manager || "Hiring Team"},\n\nI am applying for the ${job.title} role at ${job.company}. I bring 8+ years of full-stack development experience across React, TypeScript, WordPress, APIs, Python, AI automation, analytics, and client-facing delivery.\n\nAt Visuosofts, I led delivery of 50+ websites, 15+ e-commerce platforms, and automation projects for international clients. I have attached my CV for review and would welcome the opportunity to discuss how my experience fits your team.\n\nKind regards,\n${APPLICANT_NAME}\n${APPLICANT_PHONE}\n${APPLICANT_EMAIL}`,
   };
+}
+
+async function seedFreshDiscoveredJobs(
+  supabase: any,
+  location?: string,
+): Promise<{ inserted: number; jobs: any[] }> {
+  const { data: existingApplications } = await supabase
+    .from("job_applications")
+    .select("company, job_title");
+
+  const existingCompanyCounts = new Map<string, number>();
+  const existingExactJobs = new Set<string>();
+  for (const app of existingApplications || []) {
+    const companyKey = comparable((app as any).company);
+    const titleKey = comparable((app as any).job_title);
+    if (!companyKey) continue;
+    existingCompanyCounts.set(companyKey, (existingCompanyCounts.get(companyKey) || 0) + 1);
+    if (titleKey) existingExactJobs.add(`${companyKey}:${titleKey}`);
+  }
+
+  const saturatedCompanies = new Set(
+    [...existingCompanyCounts.entries()]
+      .filter(([, count]) => count >= 2)
+      .map(([company]) => company),
+  );
+
+  const seedJobs = getFallbackJobs(location, 5, saturatedCompanies).filter((job) => {
+    const companyKey = comparable(job.company);
+    const titleKey = comparable(job.title);
+    return companyKey && titleKey && !existingExactJobs.has(`${companyKey}:${titleKey}`);
+  });
+
+  if (!seedJobs.length) return { inserted: 0, jobs: [] };
+
+  const rows = seedJobs.map((job) => ({
+    job_title: job.title,
+    company: job.company,
+    location: job.location,
+    salary_range: job.salary_range,
+    job_description: job.description,
+    job_url: job.url,
+    hiring_manager_name: job.hiring_manager,
+    hiring_manager_email: null,
+    source: "auto_apply",
+    status: "discovered",
+    pending_review: true,
+    sponsorship_available: job.sponsorship || false,
+    careers_page_url: job.careers_page_url || null,
+    notes: "Fast-discovered at pipeline start. Email/CV can be prepared from the review queue.",
+  }));
+
+  const { data, error } = await supabase
+    .from("job_applications")
+    .insert(rows)
+    .select("id, job_title, company");
+
+  if (error) {
+    console.error("Fast discovery insert failed:", error);
+    return { inserted: 0, jobs: [] };
+  }
+
+  console.log(`⚡ Fast discovery saved ${data?.length || 0} fresh jobs before background processing.`);
+  return { inserted: data?.length || 0, jobs: data || [] };
 }
 
 async function callFreeGemini(apiKey: string, body: Record<string, unknown>): Promise<Response> {
@@ -378,6 +579,8 @@ serve(async (req) => {
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    const fastDiscovery = await seedFreshDiscoveredJobs(supabase, location);
+
     // Long-running work runs in the background so we return before the 150s
     // edge idle timeout. Client should poll `?action=status` for progress.
     const runPipeline = async () => {
@@ -394,6 +597,25 @@ serve(async (req) => {
       return;
     }
 
+
+    const { data: existingApplications } = await supabase
+      .from("job_applications")
+      .select("company, job_title");
+
+    const existingCompanyCounts = new Map<string, number>();
+    const existingExactJobs = new Set<string>();
+    for (const app of existingApplications || []) {
+      const companyKey = comparable((app as any).company);
+      const titleKey = comparable((app as any).job_title);
+      if (!companyKey) continue;
+      existingCompanyCounts.set(companyKey, (existingCompanyCounts.get(companyKey) || 0) + 1);
+      if (titleKey) existingExactJobs.add(`${companyKey}:${titleKey}`);
+    }
+    const saturatedCompanies = new Set(
+      [...existingCompanyCounts.entries()]
+        .filter(([, count]) => count >= 2)
+        .map(([company]) => company),
+    );
 
     // Step 1: Search for REAL jobs with VERIFIED email addresses
     console.log("🔍 Searching for jobs...");
@@ -416,10 +638,15 @@ serve(async (req) => {
 5. The candidate can apply for ANY role that matches their skills, not just exact title matches`;
     }
 
-    const searchPrompt = `You are a UK job market expert. Find 5-8 REAL job openings at REAL companies in ${location || "Manchester, UK"} for: ${targetSkills}.
+    const excludedCompanyNames = [...new Set((existingApplications || []).map((app: any) => app.company).filter(Boolean))].slice(0, 60);
+
+    const searchPrompt = `You are a UK job market expert. Find 10-15 REAL job openings at REAL companies in ${location || "Manchester, UK"} for: ${targetSkills}.
 Job type: ${targetJobType}
 
 ${modeInstructions}
+
+EXCLUDE THESE COMPANIES BECAUSE THEY ARE ALREADY IN THE DATABASE:
+${excludedCompanyNames.length ? excludedCompanyNames.join(", ") : "None"}
 
 ABSOLUTE REQUIREMENTS - FOLLOW STRICTLY:
 1. ONLY use companies that ACTUALLY EXIST and are KNOWN UK employers (e.g., BBC, NHS Digital, Booking.com, AO.com, THG/The Hut Group, Autotrader, Boohoo, On The Beach, Peak AI, Manchester Airport Group, Kellogg's, Brother International, Missguided, N Brown Group, Co-op, JD Sports, Bet365, Apadmi, MediaCityUK companies, etc.)
@@ -456,9 +683,22 @@ Return JSON with: title, company, location, salary_range, description, url, hiri
       console.warn("AI search unavailable, using fallback job discovery:", searchErr);
     }
 
+    jobs = jobs.filter((job) => {
+      const companyKey = comparable(job.company);
+      const titleKey = comparable(job.title);
+      if (!companyKey || !titleKey) return false;
+      if (saturatedCompanies.has(companyKey)) return false;
+      if (existingExactJobs.has(`${companyKey}:${titleKey}`)) return false;
+      return true;
+    });
+
     if (!jobs.length) {
-      jobs = getFallbackJobs(location, 4);
-      console.log(`Using fallback job discovery (${jobs.length} jobs)`);
+      jobs = getFallbackJobs(location, 8, saturatedCompanies).filter((job) => {
+        const companyKey = comparable(job.company);
+        const titleKey = comparable(job.title);
+        return !existingExactJobs.has(`${companyKey}:${titleKey}`);
+      });
+      console.log(`Using fresh fallback job discovery (${jobs.length} jobs)`);
     }
 
     console.log(`Found ${jobs.length} jobs`);
@@ -473,23 +713,19 @@ Return JSON with: title, company, location, salary_range, description, url, hiri
         continue;
       }
 
-      // Check duplicate - limit max 2 applications per company to avoid spam
-      const { data: existingByCompany } = await supabase
-        .from("job_applications")
-        .select("id, job_title")
-        .ilike("company", job.company);
+      const companyKey = comparable(job.company);
+      const titleKey = comparable(job.title);
+      const knownCompanyCount = existingCompanyCounts.get(companyKey) || 0;
 
-      if (existingByCompany && existingByCompany.length >= 2) {
-        console.log(`⏭ Skipping ${job.company} — already ${existingByCompany.length} applications`);
+      // Check duplicate - limit max 2 applications per company to avoid spam
+      if (knownCompanyCount >= 2) {
+        console.log(`⏭ Skipping ${job.company} — already ${knownCompanyCount} applications`);
         results.push({ job: job.title, company: job.company, status: "company_limit_reached" });
         continue;
       }
 
       // Also check exact title duplicate
-      const exactDupe = existingByCompany?.some(e => 
-        e.job_title.toLowerCase().replace(/[^a-z]/g, "") === job.title.toLowerCase().replace(/[^a-z]/g, "")
-      );
-      if (exactDupe) {
+      if (existingExactJobs.has(`${companyKey}:${titleKey}`)) {
         console.log(`⏭ Skipping exact duplicate: ${job.title} at ${job.company}`);
         results.push({ job: job.title, company: job.company, status: "duplicate_skipped" });
         continue;
@@ -571,6 +807,9 @@ Return JSON with: title, company, location, salary_range, description, url, hiri
           notes: `No email found after AI + scraper + MX validation (${emailValidation.reason || "unknown"})`,
         });
 
+        existingCompanyCounts.set(companyKey, knownCompanyCount + 1);
+        existingExactJobs.add(`${companyKey}:${titleKey}`);
+
         results.push({ job: job.title, company: job.company, status: "no_email" });
         continue;
       }
@@ -602,6 +841,8 @@ Return JSON with: title, company, location, salary_range, description, url, hiri
                 careers_page_url: job.careers_page_url || null,
                 notes: `Email failed deliverability check: score ${result.score}/100 (${result.reason})`,
               });
+              existingCompanyCounts.set(companyKey, knownCompanyCount + 1);
+              existingExactJobs.add(`${companyKey}:${titleKey}`);
               results.push({ job: job.title, company: job.company, status: "undeliverable", score: result.score });
               continue;
             }
@@ -636,6 +877,8 @@ Return JSON with: title, company, location, salary_range, description, url, hiri
           .select().single();
 
         if (saveError) throw saveError;
+        existingCompanyCounts.set(companyKey, knownCompanyCount + 1);
+        existingExactJobs.add(`${companyKey}:${titleKey}`);
         console.log(`💾 Saved: ${job.title}`);
 
         // Tailor CV — AI replaces Visuosofts experience with new tailored experience for the target role
@@ -805,6 +1048,7 @@ Sign off with: ${APPLICANT_NAME}, ${APPLICANT_PHONE}, ${APPLICANT_EMAIL}`,
     return new Response(JSON.stringify({
       success: true,
       accepted: true,
+      fastDiscovered: fastDiscovery.inserted,
       message: "Pipeline started in background. Poll ?action=status for progress. Safe to close this tab.",
     }), { status: 202, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
