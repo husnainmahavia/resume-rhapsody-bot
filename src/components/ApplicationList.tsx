@@ -1,8 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Briefcase, MapPin, Building2, ChevronDown, FileText, Mail,
   Loader2, Check, Clock, X, Star, Send, ShieldCheck, ShieldAlert, UserSquare2,
+  Download, GitCompare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +13,9 @@ import { tailorCV, generateEmail, updateApplication } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { scoreJob, ROLE_PROFILES, type FitScore, type CvProfileKey } from "@/lib/jobScoring";
 import { ScoreBadge, AtsPanel } from "@/components/AtsPanel";
+import { exportTextAsPdf } from "@/lib/pdfExport";
+import CvDiff from "@/components/CvDiff";
+import { supabase } from "@/integrations/supabase/client";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
   discovered: { label: "Discovered", color: "bg-muted text-muted-foreground", icon: <Clock className="h-3 w-3" /> },
