@@ -660,17 +660,24 @@ TAILORING INSTRUCTIONS:
 
 Return the complete tailored CV text and cover letter as JSON: {"tailored_cv":"...","cover_letter":"..."}`;
 
-        const cvResponse = await callFreeGemini(OPENROUTER_API_KEY, {
+        let cvResult = fallbackTailoredCv(job);
+        try {
+          const cvResponse = await callFreeGemini(OPENROUTER_API_KEY, {
             messages: [
               { role: "system", content: "You are a professional CV writer. Return ONLY a JSON object with 'tailored_cv' and 'cover_letter' keys. No markdown, no code fences, no thinking." },
               { role: "user", content: cvTailorPrompt },
             ],
-        });
+          });
 
-        if (!cvResponse.ok) throw new Error("CV tailoring failed");
-        const cvData = await cvResponse.json();
-        const cvContent = cvData.choices?.[0]?.message?.content || "";
-        const cvResult = parseAIJson(cvContent) || { tailored_cv: "", cover_letter: "" };
+          if (cvResponse.ok) {
+            const cvData = await cvResponse.json();
+            const cvContent = cvData.choices?.[0]?.message?.content || "";
+            const parsedCv = parseAIJson(cvContent);
+            if (parsedCv?.tailored_cv && parsedCv?.cover_letter) cvResult = parsedCv;
+          }
+        } catch (cvErr) {
+          console.warn(`CV AI unavailable for ${job.title}; using fallback CV`, cvErr);
+        }
 
         await supabase.from("job_applications").update({
           tailored_cv: cvResult.tailored_cv,
@@ -686,7 +693,9 @@ Return the complete tailored CV text and cover letter as JSON: {"tailored_cv":".
         // Generate email — short professional intro only (CV attached as file)
         console.log(`✉️ Generating email for: ${job.company}`);
         const managerName = job.hiring_manager || "Hiring Team";
-        const emailResponse = await callFreeGemini(OPENROUTER_API_KEY, {
+        let emailResult = fallbackEmail(job);
+        try {
+          const emailResponse = await callFreeGemini(OPENROUTER_API_KEY, {
             messages: [
               {
                 role: "system",
@@ -712,12 +721,17 @@ Candidate: ${APPLICANT_NAME}, ${APPLICANT_TITLE}. CV is attached as PDF.
 Sign off with: ${APPLICANT_NAME}, ${APPLICANT_PHONE}, ${APPLICANT_EMAIL}`,
               },
             ],
-        });
+          });
 
-        if (!emailResponse.ok) throw new Error("Email generation failed");
-        const emailData = await emailResponse.json();
-        const emailContent = emailData.choices?.[0]?.message?.content || "";
-        const emailResult = parseAIJson(emailContent) || { subject: "", body: "" };
+          if (emailResponse.ok) {
+            const emailData = await emailResponse.json();
+            const emailContent = emailData.choices?.[0]?.message?.content || "";
+            const parsedEmail = parseAIJson(emailContent);
+            if (parsedEmail?.subject && parsedEmail?.body) emailResult = parsedEmail;
+          }
+        } catch (emailErr) {
+          console.warn(`Email AI unavailable for ${job.company}; using fallback email`, emailErr);
+        }
         
         // Strip any remaining bracket placeholders
         emailResult.subject = (emailResult.subject || "").replace(/\[.*?\]/g, "").trim();
