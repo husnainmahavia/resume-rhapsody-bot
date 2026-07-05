@@ -127,6 +127,92 @@ export default function ApplicationList({ applications, onUpdate }: ApplicationL
     onUpdate();
   };
 
+  const handleSendAllApproved = async () => {
+    if (approvedUnsent.length === 0) {
+      toast({ title: "Nothing to send", description: "No approved applications waiting to be sent." });
+      return;
+    }
+    if (!window.confirm(
+      `Start applying to ${approvedUnsent.length} approved job(s)?\n\n` +
+      `For each: CV will be tailored (if missing), email drafted (if missing), then sent. ` +
+      `Rows missing a hiring-manager email will be skipped.`
+    )) return;
+
+    setProcessing("send-all");
+    let sent = 0, skipped = 0, failed = 0;
+    setBulkSendProgress({ done: 0, total: approvedUnsent.length });
+
+    for (let i = 0; i < approvedUnsent.length; i++) {
+      const app = approvedUnsent[i];
+      setBulkSendProgress({ done: i, total: approvedUnsent.length });
+      try {
+        let current = app;
+
+        // 1. Ensure CV is tailored
+        if (!current.tailored_cv) {
+          const fit = computeFit(current);
+          const cvVersion = getProfileKey(current, fit);
+          const r = await tailorCV(current.job_title, current.company, current.job_description || "", cvVersion);
+          if (r?.tailored_cv) {
+            await updateApplication(current.id, {
+              tailored_cv: r.tailored_cv, cover_letter: r.cover_letter,
+              status: "cv_tailored", cv_profile: cvVersion,
+            } as any);
+            current = { ...current, tailored_cv: r.tailored_cv, cover_letter: r.cover_letter };
+          }
+        }
+
+        // 2. Ensure email drafted
+        if (!current.email_body || !current.email_subject) {
+          const r = await generateEmail(
+            current.job_title, current.company,
+            current.hiring_manager_name || "Hiring Team",
+            current.job_description || ""
+          );
+          if (r?.body && r?.subject) {
+            await updateApplication(current.id, {
+              email_subject: r.subject, email_body: r.body,
+            } as any);
+            current = { ...current, email_subject: r.subject, email_body: r.body };
+          }
+        }
+
+        // 3. Validate ready-to-send
+        if (!current.hiring_manager_email || !current.email_subject || !current.email_body) {
+          skipped++;
+          continue;
+        }
+
+        // 4. Send
+        const result = await sendEmail(
+          current.hiring_manager_email, current.email_subject, current.email_body,
+          current.hiring_manager_name || undefined, current.id,
+        );
+        if (result?.sent === false || result?.error) {
+          failed++;
+        } else {
+          await updateApplication(current.id, {
+            status: "applied",
+            applied_at: new Date().toISOString(),
+            follow_up_scheduled_at: new Date(Date.now() + 3 * 86400000).toISOString(),
+          } as any);
+          sent++;
+        }
+      } catch {
+        failed++;
+      }
+    }
+
+    setBulkSendProgress(null);
+    setProcessing(null);
+    toast({
+      title: "Bulk send complete",
+      description: `${sent} sent · ${skipped} skipped (missing recipient) · ${failed} failed`,
+      variant: failed ? "destructive" : "default",
+    });
+    onUpdate();
+  };
+
 
   const getProfileKey = (app: JobApplication, fit: FitScore): CvProfileKey =>
     (profileOverrides[app.id] ?? ((app as any).cv_profile as CvProfileKey) ?? fit.role.key);
