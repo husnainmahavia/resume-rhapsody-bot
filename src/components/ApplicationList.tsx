@@ -233,7 +233,7 @@ export default function ApplicationList({ applications, onUpdate }: ApplicationL
   return (
     <div className="space-y-3">
       {/* Filter bar */}
-      <div className="flex items-center gap-2 text-xs">
+      <div className="flex items-center gap-2 text-xs flex-wrap">
         <span className="text-muted-foreground">Filter:</span>
         {(["all", "pending", "approved"] as const).map((f) => (
           <button key={f} onClick={() => setFilter(f)}
@@ -243,6 +243,17 @@ export default function ApplicationList({ applications, onUpdate }: ApplicationL
             {f === "pending" ? `Pending review (${pendingCount})` : f === "approved" ? "Approved" : `All (${applications.length})`}
           </button>
         ))}
+        {pendingCount > 0 && (
+          <Button
+            size="sm"
+            className="ml-auto h-7 gap-1 text-xs"
+            onClick={handleApproveAll}
+            disabled={processing === "approve-all"}
+          >
+            {processing === "approve-all" ? <Loader2 className="h-3 w-3 animate-spin" /> : <ShieldCheck className="h-3 w-3" />}
+            Approve all ({pendingCount})
+          </Button>
+        )}
       </div>
 
       {filtered.map(({ app, fit, score }, i) => {
