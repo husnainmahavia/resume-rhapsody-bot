@@ -363,9 +363,8 @@ async function handleSend(payload: Record<string, unknown>) {
     console.log(`✅ Recipient verified: ${to} (score ${verdict.score}, ${verdict.reason})`);
   }
 
-  const sanitizedBody = sanitizeGeneratedEmail(body);
-
   const spamHit = detectSpamContent(subject, sanitizedBody);
+
   if (spamHit) {
     console.log(`🚫 Spam content blocked (${spamHit}) → ${to}`);
     return json({
