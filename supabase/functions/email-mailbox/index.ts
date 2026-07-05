@@ -73,6 +73,57 @@ function sanitizeGeneratedEmail(body: string) {
   return `${contentOnly}\n\nBest regards,\n${senderName}\n${senderPhone}\n${senderEmail}`;
 }
 
+// Spam trigger detector — blocks obvious spam-flagged phrasing before send.
+const SPAM_TRIGGERS = [
+  /\bfree\s+(money|gift|trial|offer)\b/i,
+  /\b(100%|guarantee[d]?)\s+(free|risk[- ]free|satisfaction)\b/i,
+  /\bact\s+now\b/i, /\blimited\s+time\b/i, /\burgent\s+response\b/i,
+  /\bwork\s+from\s+home\b/i, /\bmake\s+\$?\d+\s+(a|per)\s+(day|week)\b/i,
+  /\bviagra\b/i, /\bcasino\b/i, /\blottery\b/i, /\bcrypto\s+giveaway\b/i,
+  /\bclick\s+here\b/i, /\bbuy\s+now\b/i, /\bcheap\s+meds\b/i,
+  /\$\$\$/, /!!!+/, /\bearn\s+extra\s+cash\b/i,
+];
+function detectSpamContent(subject: string, body: string): string | null {
+  const text = `${subject}\n${body}`;
+  for (const re of SPAM_TRIGGERS) {
+    const m = text.match(re);
+    if (m) return m[0];
+  }
+  // ALL CAPS shouting in subject
+  if (subject.length > 8 && subject === subject.toUpperCase() && /[A-Z]/.test(subject)) {
+    return "ALL_CAPS_SUBJECT";
+  }
+  // Excessive punctuation
+  if ((subject.match(/[!?]/g) || []).length >= 3) return "EXCESSIVE_PUNCTUATION";
+  return null;
+}
+
+// Hard authenticity gate — calls email-verify function; rejects on invalid MX / low score.
+async function verifyRecipient(email: string): Promise<{ ok: boolean; score: number; reason: string }> {
+  try {
+    const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/email-verify`;
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+      },
+      body: JSON.stringify({ email }),
+    });
+    const data = await resp.json();
+    const r = data?.results?.[0];
+    if (!r) return { ok: false, score: 0, reason: "verify_no_result" };
+    // Block: no MX, disposable, or definitively rejected by SMTP.
+    if (!r.checks?.mxRecords) return { ok: false, score: r.score, reason: "no_mx_records" };
+    if (r.checks?.disposable) return { ok: false, score: r.score, reason: "disposable_domain" };
+    if (r.checks?.smtpRcptTo === "rejected") return { ok: false, score: r.score, reason: "smtp_rejected" };
+    if (r.score < 40) return { ok: false, score: r.score, reason: `low_score_${r.reason}` };
+    return { ok: true, score: r.score, reason: r.reason };
+  } catch (e) {
+    return { ok: false, score: 0, reason: `verify_error:${e instanceof Error ? e.message : "unknown"}` };
+  }
+}
+
 function generateCvHtml(cvText: string, jobTitle: string, company: string) {
   const lines = cvText.split("\n").map((line) => line.trim()).filter(Boolean);
   const formatted = lines.map((line) => `<p>${escapeHtml(line)}</p>`).join("");
