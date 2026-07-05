@@ -385,6 +385,38 @@ export default function ApplicationList({ applications, onUpdate }: ApplicationL
         </div>
       </div>
 
+      {bulkSendProgress && (
+        <div className="glass rounded-lg p-3 space-y-2 border border-primary/30">
+          <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2 min-w-0">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-primary shrink-0" />
+              <span className="font-medium truncate">
+                {bulkSendProgress.current ?? "Wrapping up"}
+              </span>
+              {bulkSendProgress.step && (
+                <span className="text-muted-foreground truncate">· {bulkSendProgress.step}</span>
+              )}
+            </div>
+            <span className="text-muted-foreground shrink-0 ml-2">
+              {bulkSendProgress.done}/{bulkSendProgress.total}
+            </span>
+          </div>
+          <div className="h-1.5 w-full bg-secondary/50 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-primary transition-all duration-300"
+              style={{ width: `${(bulkSendProgress.done / Math.max(1, bulkSendProgress.total)) * 100}%` }}
+            />
+          </div>
+          <div className="flex gap-3 text-[11px] text-muted-foreground">
+            <span className="text-success">✓ {bulkSendProgress.sent} sent</span>
+            <span>⊘ {bulkSendProgress.skipped} skipped</span>
+            <span className="text-destructive">✗ {bulkSendProgress.failed} failed</span>
+          </div>
+        </div>
+      )}
+
+
+
 
       {filtered.map(({ app, fit, score }, i) => {
         const status = STATUS_CONFIG[app.status] || STATUS_CONFIG.discovered;
