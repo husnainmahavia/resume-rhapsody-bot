@@ -335,18 +335,38 @@ export default function ApplicationList({ applications, onUpdate }: ApplicationL
             {f === "pending" ? `Pending review (${pendingCount})` : f === "approved" ? "Approved" : `All (${applications.length})`}
           </button>
         ))}
-        {pendingCount > 0 && (
-          <Button
-            size="sm"
-            className="ml-auto h-7 gap-1 text-xs"
-            onClick={handleApproveAll}
-            disabled={processing === "approve-all"}
-          >
-            {processing === "approve-all" ? <Loader2 className="h-3 w-3 animate-spin" /> : <ShieldCheck className="h-3 w-3" />}
-            Approve all ({pendingCount})
-          </Button>
-        )}
+        <div className="ml-auto flex items-center gap-2">
+          {pendingCount > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1 text-xs"
+              onClick={handleApproveAll}
+              disabled={processing === "approve-all"}
+            >
+              {processing === "approve-all" ? <Loader2 className="h-3 w-3 animate-spin" /> : <ShieldCheck className="h-3 w-3" />}
+              Approve all ({pendingCount})
+            </Button>
+          )}
+          {approvedUnsent.length > 0 && (
+            <Button
+              size="sm"
+              className="h-7 gap-1 text-xs"
+              onClick={handleSendAllApproved}
+              disabled={processing === "send-all"}
+              title="Auto-tailors CV & drafts email if missing, then sends"
+            >
+              {processing === "send-all"
+                ? <Loader2 className="h-3 w-3 animate-spin" />
+                : <Send className="h-3 w-3" />}
+              {processing === "send-all" && bulkSendProgress
+                ? `Applying ${bulkSendProgress.done}/${bulkSendProgress.total}…`
+                : `Start applying (${approvedUnsent.length})`}
+            </Button>
+          )}
+        </div>
       </div>
+
 
       {filtered.map(({ app, fit, score }, i) => {
         const status = STATUS_CONFIG[app.status] || STATUS_CONFIG.discovered;
