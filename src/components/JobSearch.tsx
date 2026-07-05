@@ -74,7 +74,8 @@ export default function JobSearch({ onJobAdded }: JobSearchProps) {
         match_breakdown: fit.breakdown as unknown as Record<string, number>,
         ats_present: fit.ats.present, ats_missing: fit.ats.missing,
         pending_review: true,
-      });
+        cv_profile: fit.role.key,
+      } as any);
       toast({ title: "Saved to review queue", description: `${job.title} at ${job.company} — ${fit.total}/100` });
       onJobAdded();
     } catch { toast({ title: "Error", description: "Failed to save job", variant: "destructive" }); }
