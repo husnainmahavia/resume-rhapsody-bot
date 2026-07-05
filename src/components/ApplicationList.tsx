@@ -80,10 +80,24 @@ export default function ApplicationList({ applications, onUpdate }: ApplicationL
   };
 
 
-  const handleTailorCV = async (app: JobApplication) => {
+  const getProfileKey = (app: JobApplication, fit: FitScore): CvProfileKey =>
+    (profileOverrides[app.id] ?? ((app as any).cv_profile as CvProfileKey) ?? fit.role.key);
+
+  const handleSelectProfile = async (app: JobApplication, key: CvProfileKey) => {
+    setProfileOverrides((prev) => ({ ...prev, [app.id]: key }));
+    try {
+      await updateApplication(app.id, { cv_profile: key } as any);
+      onUpdate();
+    } catch {
+      toast({ title: "Error", description: "Failed to save CV profile", variant: "destructive" });
+    }
+  };
+
+  const handleTailorCV = async (app: JobApplication, fit: FitScore) => {
     setProcessing(`cv-${app.id}`);
     try {
-      const result = await tailorCV(app.job_title, app.company, app.job_description || "");
+      const cvVersion = getProfileKey(app, fit);
+      const result = await tailorCV(app.job_title, app.company, app.job_description || "", cvVersion);
       if (result.error) {
         toast({ title: "Error", description: result.error, variant: "destructive" });
         return;
@@ -92,8 +106,9 @@ export default function ApplicationList({ applications, onUpdate }: ApplicationL
         tailored_cv: result.tailored_cv,
         cover_letter: result.cover_letter,
         status: "cv_tailored",
-      });
-      toast({ title: "CV Tailored!", description: `CV customized for ${app.company}` });
+        cv_profile: cvVersion,
+      } as any);
+      toast({ title: "CV Tailored!", description: `${app.company} — profile: ${ROLE_PROFILES.find(p => p.key === cvVersion)?.label ?? cvVersion}` });
       onUpdate();
     } catch {
       toast({ title: "Error", description: "Failed to tailor CV", variant: "destructive" });
