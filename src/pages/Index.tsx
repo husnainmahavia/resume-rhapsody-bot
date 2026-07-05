@@ -185,9 +185,19 @@ const Index = () => {
               <p className="text-xs text-muted-foreground">AI Job Application Copilot — you review, you approve, you send</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-            <span className="text-xs text-muted-foreground font-mono">ONLINE</span>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+              <span className="text-xs text-muted-foreground font-mono">ONLINE</span>
+            </div>
+            {userEmail && (
+              <span className="hidden sm:inline text-xs text-muted-foreground font-mono truncate max-w-[160px]">
+                {userEmail}
+              </span>
+            )}
+            <Button size="sm" variant="outline" onClick={handleLogout} className="gap-1 h-8 text-xs">
+              <LogOut className="h-3 w-3" /> Sign out
+            </Button>
           </div>
         </motion.header>
 
