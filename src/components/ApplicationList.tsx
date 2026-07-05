@@ -142,16 +142,21 @@ export default function ApplicationList({ applications, onUpdate }: ApplicationL
 
     setProcessing("send-all");
     let sent = 0, skipped = 0, failed = 0;
-    setBulkSendProgress({ done: 0, total: approvedUnsent.length });
+    const total = approvedUnsent.length;
+    setBulkSendProgress({ done: 0, total, sent, skipped, failed, current: approvedUnsent[0]?.company, step: "Starting…" });
 
-    for (let i = 0; i < approvedUnsent.length; i++) {
+    for (let i = 0; i < total; i++) {
       const app = approvedUnsent[i];
-      setBulkSendProgress({ done: i, total: approvedUnsent.length });
+      const setStep = (step: string) =>
+        setBulkSendProgress({ done: i, total, current: app.company, step, sent, skipped, failed });
+
       try {
         let current = app;
 
         // 1. Ensure CV is tailored
         if (!current.tailored_cv) {
+          setStep("Tailoring CV…");
+          console.log(`[bulk-send ${i + 1}/${total}] Tailoring CV for ${current.company}`);
           const fit = computeFit(current);
           const cvVersion = getProfileKey(current, fit);
           const r = await tailorCV(current.job_title, current.company, current.job_description || "", cvVersion);
@@ -166,6 +171,8 @@ export default function ApplicationList({ applications, onUpdate }: ApplicationL
 
         // 2. Ensure email drafted
         if (!current.email_body || !current.email_subject) {
+          setStep("Drafting email…");
+          console.log(`[bulk-send ${i + 1}/${total}] Drafting email for ${current.company}`);
           const r = await generateEmail(
             current.job_title, current.company,
             current.hiring_manager_name || "Hiring Team",
@@ -181,16 +188,21 @@ export default function ApplicationList({ applications, onUpdate }: ApplicationL
 
         // 3. Validate ready-to-send
         if (!current.hiring_manager_email || !current.email_subject || !current.email_body) {
+          console.log(`[bulk-send ${i + 1}/${total}] Skipping ${current.company} — missing recipient/subject/body`);
           skipped++;
+          setStep(`Skipped (no recipient)`);
           continue;
         }
 
         // 4. Send
+        setStep(`Sending to ${current.hiring_manager_email}…`);
+        console.log(`[bulk-send ${i + 1}/${total}] Sending to ${current.hiring_manager_email}`);
         const result = await sendEmail(
           current.hiring_manager_email, current.email_subject, current.email_body,
           current.hiring_manager_name || undefined, current.id,
         );
         if (result?.sent === false || result?.error) {
+          console.log(`[bulk-send ${i + 1}/${total}] Send blocked: ${result?.error}`);
           failed++;
         } else {
           await updateApplication(current.id, {
@@ -200,10 +212,14 @@ export default function ApplicationList({ applications, onUpdate }: ApplicationL
           } as any);
           sent++;
         }
-      } catch {
+      } catch (err) {
+        console.error(`[bulk-send ${i + 1}/${total}] Failed:`, err);
         failed++;
       }
+
+      setBulkSendProgress({ done: i + 1, total, current: approvedUnsent[i + 1]?.company, step: "", sent, skipped, failed });
     }
+
 
     setBulkSendProgress(null);
     setProcessing(null);
