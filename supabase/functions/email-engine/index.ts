@@ -344,6 +344,7 @@ REQUIREMENTS:
       const sendJob = async () => {
         let sent = 0;
         let errors = 0;
+        let skippedInvalid = 0;
         for (const lead of leads) {
           try {
             const { data: alreadySent } = await supabase
@@ -359,6 +360,44 @@ REQUIREMENTS:
                 sent: true,
                 sent_at: new Date().toISOString(),
                 send_error: null,
+              }).eq("id", lead.id);
+              continue;
+            }
+
+            // 🔍 PRE-SEND VERIFICATION: MX + SMTP RCPT check
+            let verifyPassed = true;
+            let verifyReason = "";
+            try {
+              const verifyResp = await fetch(`${SUPABASE_URL}/functions/v1/email-verify`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                },
+                body: JSON.stringify({ email: lead.contact_email }),
+              });
+              if (verifyResp.ok) {
+                const vd = await verifyResp.json();
+                const r = vd.results?.[0];
+                if (r) {
+                  verifyReason = r.reason || "";
+                  // Block only when we have HIGH confidence the address is bad.
+                  // MX-valid but SMTP timeout/blocked is common (many servers block probes) — allow.
+                  if (!r.checks?.mxRecords || r.reason === "smtp_rejected" || r.reason === "invalid_format" || r.reason === "disposable_domain") {
+                    verifyPassed = false;
+                  }
+                }
+              }
+            } catch (ve) {
+              console.warn(`  ⚠️ Verify failed for ${lead.contact_email}, proceeding anyway:`, ve);
+            }
+
+            if (!verifyPassed) {
+              skippedInvalid++;
+              const msg = `Skipped: address failed verification (${verifyReason})`;
+              console.log(`  🚫 ${lead.contact_email} — ${msg}`);
+              await supabase.from("email_engine_leads").update({
+                send_error: msg,
               }).eq("id", lead.id);
               continue;
             }
@@ -381,16 +420,20 @@ REQUIREMENTS:
             sent++;
             console.log(`  ✅ Sent to: ${lead.contact_email} — ${info.messageId}`);
 
-            await supabase.from("sent_emails").upsert({
-              recipient_email: lead.contact_email!.toLowerCase(),
-              sender: "visuosofts",
-              subject: lead.email_subject,
-              lead_id: lead.id,
-              message_id: info.messageId,
-              sent_at: new Date().toISOString(),
-            }, { onConflict: "recipient_email,sender" }).catch((e: any) => console.error("Dedup log error:", e));
+            try {
+              await supabase.from("sent_emails").upsert({
+                recipient_email: lead.contact_email!.toLowerCase(),
+                sender: "visuosofts",
+                subject: lead.email_subject,
+                lead_id: lead.id,
+                message_id: info.messageId,
+                sent_at: new Date().toISOString(),
+              }, { onConflict: "recipient_email,sender" });
+            } catch (dedupErr) {
+              console.error("Dedup log error:", dedupErr);
+            }
 
-            // Shorter human-like pacing: 60-120s between sends
+            // Human-like pacing: 60-120s between sends
             const delay = 60000 + Math.floor(Math.random() * 60000);
             console.log(`  ⏱ Waiting ${Math.round(delay / 1000)}s...`);
             await new Promise(r => setTimeout(r, delay));
@@ -401,8 +444,9 @@ REQUIREMENTS:
             await supabase.from("email_engine_leads").update({ send_error: errMsg }).eq("id", lead.id);
           }
         }
-        console.log(`🏁 Background send done: ${sent} sent, ${errors} errors`);
+        console.log(`🏁 Background send done: ${sent} sent, ${skippedInvalid} skipped (bad address), ${errors} errors`);
       };
+
 
       // @ts-ignore EdgeRuntime is available in Supabase edge functions
       if (typeof EdgeRuntime !== "undefined" && EdgeRuntime.waitUntil) {
