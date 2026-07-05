@@ -300,6 +300,69 @@ function fallbackEmail(job: any): { subject: string; body: string } {
   };
 }
 
+async function seedFreshDiscoveredJobs(
+  supabase: any,
+  location?: string,
+): Promise<{ inserted: number; jobs: any[] }> {
+  const { data: existingApplications } = await supabase
+    .from("job_applications")
+    .select("company, job_title");
+
+  const existingCompanyCounts = new Map<string, number>();
+  const existingExactJobs = new Set<string>();
+  for (const app of existingApplications || []) {
+    const companyKey = comparable((app as any).company);
+    const titleKey = comparable((app as any).job_title);
+    if (!companyKey) continue;
+    existingCompanyCounts.set(companyKey, (existingCompanyCounts.get(companyKey) || 0) + 1);
+    if (titleKey) existingExactJobs.add(`${companyKey}:${titleKey}`);
+  }
+
+  const saturatedCompanies = new Set(
+    [...existingCompanyCounts.entries()]
+      .filter(([, count]) => count >= 2)
+      .map(([company]) => company),
+  );
+
+  const seedJobs = getFallbackJobs(location, 5, saturatedCompanies).filter((job) => {
+    const companyKey = comparable(job.company);
+    const titleKey = comparable(job.title);
+    return companyKey && titleKey && !existingExactJobs.has(`${companyKey}:${titleKey}`);
+  });
+
+  if (!seedJobs.length) return { inserted: 0, jobs: [] };
+
+  const rows = seedJobs.map((job) => ({
+    job_title: job.title,
+    company: job.company,
+    location: job.location,
+    salary_range: job.salary_range,
+    job_description: job.description,
+    job_url: job.url,
+    hiring_manager_name: job.hiring_manager,
+    hiring_manager_email: null,
+    source: "auto_apply",
+    status: "discovered",
+    pending_review: true,
+    sponsorship_available: job.sponsorship || false,
+    careers_page_url: job.careers_page_url || null,
+    notes: "Fast-discovered at pipeline start. Email/CV can be prepared from the review queue.",
+  }));
+
+  const { data, error } = await supabase
+    .from("job_applications")
+    .insert(rows)
+    .select("id, job_title, company");
+
+  if (error) {
+    console.error("Fast discovery insert failed:", error);
+    return { inserted: 0, jobs: [] };
+  }
+
+  console.log(`⚡ Fast discovery saved ${data?.length || 0} fresh jobs before background processing.`);
+  return { inserted: data?.length || 0, jobs: data || [] };
+}
+
 async function callFreeGemini(apiKey: string, body: Record<string, unknown>): Promise<Response> {
   // Strip tool_choice and tools — not supported on free models
   const { tools, tool_choice, ...cleanBody } = body as any;
