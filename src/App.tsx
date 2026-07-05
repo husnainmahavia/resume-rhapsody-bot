@@ -8,6 +8,9 @@ import Landing from "./pages/Landing";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import NotFound from "./pages/NotFound";
+import Faq from "./pages/Faq";
+import About from "./pages/About";
+import Contact from "./pages/Contact";
 import OnboardingGuard from "./components/OnboardingGuard";
 
 const queryClient = new QueryClient();
