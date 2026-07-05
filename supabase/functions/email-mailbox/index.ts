@@ -339,11 +339,43 @@ async function handleSend(payload: Record<string, unknown>) {
     html: sanitizedBody.replace(/\n/g, "<br>"),
   };
 
-  if (attachments.length > 0) {
-    mailOptions.attachments = attachments;
+  // === Pre-send authenticity + spam gate ===
+  if (RATE_LIMITS.verifyBeforeSending) {
+    const verdict = await verifyRecipient(to);
+    if (!verdict.ok) {
+      // Auto-blacklist domain on definitive SMTP rejection / no MX
+      if (recipientDomain && (verdict.reason === "no_mx_records" || verdict.reason === "smtp_rejected")) {
+        await supabase.from("domain_blacklist").upsert({
+          domain: recipientDomain,
+          is_blacklisted: true,
+          blacklisted_at: new Date().toISOString(),
+          reason: `Auto: ${verdict.reason} (score ${verdict.score})`,
+          bounce_count: 1,
+        }, { onConflict: "domain" });
+      }
+      console.log(`🚫 Blocked send to ${to}: ${verdict.reason} (score ${verdict.score})`);
+      return json({
+        success: false, sent: false, blocked: true,
+        error: `Email not verified: ${verdict.reason} (score ${verdict.score}/100). Send blocked to protect deliverability.`,
+        verification: verdict,
+      });
+    }
+    console.log(`✅ Recipient verified: ${to} (score ${verdict.score}, ${verdict.reason})`);
+  }
+
+  const sanitizedBody = sanitizeGeneratedEmail(body);
+
+  const spamHit = detectSpamContent(subject, sanitizedBody);
+  if (spamHit) {
+    console.log(`🚫 Spam content blocked (${spamHit}) → ${to}`);
+    return json({
+      success: false, sent: false, blocked: true,
+      error: `Email blocked — spam trigger detected: "${spamHit}". Rewrite and try again.`,
+    });
   }
 
   const info = await transporter.sendMail(mailOptions);
+
 
   // Upsert tracking record
   if (appId) {
