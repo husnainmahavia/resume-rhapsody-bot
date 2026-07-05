@@ -201,7 +201,10 @@ export default function ApplicationList({ applications, onUpdate }: ApplicationL
           current.hiring_manager_email, current.email_subject, current.email_body,
           current.hiring_manager_name || undefined, current.id,
         );
-        if (result?.sent === false || result?.error) {
+        if (result?.skipped) {
+          console.log(`[bulk-send ${i + 1}/${total}] Skipped: ${result?.error || result?.reason}`);
+          skipped++;
+        } else if (result?.sent === false || result?.error) {
           console.log(`[bulk-send ${i + 1}/${total}] Send blocked: ${result?.error}`);
           failed++;
         } else {
@@ -212,6 +215,7 @@ export default function ApplicationList({ applications, onUpdate }: ApplicationL
           } as any);
           sent++;
         }
+
       } catch (err) {
         console.error(`[bulk-send ${i + 1}/${total}] Failed:`, err);
         failed++;

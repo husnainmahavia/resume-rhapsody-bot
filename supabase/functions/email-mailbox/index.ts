@@ -265,7 +265,7 @@ async function handleSend(payload: Record<string, unknown>) {
     .gte("applied_at", today);
 
   if ((sentToday || 0) >= RATE_LIMITS.maxEmailsPerDay) {
-    return json({ success: false, sent: false, error: `Daily limit reached (${RATE_LIMITS.maxEmailsPerDay}). Resume tomorrow.` }, 429);
+    return json({ success: false, sent: false, skipped: true, reason: "daily_limit", error: `Daily limit reached (${RATE_LIMITS.maxEmailsPerDay}). Resume tomorrow.` }, 200);
   }
 
   // Rate limit check: per-domain limit
@@ -278,7 +278,7 @@ async function handleSend(payload: Record<string, unknown>) {
       .ilike("hiring_manager_email", `%@${recipientDomain}`);
 
     if ((domainCount || 0) >= RATE_LIMITS.maxEmailsPerDomain) {
-      return json({ success: false, sent: false, error: `Domain limit reached: max ${RATE_LIMITS.maxEmailsPerDomain} emails to ${recipientDomain}` }, 429);
+      return json({ success: false, sent: false, skipped: true, reason: "domain_limit", error: `Domain limit reached: max ${RATE_LIMITS.maxEmailsPerDomain} emails to ${recipientDomain}` }, 200);
     }
   }
 
@@ -291,9 +291,9 @@ async function handleSend(payload: Record<string, unknown>) {
 
   if ((recentBounces || 0) >= RATE_LIMITS.maxBouncesBeforePause) {
     return json({
-      success: false, sent: false,
+      success: false, sent: false, skipped: true, reason: "bounce_pause",
       error: `Sending paused: ${recentBounces} bounces in last 24h. Review bounce list before resuming.`,
-    }, 429);
+    }, 200);
   }
 
   // Check domain blacklist
@@ -307,7 +307,8 @@ async function handleSend(payload: Record<string, unknown>) {
       .maybeSingle();
 
     if (blacklisted) {
-      return json({ success: false, sent: false, error: `Domain ${recipientDomain} is blacklisted` }, 400);
+      return json({ success: false, sent: false, skipped: true, reason: "blacklisted", error: `Domain ${recipientDomain} is blacklisted` }, 200);
+
     }
   }
 
