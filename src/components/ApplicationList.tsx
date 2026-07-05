@@ -241,12 +241,39 @@ export default function ApplicationList({ applications, onUpdate }: ApplicationL
                       </div>
                     )}
 
+                    {/* CV profile switcher */}
+                    <div className="flex items-center gap-2 flex-wrap p-3 rounded-md bg-secondary/40 border border-border">
+                      <UserSquare2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <div className="flex-1 min-w-[200px]">
+                        <p className="text-xs font-medium">CV profile</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Recommended by scorer: <span className="text-foreground">{fit.role.label}</span>
+                        </p>
+                      </div>
+                      <Select
+                        value={getProfileKey(app, fit)}
+                        onValueChange={(v) => handleSelectProfile(app, v as CvProfileKey)}
+                      >
+                        <SelectTrigger className="w-[220px] h-8 text-xs bg-background">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ROLE_PROFILES.map((p) => (
+                            <SelectItem key={p.key} value={p.key} className="text-xs">
+                              {p.label}
+                              {p.key === fit.role.key ? " · recommended" : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
                     <div className="flex gap-2 flex-wrap">
-                      {canSend && app.status === "discovered" && (
-                        <Button size="sm" onClick={() => handleTailorCV(app)}
+                      {canSend && (
+                        <Button size="sm" onClick={() => handleTailorCV(app, fit)}
                           disabled={processing === `cv-${app.id}`} className="gap-1">
                           {processing === `cv-${app.id}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileText className="h-3 w-3" />}
-                          Tailor CV
+                          {app.status === "cv_tailored" ? "Re-tailor CV" : "Tailor CV"}
                         </Button>
                       )}
 
