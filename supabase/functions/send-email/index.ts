@@ -95,6 +95,64 @@ serve(async (req) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const trackingPixelUrl = `${SUPABASE_URL}/functions/v1/email-track?id=${trackingPixelId}`;
 
+    // === Pre-send authenticity + spam gate ===
+    const SPAM_TRIGGERS = [
+      /\bfree\s+(money|gift|trial|offer)\b/i, /\b100%\s+(free|guaranteed)\b/i,
+      /\bact\s+now\b/i, /\blimited\s+time\b/i, /\bviagra\b/i, /\bcasino\b/i,
+      /\blottery\b/i, /\bclick\s+here\b/i, /\bbuy\s+now\b/i, /\$\$\$/, /!!!+/,
+    ];
+    const spamText = `${subject}\n${body}`;
+    const spamHit = SPAM_TRIGGERS.find((r) => r.test(spamText));
+    if (spamHit) {
+      return new Response(JSON.stringify({
+        success: false, sent: false, blocked: true,
+        error: `Spam trigger detected: ${spamHit}. Rewrite email.`,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    try {
+      const verifyUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/email-verify`;
+      const vResp = await fetch(verifyUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+        },
+        body: JSON.stringify({ email: to }),
+      });
+      const vData = await vResp.json();
+      const r = vData?.results?.[0];
+      const blocked = !r || !r.checks?.mxRecords || r.checks?.disposable
+        || r.checks?.smtpRcptTo === "rejected" || r.score < 40;
+      if (blocked) {
+        const reason = !r ? "verify_no_result"
+          : !r.checks?.mxRecords ? "no_mx_records"
+          : r.checks?.disposable ? "disposable_domain"
+          : r.checks?.smtpRcptTo === "rejected" ? "smtp_rejected"
+          : `low_score_${r.reason}`;
+        console.log(`🚫 Blocked ${to}: ${reason}`);
+        // Auto-blacklist definitive failures
+        if ((reason === "no_mx_records" || reason === "smtp_rejected") && recipientDomain) {
+          await supabase.from("domain_blacklist").upsert({
+            domain: recipientDomain, is_blacklisted: true,
+            blacklisted_at: new Date().toISOString(),
+            reason: `Auto: ${reason}`, bounce_count: 1,
+          }, { onConflict: "domain" });
+        }
+        return new Response(JSON.stringify({
+          success: false, sent: false, blocked: true,
+          error: `Email not verified (${reason}, score ${r?.score ?? 0}/100). Send blocked.`,
+        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      console.log(`✅ Verified ${to} (score ${r.score})`);
+    } catch (e) {
+      console.log(`⚠️ Verify failed for ${to}: ${e instanceof Error ? e.message : "unknown"} — blocking to be safe`);
+      return new Response(JSON.stringify({
+        success: false, sent: false, blocked: true,
+        error: `Verification failed. Send blocked.`,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     const senderEmail = "husnainmahavia.1@gmail.com";
     const senderName = "Husnain Mahavia";
 
