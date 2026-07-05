@@ -213,8 +213,8 @@ export default function EmailEngineDashboard() {
         body: { action: "send", leadIds: unsent },
       });
       toast({
-        title: `📧 Sent ${data?.sent || 0} emails`,
-        description: data?.errors ? `${data.errors} errors` : "All sent successfully",
+        title: `📧 Queued ${data?.queued ?? 0} emails`,
+        description: data?.message || "Sending in background — refresh to see progress.",
       });
       loadStats();
       loadLeads();

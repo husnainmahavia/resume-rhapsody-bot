@@ -305,7 +305,7 @@ REQUIREMENTS:
       });
     }
 
-    // === ACTION: SEND BULK ===
+    // === ACTION: SEND BULK (background) ===
     if (action === "send") {
       if (!VISUOSOFTS_EMAIL_PASSWORD) {
         return new Response(JSON.stringify({ error: "VISUOSOFTS_EMAIL_PASSWORD not configured" }), {
@@ -327,87 +327,97 @@ REQUIREMENTS:
       const { data: leads, error } = await query.limit(10);
       if (error) throw error;
       if (!leads || leads.length === 0) {
-        return new Response(JSON.stringify({ success: true, sent: 0, message: "No emails ready to send" }), {
+        return new Response(JSON.stringify({ success: true, sent: 0, queued: 0, message: "No emails ready to send" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      console.log(`📧 Sending ${leads.length} emails via SMTP (mail.visuosofts.com)`);
+      console.log(`📧 Queuing ${leads.length} emails for background send`);
 
       const transporter = nodemailer.createTransport({
         host: "mail.visuosofts.com",
         port: 465,
         secure: true,
-        auth: {
-          user: "info@visuosofts.com",
-          pass: VISUOSOFTS_EMAIL_PASSWORD,
-        },
+        auth: { user: "info@visuosofts.com", pass: VISUOSOFTS_EMAIL_PASSWORD },
       });
 
-      let sent = 0;
-      let errors = 0;
+      const sendJob = async () => {
+        let sent = 0;
+        let errors = 0;
+        for (const lead of leads) {
+          try {
+            const { data: alreadySent } = await supabase
+              .from("sent_emails")
+              .select("id")
+              .eq("recipient_email", lead.contact_email!.toLowerCase())
+              .eq("sender", "visuosofts")
+              .limit(1);
 
-      for (const lead of leads) {
-        try {
-          // Dedup check: skip if already sent to this email
-          const { data: alreadySent } = await supabase
-            .from("sent_emails")
-            .select("id")
-            .eq("recipient_email", lead.contact_email!.toLowerCase())
-            .eq("sender", "visuosofts")
-            .limit(1);
+            if (alreadySent && alreadySent.length > 0) {
+              console.log(`⏭ Already sent to ${lead.contact_email} — marking sent`);
+              await supabase.from("email_engine_leads").update({
+                sent: true,
+                sent_at: new Date().toISOString(),
+                send_error: null,
+              }).eq("id", lead.id);
+              continue;
+            }
 
-          if (alreadySent && alreadySent.length > 0) {
-            console.log(`⏭ Already sent to ${lead.contact_email} — skipping`);
-            continue;
+            const htmlBody = lead.email_body!.replace(/\n/g, "<br>");
+            const info = await transporter.sendMail({
+              from: "Visuosofts <info@visuosofts.com>",
+              to: lead.contact_email,
+              subject: lead.email_subject,
+              text: lead.email_body,
+              html: htmlBody,
+            });
+
+            await supabase.from("email_engine_leads").update({
+              sent: true,
+              sent_at: new Date().toISOString(),
+              resend_message_id: info.messageId,
+              send_error: null,
+            }).eq("id", lead.id);
+            sent++;
+            console.log(`  ✅ Sent to: ${lead.contact_email} — ${info.messageId}`);
+
+            await supabase.from("sent_emails").upsert({
+              recipient_email: lead.contact_email!.toLowerCase(),
+              sender: "visuosofts",
+              subject: lead.email_subject,
+              lead_id: lead.id,
+              message_id: info.messageId,
+              sent_at: new Date().toISOString(),
+            }, { onConflict: "recipient_email,sender" }).catch((e: any) => console.error("Dedup log error:", e));
+
+            // Shorter human-like pacing: 60-120s between sends
+            const delay = 60000 + Math.floor(Math.random() * 60000);
+            console.log(`  ⏱ Waiting ${Math.round(delay / 1000)}s...`);
+            await new Promise(r => setTimeout(r, delay));
+          } catch (e) {
+            errors++;
+            const errMsg = e instanceof Error ? e.message : String(e);
+            console.error(`  ❌ Send error for ${lead.company_name}:`, errMsg);
+            await supabase.from("email_engine_leads").update({ send_error: errMsg }).eq("id", lead.id);
           }
-
-          const htmlBody = lead.email_body!.replace(/\n/g, "<br>");
-
-          const info = await transporter.sendMail({
-            from: "Visuosofts <info@visuosofts.com>",
-            to: lead.contact_email,
-            subject: lead.email_subject,
-            text: lead.email_body,
-            html: htmlBody,
-          });
-
-          await supabase.from("email_engine_leads").update({
-            sent: true,
-            sent_at: new Date().toISOString(),
-            resend_message_id: info.messageId,
-            send_error: null,
-          }).eq("id", lead.id);
-          sent++;
-          console.log(`  ✅ Sent to: ${lead.contact_email} — MessageId: ${info.messageId}`);
-
-          // Log to sent_emails for dedup
-          await supabase.from("sent_emails").upsert({
-            recipient_email: lead.contact_email!.toLowerCase(),
-            sender: "visuosofts",
-            subject: lead.email_subject,
-            lead_id: lead.id,
-            message_id: info.messageId,
-            sent_at: new Date().toISOString(),
-          }, { onConflict: "recipient_email,sender" }).catch((e: any) => console.error("Dedup log error:", e));
-
-          // Human-like pacing: random 3-5 minute delay between sends
-          const delay = 180000 + Math.floor(Math.random() * 120000); // 180s-300s (3-5 min)
-          console.log(`  ⏱ Waiting ${Math.round(delay / 1000)}s before next send...`);
-          await new Promise(r => setTimeout(r, delay));
-        } catch (e) {
-          errors++;
-          const errMsg = e instanceof Error ? e.message : String(e);
-          console.error(`  ❌ Send error for ${lead.company_name}:`, errMsg);
-          await supabase.from("email_engine_leads").update({
-            send_error: errMsg,
-          }).eq("id", lead.id);
         }
+        console.log(`🏁 Background send done: ${sent} sent, ${errors} errors`);
+      };
+
+      // @ts-ignore EdgeRuntime is available in Supabase edge functions
+      if (typeof EdgeRuntime !== "undefined" && EdgeRuntime.waitUntil) {
+        // @ts-ignore
+        EdgeRuntime.waitUntil(sendJob());
+      } else {
+        sendJob();
       }
 
-      return new Response(JSON.stringify({ success: true, sent, errors, total: leads.length }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(JSON.stringify({
+        success: true,
+        queued: leads.length,
+        sent: 0,
+        message: `Queued ${leads.length} emails — sending in background (60-120s pacing). Refresh to see progress.`,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     // === ACTION: STATUS ===
