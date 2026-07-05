@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { JobApplication } from "@/lib/api";
-import { tailorCV, generateEmail, updateApplication } from "@/lib/api";
+import { tailorCV, generateEmail, sendEmail, updateApplication } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { scoreJob, ROLE_PROFILES, type FitScore, type CvProfileKey } from "@/lib/jobScoring";
 import { ScoreBadge, AtsPanel } from "@/components/AtsPanel";
@@ -161,13 +161,39 @@ export default function ApplicationList({ applications, onUpdate }: ApplicationL
     }
   };
 
-  const handleSendEmail = (app: JobApplication) => {
-    const email = app.hiring_manager_email || "";
-    const subject = encodeURIComponent(app.email_subject || "");
-    const body = encodeURIComponent(app.email_body || "");
-    window.open(`mailto:${email}?subject=${subject}&body=${body}`, "_blank");
-    updateApplication(app.id, { status: "applied", applied_at: new Date().toISOString() });
-    onUpdate();
+  const handleSendEmail = async (app: JobApplication) => {
+    if (!app.hiring_manager_email || !app.email_subject || !app.email_body) {
+      toast({ title: "Cannot send", description: "Recipient, subject, and email body are required.", variant: "destructive" });
+      return;
+    }
+
+    setProcessing(`send-${app.id}`);
+    try {
+      const result = await sendEmail(
+        app.hiring_manager_email,
+        app.email_subject,
+        app.email_body,
+        app.hiring_manager_name || undefined,
+        app.id,
+      );
+
+      if (result?.error || result?.sent === false) {
+        toast({ title: "Send blocked", description: result?.error || "Email was not sent.", variant: "destructive" });
+        return;
+      }
+
+      await updateApplication(app.id, {
+        status: "applied",
+        applied_at: new Date().toISOString(),
+        follow_up_scheduled_at: new Date(Date.now() + 3 * 86400000).toISOString(),
+      } as any);
+      toast({ title: "Email sent", description: `${app.company} was updated without leaving the app.` });
+      onUpdate();
+    } catch (err) {
+      toast({ title: "Send failed", description: String(err), variant: "destructive" });
+    } finally {
+      setProcessing(null);
+    }
   };
 
   if (applications.length === 0) {
@@ -303,8 +329,16 @@ export default function ApplicationList({ applications, onUpdate }: ApplicationL
                       )}
 
                       {canSend && app.email_body && (
-                        <Button size="sm" variant="outline" onClick={() => handleSendEmail(app)} className="gap-1">
-                          <Send className="h-3 w-3" /> Send Email
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleSendEmail(app)}
+                          disabled={processing === `send-${app.id}`}
+                          className="gap-1"
+                        >
+                          {processing === `send-${app.id}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                          {processing === `send-${app.id}` ? "Sending..." : "Send Email"}
                         </Button>
                       )}
                     </div>
