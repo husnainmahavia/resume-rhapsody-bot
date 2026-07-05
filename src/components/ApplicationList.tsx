@@ -40,6 +40,7 @@ export default function ApplicationList({ applications, onUpdate }: ApplicationL
   const [expanded, setExpanded] = useState<string | null>(null);
   const [processing, setProcessing] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "pending" | "approved">("all");
+  const [profileOverrides, setProfileOverrides] = useState<Record<string, CvProfileKey>>({});
   const { toast } = useToast();
 
   const enriched = useMemo(() => applications.map((a) => ({
