@@ -215,15 +215,42 @@ export default function ApplicantProfileForm() {
         </div>
       </div>
 
-      {/* CV Content */}
+      {/* CV Upload + Content */}
       <div className="space-y-1.5">
-        <Label className="text-xs">Full CV Content (optional — paste your full CV text here for AI tailoring)</Label>
+        <div className="flex items-center justify-between gap-2">
+          <Label className="text-xs">Full CV Content</Label>
+          <div className="flex items-center gap-2">
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".pdf,.docx,.txt,.md"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="gap-1 h-7 text-xs"
+              onClick={() => fileRef.current?.click()}
+              disabled={parsing}
+            >
+              {parsing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
+              {parsing ? "Parsing…" : "Upload PDF / DOCX"}
+            </Button>
+          </div>
+        </div>
         <Textarea
           value={profile.cv_content}
           onChange={e => update("cv_content", e.target.value)}
           className="bg-secondary/30 min-h-[120px] font-mono text-xs"
-          placeholder="Paste your full CV text here. The AI pipeline will use this as the base for tailoring CVs to each job..."
+          placeholder="Upload a PDF/DOCX above, or paste your full CV text here. The AI uses this as the base for every tailored CV."
         />
+        {profile.cv_content && (
+          <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+            <FileText className="h-2.5 w-2.5" /> {profile.cv_content.length.toLocaleString()} chars stored
+          </p>
+        )}
       </div>
 
       {/* Gmail Setup Info */}
