@@ -299,6 +299,10 @@ serve(async (req) => {
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    // Long-running work runs in the background so we return before the 150s
+    // edge idle timeout. Client should poll `?action=status` for progress.
+    const runPipeline = async () => {
+     try {
     const today = new Date().toISOString().split("T")[0];
     const { count: sentToday } = await supabase
       .from("job_applications")
@@ -307,12 +311,10 @@ serve(async (req) => {
       .gte("applied_at", today);
 
     if ((sentToday || 0) >= GMAIL_DAILY_LIMIT) {
-      return new Response(JSON.stringify({
-        error: "Daily email limit reached. Will resume tomorrow.",
-        sentToday,
-        limit: GMAIL_DAILY_LIMIT,
-      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      console.log(`⛔ Daily limit reached (${sentToday}/${GMAIL_DAILY_LIMIT}) — background run aborting.`);
+      return;
     }
+
 
     // Step 1: Search for REAL jobs with VERIFIED email addresses
     console.log("🔍 Searching for jobs...");
