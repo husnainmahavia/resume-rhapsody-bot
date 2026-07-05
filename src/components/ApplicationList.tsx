@@ -1,15 +1,16 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Briefcase, MapPin, Building2, ChevronDown, FileText, Mail,
-  Loader2, Check, Clock, X, Star, Send, ShieldCheck, ShieldAlert,
+  Loader2, Check, Clock, X, Star, Send, ShieldCheck, ShieldAlert, UserSquare2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { JobApplication } from "@/lib/api";
 import { tailorCV, generateEmail, updateApplication } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
-import { scoreJob, type FitScore } from "@/lib/jobScoring";
+import { scoreJob, ROLE_PROFILES, type FitScore, type CvProfileKey } from "@/lib/jobScoring";
 import { ScoreBadge, AtsPanel } from "@/components/AtsPanel";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
