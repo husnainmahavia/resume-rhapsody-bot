@@ -19,11 +19,13 @@ export default function OnboardingGuard({ children }: Props) {
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [profileState, setProfileState] = useState<ProfileState>("loading");
+  const [skipped, setSkipped] = useState<boolean>(() => sessionStorage.getItem("skipOnboarding") === "1");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const { toast } = useToast();
+
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => {
