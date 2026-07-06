@@ -323,6 +323,7 @@ REQUIREMENTS:
         .select("*")
         .eq("email_generated", true)
         .eq("sent", false)
+        .eq("queued", false)
         .is("send_error", null)
         .not("contact_email", "is", null)
         .not("email_subject", "is", null)
