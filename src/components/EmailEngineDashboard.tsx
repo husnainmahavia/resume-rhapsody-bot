@@ -455,6 +455,8 @@ export default function EmailEngineDashboard() {
                       <Badge className="bg-success/20 text-success text-[9px]"><CheckCircle2 className="h-3 w-3 mr-0.5" />Sent</Badge>
                     ) : status === "error" ? (
                       <Badge className="bg-destructive/20 text-destructive text-[9px]"><XCircle className="h-3 w-3 mr-0.5" />Error</Badge>
+                    ) : status === "processing" ? (
+                      <Badge className="bg-primary/20 text-primary text-[9px]"><Loader2 className="h-3 w-3 mr-0.5 animate-spin" />Processing</Badge>
                     ) : status === "ready" ? (
                       <Badge className="bg-accent/20 text-accent text-[9px]"><Mail className="h-3 w-3 mr-0.5" />Ready</Badge>
                     ) : (
