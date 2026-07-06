@@ -51,7 +51,10 @@ export default function JobSearch({ onJobAdded }: JobSearchProps) {
       if (result.error) toast({ title: "Error", description: result.error, variant: "destructive" });
       else {
         setJobs(result.jobs || []);
-        toast({ title: "Jobs Found", description: `Found ${result.jobs?.length || 0} — scored by fit` });
+        toast({
+          title: result.warning ? "Fallback Jobs Loaded" : "Jobs Found",
+          description: result.warning || `Found ${result.jobs?.length || 0} — scored by fit`,
+        });
       }
     } catch { toast({ title: "Error", description: "Failed to search jobs", variant: "destructive" }); }
     finally { setLoading(false); }

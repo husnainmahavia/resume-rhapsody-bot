@@ -431,6 +431,11 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
           <p className="text-xs text-muted-foreground">
             Safe to switch tabs. The pipeline continues on the server.
           </p>
+          {(pipelineStats as any).lastLog && (
+            <p className="text-xs text-primary/80 rounded-md border border-primary/20 bg-primary/10 px-3 py-2">
+              {(pipelineStats as any).lastLog}
+            </p>
+          )}
           {activeRun && (
             <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-secondary/30 px-3 py-2 text-xs text-muted-foreground">
               <span>

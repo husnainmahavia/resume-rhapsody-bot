@@ -12,6 +12,9 @@ const GMAIL_DAILY_LIMIT = 80;
 const MIN_DELAY_MS = 45000;
 const MAX_DELAY_MS = 120000;
 const BATCH_PAUSE_MS = 300000;
+const DISCOVERY_RETRY_ATTEMPTS = 4;
+const DISCOVERY_RETRY_BASE_MS = 15000;
+const MAX_EMPTY_BATCHES = 8;
 
 const FALLBACK_JOBS = [
   {
@@ -206,6 +209,14 @@ function humanDelay(): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 class AICreditsError extends Error {
   status: number;
   constructor(status: number, msg?: string) {
@@ -367,7 +378,7 @@ async function callFreeGemini(apiKey: string, body: Record<string, unknown>): Pr
   // Strip tool_choice and tools — not supported on free models
   const { tools, tool_choice, ...cleanBody } = body as any;
   
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < DISCOVERY_RETRY_ATTEMPTS; attempt++) {
     await throttleAI();
     const resp = await callGemini(apiKey, {
       ...cleanBody,
@@ -378,9 +389,9 @@ async function callFreeGemini(apiKey: string, body: Record<string, unknown>): Pr
     });
     
     if (resp.status === 429 || resp.status === 503) {
-      const waitMs = Math.min(15000, (attempt + 1) * 5000 + Math.random() * 2000);
-      console.log(`⚠️ ${resp.status === 429 ? 'Rate limited' : 'Server overloaded'} (attempt ${attempt + 1}/5), waiting ${Math.round(waitMs / 1000)}s...`);
-      await new Promise((r) => setTimeout(r, waitMs));
+      const waitMs = DISCOVERY_RETRY_BASE_MS * (attempt + 1) + Math.random() * 5000;
+      console.log(`⚠️ ${resp.status === 429 ? 'Rate limited' : 'Server overloaded'} (attempt ${attempt + 1}/${DISCOVERY_RETRY_ATTEMPTS}), waiting ${Math.round(waitMs / 1000)}s...`);
+      await sleep(waitMs);
       continue;
     }
     if (!resp.ok) {
@@ -571,24 +582,97 @@ serve(async (req) => {
       const { count: todayCount } = await supabase.from("job_applications").select("*", { count: "exact", head: true })
         .gte("applied_at", new Date().toISOString().split("T")[0]);
       const { data: stateRow } = await supabase.from("auto_apply_pipeline_state").select("*").eq("id", 1).maybeSingle();
+      const startedAtMs = stateRow?.started_at ? new Date(stateRow.started_at).getTime() : 0;
+      const stuckAtStart = Boolean(
+        stateRow?.running &&
+        stateRow?.last_log === "Pipeline started" &&
+        startedAtMs &&
+        Date.now() - startedAtMs > 3 * 60 * 1000
+      );
+      if (stuckAtStart) {
+        await supabase.from("auto_apply_pipeline_state").update({
+          running: false,
+          finished_at: new Date().toISOString(),
+          last_log: "Previous start did not continue; ready to restart",
+        }).eq("id", 1);
+      }
 
       return new Response(JSON.stringify({
         total: totalCount || 0,
         applied: appliedCount || 0,
         today: todayCount || 0,
         dailyLimit: GMAIL_DAILY_LIMIT,
-        running: stateRow?.running ?? false,
+        running: stuckAtStart ? false : (stateRow?.running ?? false),
         startedAt: stateRow?.started_at ?? null,
         finishedAt: stateRow?.finished_at ?? null,
-        lastLog: stateRow?.last_log ?? null,
+        lastLog: stuckAtStart ? "Previous start did not continue; ready to restart" : (stateRow?.last_log ?? null),
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const fastDiscovery = await seedFreshDiscoveredJobs(supabase, location);
+    const { data: currentState } = await supabase
+      .from("auto_apply_pipeline_state")
+      .select("running, started_at, last_log, location, updated_at")
+      .eq("id", 1)
+      .maybeSingle();
+
+    const currentStartedMs = currentState?.started_at ? new Date(currentState.started_at).getTime() : 0;
+    const currentUpdatedMs = currentState?.updated_at ? new Date(currentState.updated_at).getTime() : currentStartedMs;
+    const currentStuckAtStart = Boolean(
+      currentState?.running &&
+      currentState?.last_log === "Pipeline started" &&
+      currentStartedMs &&
+      Date.now() - currentStartedMs > 3 * 60 * 1000
+    );
+    const isResume = action === "resume";
+    const staleRunningState = Boolean(
+      isResume &&
+      currentState?.running &&
+      currentUpdatedMs &&
+      Date.now() - currentUpdatedMs > 3 * 60 * 1000
+    );
+    const effectiveLocation = location || currentState?.location || APPLICANT_LOCATION || "Manchester, UK";
+
+    if (isResume && !currentState?.running) {
+      return new Response(JSON.stringify({
+        success: true,
+        accepted: false,
+        message: "Auto-apply is idle; nothing to resume.",
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (currentState?.running && !currentStuckAtStart && !staleRunningState) {
+      return new Response(JSON.stringify({
+        success: true,
+        accepted: true,
+        alreadyRunning: true,
+        message: "Auto-apply is already running in the background.",
+      }), { status: 202, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // Mark pipeline as running BEFORE any discovery work so status returns
+    // running=true immediately and survives tab switches/refreshes.
+    try {
+      await supabase.from("auto_apply_pipeline_state").upsert({
+        id: 1,
+        running: true,
+        started_at: new Date().toISOString(),
+        finished_at: null,
+        last_log: isResume ? "Pipeline resumed by background worker" : "Pipeline started",
+        location: effectiveLocation,
+      }, { onConflict: "id" });
+    } catch (_) { /* ignore */ }
+
+    let fastDiscovery = { inserted: 0, jobs: [] as any[] };
+    try {
+      fastDiscovery = await seedFreshDiscoveredJobs(supabase, effectiveLocation);
+    } catch (seedErr) {
+      console.warn("Fast discovery skipped:", seedErr);
+    }
 
     // Long-running work runs in the background so we return before the 150s
     // edge idle timeout. Client should poll `?action=status` for progress.
     const runPipeline = async () => {
+      let emailsSentThisRun = 0;
      try {
     const today = new Date().toISOString().split("T")[0];
     const { count: sentToday } = await supabase
@@ -599,7 +683,7 @@ serve(async (req) => {
 
     if ((sentToday || 0) >= GMAIL_DAILY_LIMIT) {
       console.log(`⛔ Daily limit reached (${sentToday}/${GMAIL_DAILY_LIMIT}) — background run aborting.`);
-      return;
+       return;
     }
 
 
@@ -644,11 +728,10 @@ serve(async (req) => {
     }
 
     const results: any[] = [];
-    let emailsSentThisRun = 0;
     let iteration = 0;
     let emptyBatches = 0;
     const MAX_ITERATIONS = 20;
-    const MAX_EMPTY_BATCHES = 3;
+    let consecutiveSearchFailures = 0;
 
     // Continuous loop: keep discovering + applying until daily limit reached
     // or no fresh jobs found across several attempts.
@@ -659,10 +742,14 @@ serve(async (req) => {
     ) {
       iteration++;
       console.log(`🔁 Discovery iteration ${iteration} — sent so far this run: ${emailsSentThisRun}`);
+      await supabase.from("auto_apply_pipeline_state").update({
+        running: true,
+        last_log: `Searching jobs — iteration ${iteration}/${MAX_ITERATIONS}`,
+      }).eq("id", 1);
 
       const excludedCompanyNames = [...new Set((existingApplications || []).map((app: any) => app.company).filter(Boolean))].slice(0, 60);
 
-      const searchPrompt = `You are a UK job market expert. Find 10-15 REAL job openings at REAL companies in ${location || "Manchester, UK"} for: ${targetSkills}.
+      const searchPrompt = `You are a UK job market expert. Find 10-15 REAL job openings at REAL companies in ${effectiveLocation || "Manchester, UK"} for: ${targetSkills}.
 Job type: ${targetJobType}
 
 ${modeInstructions}
@@ -683,6 +770,8 @@ ABSOLUTE REQUIREMENTS - FOLLOW STRICTLY:
 Return JSON with: title, company, location, salary_range, description, url, hiring_manager, hiring_email, sponsorship (boolean), careers_page_url`;
 
       let jobs: any[] = [];
+      let discoveryFailed = false;
+      let lastDiscoveryError = "";
       try {
         const searchResponse = await callFreeGemini(OPENROUTER_API_KEY, {
           messages: [
@@ -698,7 +787,21 @@ Return JSON with: title, company, location, salary_range, description, url, hiri
           jobs = Array.isArray(parsed) ? parsed : (parsed?.jobs || []);
         }
       } catch (searchErr) {
+        discoveryFailed = true;
+        lastDiscoveryError = errorMessage(searchErr);
+        consecutiveSearchFailures++;
         console.warn(`AI search failed on iteration ${iteration}:`, searchErr);
+      }
+
+      if (discoveryFailed && consecutiveSearchFailures < DISCOVERY_RETRY_ATTEMPTS) {
+        const waitMs = 60000 + consecutiveSearchFailures * 30000;
+        await supabase.from("auto_apply_pipeline_state").update({
+          running: true,
+          last_log: `Job search temporarily failed; retrying in ${Math.round(waitMs / 1000)}s (${lastDiscoveryError.slice(0, 120)})`,
+        }).eq("id", 1);
+        await sleep(waitMs);
+      } else if (!discoveryFailed) {
+        consecutiveSearchFailures = 0;
       }
 
       jobs = jobs.filter((job) => {
@@ -711,7 +814,7 @@ Return JSON with: title, company, location, salary_range, description, url, hiri
       });
 
       if (!jobs.length) {
-        jobs = getFallbackJobs(location, 8, saturatedCompanies).filter((job) => {
+        jobs = getFallbackJobs(effectiveLocation, 8, saturatedCompanies).filter((job) => {
           const companyKey = comparable(job.company);
           const titleKey = comparable(job.title);
           return !existingExactJobs.has(`${companyKey}:${titleKey}`);
@@ -722,11 +825,19 @@ Return JSON with: title, company, location, salary_range, description, url, hiri
       if (!jobs.length) {
         emptyBatches++;
         console.log(`⚠️ Iteration ${iteration} found no fresh jobs (empty batch ${emptyBatches}/${MAX_EMPTY_BATCHES}).`);
+        await supabase.from("auto_apply_pipeline_state").update({
+          running: true,
+          last_log: `No fresh jobs found yet (${emptyBatches}/${MAX_EMPTY_BATCHES}); continuing search`,
+        }).eq("id", 1);
         continue;
       }
       emptyBatches = 0;
 
       console.log(`Found ${jobs.length} jobs in iteration ${iteration}`);
+      await supabase.from("auto_apply_pipeline_state").update({
+        running: true,
+        last_log: `Found ${jobs.length} jobs; preparing review items`,
+      }).eq("id", 1);
 
 
     for (let i = 0; i < jobs.length; i++) {
@@ -877,13 +988,13 @@ Return JSON with: title, company, location, salary_range, description, url, hiri
       }
 
       if (i > 0) {
-        console.log("⏳ Human-like delay...");
-        await humanDelay();
+        console.log("⏳ Short queue pacing...");
+        await sleep(2000 + Math.random() * 3000);
       }
 
       if (emailsSentThisRun > 0 && emailsSentThisRun % 10 === 0) {
-        console.log("☕ Batch pause (5 min)...");
-        await new Promise((r) => setTimeout(r, BATCH_PAUSE_MS));
+        console.log("☕ Queue batch pause...");
+        await sleep(15000);
       }
 
       try {
@@ -1048,7 +1159,8 @@ Sign off with: ${APPLICANT_NAME}, ${APPLICANT_PHONE}, ${APPLICANT_EMAIL}`,
           }).eq("id", saved.id);
 
           console.log(`📋 Queued for review: ${job.hiring_email} (${job.company})`);
-          results.push({ job: job.title, company: job.company, status: "queued_for_review", email: job.hiring_email });
+            emailsSentThisRun++;
+            results.push({ job: job.title, company: job.company, status: "queued_for_review", email: job.hiring_email });
         } else {
           await supabase.from("job_applications").update({ status: "no_email" }).eq("id", saved.id);
           results.push({ job: job.title, company: job.company, status: "no_email" });
@@ -1074,29 +1186,22 @@ Sign off with: ${APPLICANT_NAME}, ${APPLICANT_PHONE}, ${APPLICANT_EMAIL}`,
       console.error("Background pipeline error:", bgErr);
      } finally {
       try {
-        await supabase.from("auto_apply_pipeline_state").update({
+        await supabase.from("auto_apply_pipeline_state").upsert({
+          id: 1,
           running: false,
           finished_at: new Date().toISOString(),
           last_log: `Finished. emails=${emailsSentThisRun}`,
-        }).eq("id", 1);
+        }, { onConflict: "id" });
       } catch (_) { /* ignore */ }
      }
     };
 
-    // Mark pipeline as running BEFORE spawning background work so status returns
-    // running=true immediately (survives tab switches).
-    try {
-      await supabase.from("auto_apply_pipeline_state").update({
-        running: true,
-        started_at: new Date().toISOString(),
-        finished_at: null,
-        last_log: "Pipeline started",
-        location,
-      }).eq("id", 1);
-    } catch (_) { /* ignore */ }
-
+    const backgroundRun = runPipeline();
     // @ts-ignore -- EdgeRuntime is provided by Supabase Edge Runtime
-    (globalThis as any).EdgeRuntime?.waitUntil?.(runPipeline()) ?? runPipeline();
+    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime.waitUntil) {
+      // @ts-ignore
+      EdgeRuntime.waitUntil(backgroundRun);
+    }
 
     return new Response(JSON.stringify({
       success: true,
