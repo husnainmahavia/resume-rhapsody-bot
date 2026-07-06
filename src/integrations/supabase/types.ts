@@ -59,6 +59,36 @@ export type Database = {
         }
         Relationships: []
       }
+      auto_apply_pipeline_state: {
+        Row: {
+          finished_at: string | null
+          id: number
+          last_log: string | null
+          location: string | null
+          running: boolean
+          started_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          finished_at?: string | null
+          id?: number
+          last_log?: string | null
+          location?: string | null
+          running?: boolean
+          started_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          finished_at?: string | null
+          id?: number
+          last_log?: string | null
+          location?: string | null
+          running?: boolean
+          started_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       domain_blacklist: {
         Row: {
           blacklisted_at: string | null
@@ -108,6 +138,8 @@ export type Database = {
           industry: string
           opened: boolean
           opportunity: string | null
+          queued: boolean
+          queued_at: string | null
           region: string
           resend_message_id: string | null
           send_error: string | null
@@ -131,6 +163,8 @@ export type Database = {
           industry?: string
           opened?: boolean
           opportunity?: string | null
+          queued?: boolean
+          queued_at?: string | null
           region?: string
           resend_message_id?: string | null
           send_error?: string | null
@@ -154,6 +188,8 @@ export type Database = {
           industry?: string
           opened?: boolean
           opportunity?: string | null
+          queued?: boolean
+          queued_at?: string | null
           region?: string
           resend_message_id?: string | null
           send_error?: string | null
