@@ -103,14 +103,14 @@ export default function EmailEngineDashboard() {
 
   const loadStats = async () => {
     try {
-      const { data } = await supabase.functions.invoke("email-engine", { body: { action: "status" } });
+      const { data } = await invokeEmailEngine( { action: "status" } });
       if (data) setStats(data);
     } catch (e) { console.error("Stats error:", e); }
   };
 
   const loadLeads = async () => {
     try {
-      const { data } = await supabase.functions.invoke("email-engine", { body: { action: "list" } });
+      const { data } = await invokeEmailEngine( { action: "list" } });
       if (data?.leads) setLeads(data.leads);
     } catch (e) { console.error("List error:", e); }
   };
@@ -136,7 +136,7 @@ export default function EmailEngineDashboard() {
   const handleDiscover = async () => {
     setDiscovering(true);
     try {
-      const { data } = await supabase.functions.invoke("email-engine", {
+      const { data } = await invokeEmailEngine( {
         body: { action: "discover", industry: selectedIndustry, region: selectedRegion },
       });
       toast({
@@ -187,7 +187,7 @@ export default function EmailEngineDashboard() {
 
     setGenerating(true);
     try {
-      const { data } = await supabase.functions.invoke("email-engine", {
+      const { data } = await invokeEmailEngine( {
         body: { action: "generate", leadIds: ids, force },
       });
       toast({
@@ -220,7 +220,7 @@ export default function EmailEngineDashboard() {
 
     setSending(true);
     try {
-      const { data } = await supabase.functions.invoke("email-engine", {
+      const { data } = await invokeEmailEngine( {
         body: { action: "send", leadIds: unsent },
       });
       if ((data?.queued ?? 0) === 0) {
@@ -263,7 +263,7 @@ export default function EmailEngineDashboard() {
         }).eq("id", lead.id);
       }
       // Now send them
-      const { data } = await supabase.functions.invoke("email-engine", {
+      const { data } = await invokeEmailEngine( {
         body: { action: "send", leadIds: errorLeads.map(l => l.id) },
       });
       toast({
