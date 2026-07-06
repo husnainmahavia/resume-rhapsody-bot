@@ -570,12 +570,17 @@ serve(async (req) => {
       const { count: appliedCount } = await supabase.from("job_applications").select("*", { count: "exact", head: true }).eq("status", "applied");
       const { count: todayCount } = await supabase.from("job_applications").select("*", { count: "exact", head: true })
         .gte("applied_at", new Date().toISOString().split("T")[0]);
+      const { data: stateRow } = await supabase.from("auto_apply_pipeline_state").select("*").eq("id", 1).maybeSingle();
 
       return new Response(JSON.stringify({
         total: totalCount || 0,
         applied: appliedCount || 0,
         today: todayCount || 0,
         dailyLimit: GMAIL_DAILY_LIMIT,
+        running: stateRow?.running ?? false,
+        startedAt: stateRow?.started_at ?? null,
+        finishedAt: stateRow?.finished_at ?? null,
+        lastLog: stateRow?.last_log ?? null,
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
