@@ -289,8 +289,8 @@ export default function EmailEngineDashboard() {
 
   const selectAllFiltered = () => {
     const selectableLeads = activeFilter === "ready"
-      ? filteredLeads.filter((lead) => !lead.sent && hasSendableEmail(lead))
-      : filteredLeads;
+      ? filteredLeads.filter((lead) => !lead.sent && !lead.queued && hasSendableEmail(lead))
+      : filteredLeads.filter((lead) => !lead.queued);
     const filteredIds = selectableLeads.map(l => l.id);
     if (filteredIds.length === 0) {
       toast({ title: "Nothing selectable", description: "Generate complete emails before selecting ready leads." });
