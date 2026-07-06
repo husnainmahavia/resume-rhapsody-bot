@@ -113,7 +113,8 @@ const DEFAULT_ROTATION = [
 
 const DAILY_SEND_CAP = 40;
 const MAX_ITERATIONS = 15;
-const MAX_EMPTY_BATCHES = 3;
+const MAX_EMPTY_BATCHES = 8;
+const DISCOVERY_RETRY_ATTEMPTS = 4;
 
 function hasText(v: unknown): v is string {
   return typeof v === "string" && v.trim().length > 0;
