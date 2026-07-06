@@ -220,6 +220,16 @@ export default function EmailEngineDashboard() {
       const { data } = await supabase.functions.invoke("email-engine", {
         body: { action: "send", leadIds: unsent },
       });
+      if ((data?.queued ?? 0) === 0) {
+        toast({
+          title: "No emails queued",
+          description: data?.message || "No complete ready emails were found. Generate or regenerate emails first.",
+          variant: "destructive",
+        });
+        loadStats();
+        loadLeads();
+        return;
+      }
       toast({
         title: `📧 Queued ${data?.queued ?? 0} emails`,
         description: data?.message || "Sending in background — refresh to see progress.",
