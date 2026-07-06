@@ -764,6 +764,15 @@ serve(async (req) => {
       iteration < MAX_ITERATIONS &&
       emptyBatches < MAX_EMPTY_BATCHES
     ) {
+      if (Date.now() - runStartedAt > HANDOFF_MS) {
+        console.log(`⏭ Wall-time approaching; handing off to fresh isolate.`);
+        await supabase.from("auto_apply_pipeline_state").update({
+          running: true,
+          last_log: `Handing off to fresh worker to continue (iteration ${iteration})`,
+        }).eq("id", 1);
+        await scheduleHandoff("wall-time");
+        return; // finally block will NOT set running=false because handoffScheduled=true
+      }
       iteration++;
       console.log(`🔁 Discovery iteration ${iteration} — sent so far this run: ${emailsSentThisRun}`);
       await supabase.from("auto_apply_pipeline_state").update({
