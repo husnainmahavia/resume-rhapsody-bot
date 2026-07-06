@@ -491,13 +491,24 @@ REQUIREMENTS:
     // === ACTION: STATUS ===
     if (action === "status") {
       const { count: totalLeads } = await supabase.from("email_engine_leads").select("*", { count: "exact", head: true });
-      const { count: generated } = await supabase.from("email_engine_leads").select("*", { count: "exact", head: true }).eq("email_generated", true);
+      const { data: generatedRows } = await supabase
+        .from("email_engine_leads")
+        .select("id,contact_email,email_subject,email_body")
+        .eq("email_generated", true)
+        .eq("sent", false)
+        .is("send_error", null)
+        .not("contact_email", "is", null)
+        .not("email_subject", "is", null)
+        .not("email_body", "is", null);
       const { count: sentCount } = await supabase.from("email_engine_leads").select("*", { count: "exact", head: true }).eq("sent", true);
       const { count: errorCount } = await supabase.from("email_engine_leads").select("*", { count: "exact", head: true }).not("send_error", "is", null);
+      const generated = (generatedRows || []).filter((lead) =>
+        hasText(lead.contact_email) && hasText(lead.email_subject) && hasText(lead.email_body)
+      ).length;
 
       return new Response(JSON.stringify({
         totalLeads: totalLeads || 0,
-        generated: generated || 0,
+        generated,
         sent: sentCount || 0,
         errors: errorCount || 0,
         industries: INDUSTRIES,
