@@ -394,6 +394,7 @@ REQUIREMENTS:
                 sent: true,
                 sent_at: new Date().toISOString(),
                 send_error: null,
+                queued: false,
               }).eq("id", lead.id);
               continue;
             }
