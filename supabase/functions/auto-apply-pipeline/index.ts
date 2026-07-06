@@ -1053,7 +1053,16 @@ Sign off with: ${APPLICANT_NAME}, ${APPLICANT_PHONE}, ${APPLICANT_EMAIL}`,
         console.error(`Error processing ${job.title}:`, err);
         results.push({ job: job.title, company: job.company, status: "error", error: String(err) });
       }
+
+      // Track this job so future iterations of the outer loop don't re-fetch it
+      existingExactJobs.add(`${companyKey}:${titleKey}`);
+      existingCompanyCounts.set(companyKey, (existingCompanyCounts.get(companyKey) || 0) + 1);
+      if ((existingCompanyCounts.get(companyKey) || 0) >= 2) saturatedCompanies.add(companyKey);
     }
+    } // end while (continuous discovery loop)
+
+    console.log(`🏁 Continuous run ended. iterations=${iteration} emptyBatches=${emptyBatches} sentThisRun=${emailsSentThisRun}`);
+
 
       console.log(`✅ Background run finished. processed=${results.length} emailsSent=${emailsSentThisRun}`);
      } catch (bgErr) {
