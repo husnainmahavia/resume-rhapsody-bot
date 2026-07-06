@@ -676,7 +676,7 @@ serve(async (req) => {
     // Long-running work runs in the background so we return before the 150s
     // edge idle timeout. Client should poll `?action=status` for progress.
     const runStartedAt = Date.now();
-    const HANDOFF_MS = 100_000; // 100s — self re-invoke before edge wall time
+    const HANDOFF_MS = 25_000; // 25s — hand off well before edge isolate can be reaped mid-work
     let handoffScheduled = false;
     const scheduleHandoff = async (reason: string) => {
       if (handoffScheduled) return;
