@@ -491,9 +491,9 @@ REQUIREMENTS:
     // === ACTION: STATUS ===
     if (action === "status") {
       const { count: totalLeads } = await supabase.from("email_engine_leads").select("*", { count: "exact", head: true });
-      const { data: generatedRows } = await supabase
+      const { count: generatedCount } = await supabase
         .from("email_engine_leads")
-        .select("id,contact_email,email_subject,email_body")
+        .select("*", { count: "exact", head: true })
         .eq("email_generated", true)
         .eq("sent", false)
         .is("send_error", null)
@@ -502,13 +502,10 @@ REQUIREMENTS:
         .not("email_body", "is", null);
       const { count: sentCount } = await supabase.from("email_engine_leads").select("*", { count: "exact", head: true }).eq("sent", true);
       const { count: errorCount } = await supabase.from("email_engine_leads").select("*", { count: "exact", head: true }).not("send_error", "is", null);
-      const generated = (generatedRows || []).filter((lead) =>
-        hasText(lead.contact_email) && hasText(lead.email_subject) && hasText(lead.email_body)
-      ).length;
 
       return new Response(JSON.stringify({
         totalLeads: totalLeads || 0,
-        generated,
+        generated: generatedCount || 0,
         sent: sentCount || 0,
         errors: errorCount || 0,
         industries: INDUSTRIES,
