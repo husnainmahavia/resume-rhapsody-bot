@@ -211,7 +211,7 @@ export default function EmailEngineDashboard() {
     const unsent = selectedLeads.size > 0
       ? Array.from(selectedLeads).filter(id => {
           const lead = leads.find(l => l.id === id);
-          return lead && !lead.sent && lead.email_generated && hasSendableEmail(lead);
+          return lead && !lead.sent && !lead.queued && lead.email_generated && hasSendableEmail(lead);
         })
       : undefined;
 
