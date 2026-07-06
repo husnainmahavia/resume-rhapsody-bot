@@ -75,6 +75,16 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+    // === ACTION: HEALTH (lightweight ping to detect blob eviction) ===
+    if (action === "health") {
+      return new Response(JSON.stringify({
+        status: "healthy",
+        function: "email-engine",
+        timestamp: new Date().toISOString(),
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+
     // === ACTION: DISCOVER ===
     if (action === "discover") {
       const rotating = getRotatingTarget();
