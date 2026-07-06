@@ -31,6 +31,8 @@ interface Lead {
   sent_at: string | null;
   send_error: string | null;
   campaign_batch: string | null;
+  queued?: boolean;
+  queued_at?: string | null;
   created_at: string;
 }
 
