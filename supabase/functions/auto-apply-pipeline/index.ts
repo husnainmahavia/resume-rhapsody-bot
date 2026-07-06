@@ -606,6 +606,7 @@ serve(async (req) => {
         startedAt: stateRow?.started_at ?? null,
         finishedAt: stateRow?.finished_at ?? null,
         lastLog: stuckAtStart ? "Previous start did not continue; ready to restart" : (stateRow?.last_log ?? null),
+        updatedAt: stateRow?.updated_at ?? null,
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
