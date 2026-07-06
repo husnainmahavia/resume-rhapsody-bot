@@ -636,6 +636,7 @@ serve(async (req) => {
     const effectiveLocation = location || currentState?.location || APPLICANT_LOCATION || "Manchester, UK";
 
     if (isResume && !currentState?.running) {
+      // Resume triggered by cron/watchdog but nothing to resume — silently ok.
       return new Response(JSON.stringify({
         success: true,
         accepted: false,
