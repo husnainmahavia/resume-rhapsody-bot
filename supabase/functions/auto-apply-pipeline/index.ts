@@ -625,11 +625,13 @@ serve(async (req) => {
       Date.now() - currentStartedMs > 3 * 60 * 1000
     );
     const isResume = action === "resume";
+    // A pipeline that hasn't updated its heartbeat in >90s is considered dead
+    // (edge isolate got reaped). Any invocation — resume OR fresh run — is
+    // allowed to take over so a crash never leaves the pipeline permanently stuck.
     const staleRunningState = Boolean(
-      isResume &&
       currentState?.running &&
       currentUpdatedMs &&
-      Date.now() - currentUpdatedMs > 3 * 60 * 1000
+      Date.now() - currentUpdatedMs > 90 * 1000
     );
     const effectiveLocation = location || currentState?.location || APPLICANT_LOCATION || "Manchester, UK";
 
