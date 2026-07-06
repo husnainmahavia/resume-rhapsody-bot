@@ -19,6 +19,7 @@ import CSVUpload from "@/components/CSVUpload";
 import ApplicantProfileForm from "@/components/ApplicantProfileForm";
 import AuthGate from "@/components/AuthGate";
 import EmailEngineDashboard from "@/components/EmailEngineDashboard";
+import ServicesOutreachPipeline from "@/components/ServicesOutreachPipeline";
 import CronMonitorPanel from "@/components/CronMonitorPanel";
 import EmailOpenTracker from "@/components/EmailOpenTracker";
 import { fetchApplications, type JobApplication } from "@/lib/api";
