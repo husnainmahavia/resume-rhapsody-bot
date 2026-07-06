@@ -45,7 +45,7 @@ interface EngineStats {
   regions: string[];
 }
 
-type StatusFilter = "all" | "ready" | "processing" | "sent" | "error" | "pending";
+type StatusFilter = "all" | "ready" | "processing" | "sent" | "error";
 
 function hasSendableEmail(lead: Lead): boolean {
   return Boolean(
@@ -66,12 +66,12 @@ const DEFAULT_REGIONS = [
   "Canada", "Ireland", "UAE", "Saudi Arabia", "Germany & Europe",
 ];
 
-function getLeadStatus(lead: Lead): StatusFilter {
+function getLeadStatus(lead: Lead): StatusFilter | null {
   if (lead.sent) return "sent";
   if (lead.send_error) return "error";
   if (lead.queued) return "processing";
   if (lead.email_generated && hasSendableEmail(lead)) return "ready";
-  return "pending";
+  return null; // leads without generated emails are not shown in status tabs
 }
 
 const FILTER_CONFIG: { key: StatusFilter; label: string; icon: React.ElementType; color: string }[] = [
@@ -80,7 +80,6 @@ const FILTER_CONFIG: { key: StatusFilter; label: string; icon: React.ElementType
   { key: "processing", label: "Processing", icon: Loader2, color: "text-primary" },
   { key: "sent", label: "Sent", icon: CheckCircle2, color: "text-success" },
   { key: "error", label: "Errors", icon: XCircle, color: "text-destructive" },
-  { key: "pending", label: "Pending", icon: Clock, color: "text-muted-foreground" },
 ];
 
 export default function EmailEngineDashboard() {
