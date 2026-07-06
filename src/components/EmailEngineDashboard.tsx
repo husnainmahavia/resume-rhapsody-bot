@@ -307,6 +307,9 @@ export default function EmailEngineDashboard() {
 
   return (
     <div className="space-y-4">
+      {/* Health banner */}
+      <EmailEngineHealthBanner onRecovered={() => { loadStats(); loadLeads(); }} />
+
       {/* Stats Row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
