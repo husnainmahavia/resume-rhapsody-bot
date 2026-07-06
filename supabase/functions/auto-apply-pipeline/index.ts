@@ -1067,8 +1067,28 @@ Sign off with: ${APPLICANT_NAME}, ${APPLICANT_PHONE}, ${APPLICANT_EMAIL}`,
       console.log(`✅ Background run finished. processed=${results.length} emailsSent=${emailsSentThisRun}`);
      } catch (bgErr) {
       console.error("Background pipeline error:", bgErr);
+     } finally {
+      try {
+        await supabase.from("auto_apply_pipeline_state").update({
+          running: false,
+          finished_at: new Date().toISOString(),
+          last_log: `Finished. emails=${emailsSentThisRun}`,
+        }).eq("id", 1);
+      } catch (_) { /* ignore */ }
      }
     };
+
+    // Mark pipeline as running BEFORE spawning background work so status returns
+    // running=true immediately (survives tab switches).
+    try {
+      await supabase.from("auto_apply_pipeline_state").update({
+        running: true,
+        started_at: new Date().toISOString(),
+        finished_at: null,
+        last_log: "Pipeline started",
+        location,
+      }).eq("id", 1);
+    } catch (_) { /* ignore */ }
 
     // @ts-ignore -- EdgeRuntime is provided by Supabase Edge Runtime
     (globalThis as any).EdgeRuntime?.waitUntil?.(runPipeline()) ?? runPipeline();
