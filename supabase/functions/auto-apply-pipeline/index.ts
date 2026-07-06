@@ -1190,6 +1190,42 @@ Sign off with: ${APPLICANT_NAME}, ${APPLICANT_PHONE}, ${APPLICANT_EMAIL}`,
 
           job.hiring_email = finalEmailValidation.normalized;
 
+          // Final pre-queue deliverability re-check (same rules as Email Engine).
+          let finalVerifyOk = true;
+          let finalVerifyReason = "";
+          try {
+            const vResp = await fetch(`${SUPABASE_URL}/functions/v1/email-verify`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+              body: JSON.stringify({ email: job.hiring_email }),
+            });
+            if (vResp.ok) {
+              const vData = await vResp.json();
+              const r = vData.results?.[0];
+              if (r) {
+                finalVerifyReason = r.reason || "";
+                if (!r.checks?.mxRecords ||
+                    r.reason === "smtp_rejected" ||
+                    r.reason === "invalid_format" ||
+                    r.reason === "disposable_domain" ||
+                    r.reason === "mailbox_not_found" ||
+                    r.reason === "no_mx_records") {
+                  finalVerifyOk = false;
+                }
+              }
+            }
+          } catch (_) { /* soft-fail, allow */ }
+
+          if (!finalVerifyOk) {
+            await supabase.from("job_applications").update({
+              status: "no_email",
+              hiring_manager_email: null,
+              notes: `Blocked before queue: address failed verification (${finalVerifyReason})`,
+            }).eq("id", saved.id);
+            results.push({ job: job.title, company: job.company, status: "undeliverable", reason: finalVerifyReason });
+            continue;
+          }
+
           // Insert into review queue for approval
           await supabase.from("email_review_queue").insert({
             recipient_email: job.hiring_email,
@@ -1201,7 +1237,7 @@ Sign off with: ${APPLICANT_NAME}, ${APPLICANT_PHONE}, ${APPLICANT_EMAIL}`,
             application_id: saved.id,
             domain_match: finalEmailValidation.valid,
             validation_status: "pending",
-            validation_reason: `${finalEmailValidation.reason || "domain_verified"} | deliverability: ${deliverabilityScore}/100`,
+            validation_reason: `${finalEmailValidation.reason || "domain_verified"} | deliverability: ${deliverabilityScore}/100 | verified: ${finalVerifyReason || "ok"}`,
           });
 
           await supabase.from("job_applications").update({
