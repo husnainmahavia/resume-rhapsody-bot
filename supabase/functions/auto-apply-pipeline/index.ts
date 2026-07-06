@@ -672,6 +672,29 @@ serve(async (req) => {
 
     // Long-running work runs in the background so we return before the 150s
     // edge idle timeout. Client should poll `?action=status` for progress.
+    const runStartedAt = Date.now();
+    const HANDOFF_MS = 100_000; // 100s — self re-invoke before edge wall time
+    let handoffScheduled = false;
+    const scheduleHandoff = async (reason: string) => {
+      if (handoffScheduled) return;
+      handoffScheduled = true;
+      try {
+        const url = `${SUPABASE_URL}/functions/v1/auto-apply-pipeline`;
+        // Fire-and-forget; a new isolate will pick up the `resume` action.
+        fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            "apikey": SUPABASE_SERVICE_ROLE_KEY,
+          },
+          body: JSON.stringify({ action: "resume" }),
+        }).catch((e) => console.warn("handoff fetch failed:", e));
+        console.log(`🔁 Handoff scheduled (${reason})`);
+      } catch (e) {
+        console.warn("handoff error:", e);
+      }
+    };
     const runPipeline = async () => {
       let emailsSentThisRun = 0;
      try {
@@ -741,6 +764,15 @@ serve(async (req) => {
       iteration < MAX_ITERATIONS &&
       emptyBatches < MAX_EMPTY_BATCHES
     ) {
+      if (Date.now() - runStartedAt > HANDOFF_MS) {
+        console.log(`⏭ Wall-time approaching; handing off to fresh isolate.`);
+        await supabase.from("auto_apply_pipeline_state").update({
+          running: true,
+          last_log: `Handing off to fresh worker to continue (iteration ${iteration})`,
+        }).eq("id", 1);
+        await scheduleHandoff("wall-time");
+        return; // finally block will NOT set running=false because handoffScheduled=true
+      }
       iteration++;
       console.log(`🔁 Discovery iteration ${iteration} — sent so far this run: ${emailsSentThisRun}`);
       await supabase.from("auto_apply_pipeline_state").update({
@@ -1186,14 +1218,18 @@ Sign off with: ${APPLICANT_NAME}, ${APPLICANT_PHONE}, ${APPLICANT_EMAIL}`,
      } catch (bgErr) {
       console.error("Background pipeline error:", bgErr);
      } finally {
-      try {
-        await supabase.from("auto_apply_pipeline_state").upsert({
-          id: 1,
-          running: false,
-          finished_at: new Date().toISOString(),
-          last_log: `Finished. emails=${emailsSentThisRun}`,
-        }, { onConflict: "id" });
-      } catch (_) { /* ignore */ }
+      if (handoffScheduled) {
+        console.log("👋 Isolate exiting after handoff; keeping running=true.");
+      } else {
+        try {
+          await supabase.from("auto_apply_pipeline_state").upsert({
+            id: 1,
+            running: false,
+            finished_at: new Date().toISOString(),
+            last_log: `Finished. emails=${emailsSentThisRun}`,
+          }, { onConflict: "id" });
+        } catch (_) { /* ignore */ }
+      }
      }
     };
 

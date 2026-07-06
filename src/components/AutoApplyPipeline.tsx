@@ -125,7 +125,9 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
         setPipelineStats(stats);
         onUpdate();
         const updatedAt = (stats as any)?.updatedAt ? new Date((stats as any).updatedAt).getTime() : 0;
-        if ((stats as any)?.running && updatedAt && Date.now() - updatedAt > 4 * 60 * 1000) {
+        // Backup safety: if server state hasn't ticked for >90s, nudge a resume
+        // (the backend self-hands off, so this is just belt-and-braces).
+        if ((stats as any)?.running && updatedAt && Date.now() - updatedAt > 90 * 1000) {
           await resumeServerPipeline().catch(() => null);
         }
         // Auto-clear when server reports it finished
@@ -140,7 +142,7 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
     };
 
     poll();
-    const timer = window.setInterval(poll, 10000);
+    const timer = window.setInterval(poll, 5000);
     return () => window.clearInterval(timer);
   }, [activeRun, onUpdate]);
 
