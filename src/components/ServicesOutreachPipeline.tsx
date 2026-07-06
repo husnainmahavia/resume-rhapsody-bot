@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Building2, Play, Square, RefreshCw, MapPin, Zap, Mail,
-  CheckCircle2, XCircle, Sparkles, Loader2,
+  CheckCircle2, XCircle, Sparkles, Loader2, Clock, AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -35,6 +35,7 @@ interface StatusPayload {
   total: number;
   sent: number;
   pending: number;
+  errors?: number;
   recent: Array<{
     id: string;
     business_name: string;
@@ -119,9 +120,11 @@ export default function ServicesOutreachPipeline() {
   const stats = useMemo(() => ([
     { label: "Discovered", value: s?.discovered ?? 0, icon: Building2 },
     { label: "Emails Sent", value: s?.emails_sent ?? 0, icon: Mail },
-    { label: "Errors", value: s?.errors ?? 0, icon: XCircle },
+    { label: "Errors / Skips", value: status?.errors ?? s?.errors ?? 0, icon: XCircle },
     { label: "Total Leads", value: status?.total ?? 0, icon: Sparkles },
   ]), [s, status]);
+
+  const mailboxFailed = s?.status === "mailbox_auth_failed";
 
   return (
     <div className="space-y-6">
@@ -139,6 +142,20 @@ export default function ServicesOutreachPipeline() {
           </div>
         </div>
       </div>
+
+      {mailboxFailed && (
+        <div className="p-4 rounded-lg border border-destructive/30 bg-destructive/10">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-destructive">Outreach sender is unhealthy</p>
+              <p className="text-xs text-muted-foreground mt-1 font-mono break-words">
+                {s?.last_log || "Mailbox login failed. Update the mailbox password before sending resumes."}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Region */}
       <div>
@@ -231,6 +248,13 @@ export default function ServicesOutreachPipeline() {
         <p className="text-sm text-muted-foreground font-mono min-h-[1.5rem]">
           {s?.last_log || "No activity yet."}
         </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+          <span className="inline-flex items-center gap-1">
+            <Clock className="h-3 w-3" /> Autopilot batch schedule enabled
+          </span>
+          <span>Pending: {status?.pending ?? 0}</span>
+          <span>Sent: {status?.sent ?? 0}</span>
+        </div>
       </div>
 
       {/* Recent leads */}
