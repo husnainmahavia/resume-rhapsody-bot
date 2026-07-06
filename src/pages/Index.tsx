@@ -115,6 +115,11 @@ const Index = () => {
         description: "AI discovers companies by industry → generates personalized cold outreach emails → sends from info@visuosofts.com via SMTP.",
         component: <EmailEngineDashboard />,
       },
+      "services-outreach": {
+        icon: Zap, title: "Services Outreach Pipeline", subtitle: "autonomous B2B",
+        description: "One-click autonomous pipeline: AI finds UK businesses needing websites, dashboards, or AR — writes tailored pitches — sends from info@visuosofts.com. Runs continuously like Auto-Apply.",
+        component: <ServicesOutreachPipeline />,
+      },
       review: {
         icon: ShieldCheck, title: "Email Review Queue & Bounce Analytics", subtitle: "pre-send review",
         description: "Review pending emails before they're sent. Approve verified domains in bulk or reject suspicious ones.",
