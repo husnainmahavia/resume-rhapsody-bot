@@ -625,15 +625,18 @@ serve(async (req) => {
       Date.now() - currentStartedMs > 3 * 60 * 1000
     );
     const isResume = action === "resume";
+    // A pipeline that hasn't updated its heartbeat in >90s is considered dead
+    // (edge isolate got reaped). Any invocation — resume OR fresh run — is
+    // allowed to take over so a crash never leaves the pipeline permanently stuck.
     const staleRunningState = Boolean(
-      isResume &&
       currentState?.running &&
       currentUpdatedMs &&
-      Date.now() - currentUpdatedMs > 3 * 60 * 1000
+      Date.now() - currentUpdatedMs > 90 * 1000
     );
     const effectiveLocation = location || currentState?.location || APPLICANT_LOCATION || "Manchester, UK";
 
     if (isResume && !currentState?.running) {
+      // Resume triggered by cron/watchdog but nothing to resume — silently ok.
       return new Response(JSON.stringify({
         success: true,
         accepted: false,
@@ -673,7 +676,7 @@ serve(async (req) => {
     // Long-running work runs in the background so we return before the 150s
     // edge idle timeout. Client should poll `?action=status` for progress.
     const runStartedAt = Date.now();
-    const HANDOFF_MS = 100_000; // 100s — self re-invoke before edge wall time
+    const HANDOFF_MS = 25_000; // 25s — hand off well before edge isolate can be reaped mid-work
     let handoffScheduled = false;
     const scheduleHandoff = async (reason: string) => {
       if (handoffScheduled) return;
