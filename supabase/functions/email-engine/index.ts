@@ -362,6 +362,12 @@ REQUIREMENTS:
 
       console.log(`📧 Queuing ${sendableLeads.length} emails for background send`);
 
+      // Immediately mark these leads as queued so the UI removes them from "Ready"
+      const queuedIds = sendableLeads.map((l) => l.id);
+      await supabase.from("email_engine_leads")
+        .update({ queued: true, queued_at: new Date().toISOString() })
+        .in("id", queuedIds);
+
       const transporter = nodemailer.createTransport({
         host: "mail.visuosofts.com",
         port: 465,
