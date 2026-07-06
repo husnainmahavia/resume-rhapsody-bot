@@ -618,7 +618,7 @@ serve(async (req) => {
     );
 
     // Step 1: Search for REAL jobs with VERIFIED email addresses
-    console.log("🔍 Searching for jobs...");
+    console.log("🔍 Starting continuous discovery + apply loop...");
     const targetSkills = (skills || (APPLICANT_SKILLS.length > 0 ? APPLICANT_SKILLS : ["JavaScript", "React", "Python", "WordPress", "AI"])).join(", ");
     const targetJobType = jobType || "Full-time";
     const mode = searchMode || "standard";
@@ -638,9 +638,26 @@ serve(async (req) => {
 5. The candidate can apply for ANY role that matches their skills, not just exact title matches`;
     }
 
-    const excludedCompanyNames = [...new Set((existingApplications || []).map((app: any) => app.company).filter(Boolean))].slice(0, 60);
+    const results: any[] = [];
+    let emailsSentThisRun = 0;
+    let iteration = 0;
+    let emptyBatches = 0;
+    const MAX_ITERATIONS = 20;
+    const MAX_EMPTY_BATCHES = 3;
 
-    const searchPrompt = `You are a UK job market expert. Find 10-15 REAL job openings at REAL companies in ${location || "Manchester, UK"} for: ${targetSkills}.
+    // Continuous loop: keep discovering + applying until daily limit reached
+    // or no fresh jobs found across several attempts.
+    while (
+      (sentToday || 0) + emailsSentThisRun < GMAIL_DAILY_LIMIT &&
+      iteration < MAX_ITERATIONS &&
+      emptyBatches < MAX_EMPTY_BATCHES
+    ) {
+      iteration++;
+      console.log(`🔁 Discovery iteration ${iteration} — sent so far this run: ${emailsSentThisRun}`);
+
+      const excludedCompanyNames = [...new Set((existingApplications || []).map((app: any) => app.company).filter(Boolean))].slice(0, 60);
+
+      const searchPrompt = `You are a UK job market expert. Find 10-15 REAL job openings at REAL companies in ${location || "Manchester, UK"} for: ${targetSkills}.
 Job type: ${targetJobType}
 
 ${modeInstructions}
@@ -649,61 +666,63 @@ EXCLUDE THESE COMPANIES BECAUSE THEY ARE ALREADY IN THE DATABASE:
 ${excludedCompanyNames.length ? excludedCompanyNames.join(", ") : "None"}
 
 ABSOLUTE REQUIREMENTS - FOLLOW STRICTLY:
-1. ONLY use companies that ACTUALLY EXIST and are KNOWN UK employers (e.g., BBC, NHS Digital, Booking.com, AO.com, THG/The Hut Group, Autotrader, Boohoo, On The Beach, Peak AI, Manchester Airport Group, Kellogg's, Brother International, Missguided, N Brown Group, Co-op, JD Sports, Bet365, Apadmi, MediaCityUK companies, etc.)
+1. ONLY use companies that ACTUALLY EXIST and are KNOWN UK employers.
 2. The hiring_email MUST be a REAL, VERIFIED company email address tied to that company domain.
 3. DO NOT invent, guess, or synthesize email addresses.
 4. If a verified hiring email is not publicly known, set hiring_email to an empty string "".
 5. The job URL must point to a real careers page (careers.company.com or company.com/careers)
-6. DO NOT use fictional companies, startups you made up, or domains that don't exist
+6. DO NOT use fictional companies or made-up domains
 7. Include whether the company offers visa sponsorship (sponsorship field: true/false)
 8. Include the company's careers page URL if known
 
-VERIFICATION: Before returning each job, mentally verify:
-- Is this company real? (Google it)
-- Does this domain actually exist? (company website)
-- Is this email format what they actually use?
-
 Return JSON with: title, company, location, salary_range, description, url, hiring_manager, hiring_email, sponsorship (boolean), careers_page_url`;
 
-    let jobs: any[] = [];
-    try {
-      const searchResponse = await callFreeGemini(OPENROUTER_API_KEY, {
-        messages: [
-          { role: "system", content: "You are a job search API. Return ONLY a JSON object with a 'jobs' array. No markdown, no code fences, no thinking, no explanation. Example: {\"jobs\":[{\"title\":\"...\",\"company\":\"...\",\"location\":\"...\",\"description\":\"...\"}]}" },
-          { role: "user", content: searchPrompt },
-        ],
-      });
+      let jobs: any[] = [];
+      try {
+        const searchResponse = await callFreeGemini(OPENROUTER_API_KEY, {
+          messages: [
+            { role: "system", content: "You are a job search API. Return ONLY a JSON object with a 'jobs' array. No markdown, no code fences, no thinking, no explanation." },
+            { role: "user", content: searchPrompt },
+          ],
+        });
 
-      if (!searchResponse.ok) throw new Error(`Search failed: ${searchResponse.status}`);
-      const searchData = await searchResponse.json();
-      const content = searchData.choices?.[0]?.message?.content || "";
-      const parsed = parseAIJson(content);
-      jobs = Array.isArray(parsed) ? parsed : (parsed?.jobs || []);
-    } catch (searchErr) {
-      console.warn("AI search unavailable, using fallback job discovery:", searchErr);
-    }
+        if (searchResponse.ok) {
+          const searchData = await searchResponse.json();
+          const content = searchData.choices?.[0]?.message?.content || "";
+          const parsed = parseAIJson(content);
+          jobs = Array.isArray(parsed) ? parsed : (parsed?.jobs || []);
+        }
+      } catch (searchErr) {
+        console.warn(`AI search failed on iteration ${iteration}:`, searchErr);
+      }
 
-    jobs = jobs.filter((job) => {
-      const companyKey = comparable(job.company);
-      const titleKey = comparable(job.title);
-      if (!companyKey || !titleKey) return false;
-      if (saturatedCompanies.has(companyKey)) return false;
-      if (existingExactJobs.has(`${companyKey}:${titleKey}`)) return false;
-      return true;
-    });
-
-    if (!jobs.length) {
-      jobs = getFallbackJobs(location, 8, saturatedCompanies).filter((job) => {
+      jobs = jobs.filter((job) => {
         const companyKey = comparable(job.company);
         const titleKey = comparable(job.title);
-        return !existingExactJobs.has(`${companyKey}:${titleKey}`);
+        if (!companyKey || !titleKey) return false;
+        if (saturatedCompanies.has(companyKey)) return false;
+        if (existingExactJobs.has(`${companyKey}:${titleKey}`)) return false;
+        return true;
       });
-      console.log(`Using fresh fallback job discovery (${jobs.length} jobs)`);
-    }
 
-    console.log(`Found ${jobs.length} jobs`);
-    const results: any[] = [];
-    let emailsSentThisRun = 0;
+      if (!jobs.length) {
+        jobs = getFallbackJobs(location, 8, saturatedCompanies).filter((job) => {
+          const companyKey = comparable(job.company);
+          const titleKey = comparable(job.title);
+          return !existingExactJobs.has(`${companyKey}:${titleKey}`);
+        });
+        if (jobs.length) console.log(`Using fallback jobs on iteration ${iteration} (${jobs.length})`);
+      }
+
+      if (!jobs.length) {
+        emptyBatches++;
+        console.log(`⚠️ Iteration ${iteration} found no fresh jobs (empty batch ${emptyBatches}/${MAX_EMPTY_BATCHES}).`);
+        continue;
+      }
+      emptyBatches = 0;
+
+      console.log(`Found ${jobs.length} jobs in iteration ${iteration}`);
+
 
     for (let i = 0; i < jobs.length; i++) {
       const job = jobs[i];
