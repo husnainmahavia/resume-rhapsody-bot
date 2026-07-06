@@ -303,53 +303,66 @@ RULES:
 - Skip anything you are uncertain about.`;
 
         let leads: any[] = [];
-        try {
-          const resp = await callGemini(GEMINI_KEY, {
-            messages: [
-              { role: "system", content: "Return only real, verified UK businesses as valid JSON." },
-              { role: "user", content: discoverPrompt },
-            ],
-            tools: [{
-              type: "function",
-              function: {
-                name: "return_leads",
-                description: "Return discovered business leads",
-                parameters: {
-                  type: "object",
-                  properties: {
-                    leads: {
-                      type: "array",
-                      items: {
-                        type: "object",
-                        properties: {
-                          business_name: { type: "string" },
-                          website: { type: "string" },
-                          contact_email: { type: "string" },
-                          phone: { type: "string" },
-                          location: { type: "string" },
-                          industry: { type: "string" },
-                          website_status: { type: "string" },
-                          opportunity: { type: "string" },
+        let discoveryFailed = false;
+        let lastDiscoveryError = "";
+        for (let attempt = 1; attempt <= DISCOVERY_RETRY_ATTEMPTS; attempt++) {
+          try {
+            const resp = await callGemini(GEMINI_KEY, {
+              messages: [
+                { role: "system", content: "Return only real, verified UK businesses as valid JSON." },
+                { role: "user", content: discoverPrompt },
+              ],
+              tools: [{
+                type: "function",
+                function: {
+                  name: "return_leads",
+                  description: "Return discovered business leads",
+                  parameters: {
+                    type: "object",
+                    properties: {
+                      leads: {
+                        type: "array",
+                        items: {
+                          type: "object",
+                          properties: {
+                            business_name: { type: "string" },
+                            website: { type: "string" },
+                            contact_email: { type: "string" },
+                            phone: { type: "string" },
+                            location: { type: "string" },
+                            industry: { type: "string" },
+                            website_status: { type: "string" },
+                            opportunity: { type: "string" },
+                          },
+                          required: ["business_name", "opportunity"],
                         },
-                        required: ["business_name", "opportunity"],
                       },
                     },
+                    required: ["leads"],
                   },
-                  required: ["leads"],
                 },
-              },
-            }],
-            tool_choice: { type: "function", function: { name: "return_leads" } },
-          });
-          const raw = await resp.text();
-          const parsed = JSON.parse(raw);
-          const call = parsed?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
-          if (call) {
-            const args = typeof call === "string" ? JSON.parse(call) : call;
-            leads = args.leads || [];
+              }],
+              tool_choice: { type: "function", function: { name: "return_leads" } },
+            });
+            const raw = await resp.text();
+            const parsed = JSON.parse(raw);
+            const call = parsed?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
+            if (call) {
+              const args = typeof call === "string" ? JSON.parse(call) : call;
+              leads = args.leads || [];
+            }
+            discoveryFailed = false;
+            break;
+          } catch (e) {
+            lastDiscoveryError = e instanceof Error ? e.message : String(e);
+            discoveryFailed = true;
+            const backoff = 15000 * attempt + Math.floor(Math.random() * 5000);
+            await log(
+              supabase,
+              `⚠️ Discovery attempt ${attempt}/${DISCOVERY_RETRY_ATTEMPTS} failed (${lastDiscoveryError.slice(0, 120)}) — retrying in ${Math.round(backoff / 1000)}s`,
+            );
+            await new Promise((r) => setTimeout(r, backoff));
           }
-        } catch (e) {
-          await log(supabase, `⚠️ Discovery failed: ${e instanceof Error ? e.message : e}`);
         }
 
         // Filter fresh + emailable
@@ -359,9 +372,24 @@ RULES:
         );
 
         if (fresh.length === 0) {
+          if (discoveryFailed) {
+            // Don't count as empty — API was unavailable. Long pause then try next category.
+            await log(
+              supabase,
+              `⏸️ AI discovery unavailable (${lastDiscoveryError.slice(0, 120)}). Pausing 60s and continuing.`,
+              { status: "waiting_for_ai" },
+            );
+            await new Promise((r) => setTimeout(r, 60000));
+            continue;
+          }
           emptyBatches++;
-          await log(supabase, `↺ No fresh leads (empty batches ${emptyBatches}/${MAX_EMPTY_BATCHES}).`);
-          if (emptyBatches >= MAX_EMPTY_BATCHES) break;
+          await log(supabase, `↺ No fresh leads in "${catDef.label}" (empty batches ${emptyBatches}/${MAX_EMPTY_BATCHES}).`);
+          if (emptyBatches >= MAX_EMPTY_BATCHES) {
+            await log(supabase, `🛑 Stopping — ${MAX_EMPTY_BATCHES} consecutive empty batches across categories.`);
+            break;
+          }
+          // Short pause before next category
+          await new Promise((r) => setTimeout(r, 5000));
           continue;
         }
         emptyBatches = 0;
