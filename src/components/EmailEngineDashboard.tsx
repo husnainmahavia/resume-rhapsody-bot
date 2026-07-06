@@ -45,6 +45,14 @@ interface EngineStats {
 
 type StatusFilter = "all" | "ready" | "sent" | "error" | "pending";
 
+function hasSendableEmail(lead: Lead): boolean {
+  return Boolean(
+    lead.contact_email?.trim() &&
+    lead.email_subject?.trim() &&
+    lead.email_body?.trim()
+  );
+}
+
 const DEFAULT_INDUSTRIES = [
   "Retail & E-commerce", "Real Estate", "Healthcare & Medical",
   "Hospitality & Tourism", "Fashion & Apparel", "Education & EdTech",
@@ -59,7 +67,7 @@ const DEFAULT_REGIONS = [
 function getLeadStatus(lead: Lead): StatusFilter {
   if (lead.sent) return "sent";
   if (lead.send_error) return "error";
-  if (lead.email_generated) return "ready";
+  if (lead.email_generated && hasSendableEmail(lead)) return "ready";
   return "pending";
 }
 
@@ -116,10 +124,10 @@ export default function EmailEngineDashboard() {
 
   const filterCounts = useMemo(() => ({
     all: leads.length,
-    ready: leads.filter(l => l.email_generated && !l.sent && !l.send_error).length,
+    ready: leads.filter(l => l.email_generated && hasSendableEmail(l) && !l.sent && !l.send_error).length,
     sent: leads.filter(l => l.sent).length,
     error: leads.filter(l => !!l.send_error).length,
-    pending: leads.filter(l => !l.email_generated && !l.sent && !l.send_error).length,
+    pending: leads.filter(l => (!l.email_generated || !hasSendableEmail(l)) && !l.sent && !l.send_error).length,
   }), [leads]);
 
   const handleDiscover = async () => {
@@ -160,7 +168,7 @@ export default function EmailEngineDashboard() {
       return;
     }
 
-    const hasAnyPending = leads.some((l) => !l.email_generated && !l.sent && !l.send_error);
+    const hasAnyPending = leads.some((l) => (!l.email_generated || !hasSendableEmail(l)) && !l.sent && !l.send_error);
     if (!ids && !hasAnyPending) {
       toast({
         title: "0 emails generated",
@@ -198,12 +206,12 @@ export default function EmailEngineDashboard() {
     const unsent = selectedLeads.size > 0
       ? Array.from(selectedLeads).filter(id => {
           const lead = leads.find(l => l.id === id);
-          return lead && !lead.sent && lead.email_generated;
+          return lead && !lead.sent && lead.email_generated && hasSendableEmail(lead);
         })
       : undefined;
 
     if (selectedLeads.size > 0 && (!unsent || unsent.length === 0)) {
-      toast({ title: "No unsent emails selected", description: "All selected leads have already been sent.", variant: "destructive" });
+      toast({ title: "No ready emails selected", description: "Select leads that have a recipient, subject, and email body.", variant: "destructive" });
       return;
     }
 
@@ -212,6 +220,16 @@ export default function EmailEngineDashboard() {
       const { data } = await supabase.functions.invoke("email-engine", {
         body: { action: "send", leadIds: unsent },
       });
+      if ((data?.queued ?? 0) === 0) {
+        toast({
+          title: "No emails queued",
+          description: data?.message || "No complete ready emails were found. Generate or regenerate emails first.",
+          variant: "destructive",
+        });
+        loadStats();
+        loadLeads();
+        return;
+      }
       toast({
         title: `📧 Queued ${data?.queued ?? 0} emails`,
         description: data?.message || "Sending in background — refresh to see progress.",
@@ -265,7 +283,14 @@ export default function EmailEngineDashboard() {
   };
 
   const selectAllFiltered = () => {
-    const filteredIds = filteredLeads.map(l => l.id);
+    const selectableLeads = activeFilter === "ready"
+      ? filteredLeads.filter((lead) => !lead.sent && hasSendableEmail(lead))
+      : filteredLeads;
+    const filteredIds = selectableLeads.map(l => l.id);
+    if (filteredIds.length === 0) {
+      toast({ title: "Nothing selectable", description: "Generate complete emails before selecting ready leads." });
+      return;
+    }
     if (filteredIds.every(id => selectedLeads.has(id))) {
       const next = new Set(selectedLeads);
       filteredIds.forEach(id => next.delete(id));

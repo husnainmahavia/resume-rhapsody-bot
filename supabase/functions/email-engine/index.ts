@@ -48,6 +48,10 @@ const REGIONS = [
   "Germany & Europe",
 ];
 
+function hasText(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
 // Rotate through industry/region combos based on current hour
 function getRotatingTarget(): { industry: string; region: string } {
   const now = new Date();
@@ -195,7 +199,7 @@ CRITICAL RULES:
         .eq("sent", false);
 
       if (!shouldForce) {
-        query = query.eq("email_generated", false);
+        query = query.or("email_generated.eq.false,email_subject.is.null,email_body.is.null,email_subject.eq.,email_body.eq.");
       }
 
       if (targetLeadIds && targetLeadIds.length > 0) {
@@ -318,7 +322,14 @@ REQUIREMENTS:
         .from("email_engine_leads")
         .select("*")
         .eq("email_generated", true)
-        .eq("sent", false);
+        .eq("sent", false)
+        .is("send_error", null)
+        .not("contact_email", "is", null)
+        .not("email_subject", "is", null)
+        .not("email_body", "is", null)
+        .neq("contact_email", "")
+        .neq("email_subject", "")
+        .neq("email_body", "");
 
       if (targetLeadIds && targetLeadIds.length > 0) {
         query = query.in("id", targetLeadIds);
@@ -326,13 +337,29 @@ REQUIREMENTS:
 
       const { data: leads, error } = await query.limit(10);
       if (error) throw error;
-      if (!leads || leads.length === 0) {
+      const sendableLeads = (leads || []).filter((lead) =>
+        hasText(lead.contact_email) && hasText(lead.email_subject) && hasText(lead.email_body)
+      );
+
+      if (leads && leads.length > 0 && sendableLeads.length < leads.length) {
+        const invalidIds = leads
+          .filter((lead) => !hasText(lead.contact_email) || !hasText(lead.email_subject) || !hasText(lead.email_body))
+          .map((lead) => lead.id);
+        if (invalidIds.length > 0) {
+          await supabase
+            .from("email_engine_leads")
+            .update({ email_generated: false, send_error: "Email content incomplete — regenerate before sending" })
+            .in("id", invalidIds);
+        }
+      }
+
+      if (sendableLeads.length === 0) {
         return new Response(JSON.stringify({ success: true, sent: 0, queued: 0, message: "No emails ready to send" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      console.log(`📧 Queuing ${leads.length} emails for background send`);
+      console.log(`📧 Queuing ${sendableLeads.length} emails for background send`);
 
       const transporter = nodemailer.createTransport({
         host: "mail.visuosofts.com",
@@ -345,7 +372,7 @@ REQUIREMENTS:
         let sent = 0;
         let errors = 0;
         let skippedInvalid = 0;
-        for (const lead of leads) {
+        for (const lead of sendableLeads) {
           try {
             const { data: alreadySent } = await supabase
               .from("sent_emails")
@@ -458,22 +485,33 @@ REQUIREMENTS:
 
       return new Response(JSON.stringify({
         success: true,
-        queued: leads.length,
+        queued: sendableLeads.length,
         sent: 0,
-        message: `Queued ${leads.length} emails — sending in background (60-120s pacing). Refresh to see progress.`,
+        message: `Queued ${sendableLeads.length} emails — sending in background (60-120s pacing). Refresh to see progress.`,
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     // === ACTION: STATUS ===
     if (action === "status") {
       const { count: totalLeads } = await supabase.from("email_engine_leads").select("*", { count: "exact", head: true });
-      const { count: generated } = await supabase.from("email_engine_leads").select("*", { count: "exact", head: true }).eq("email_generated", true);
+      const { count: generatedCount } = await supabase
+        .from("email_engine_leads")
+        .select("*", { count: "exact", head: true })
+        .eq("email_generated", true)
+        .eq("sent", false)
+        .is("send_error", null)
+        .not("contact_email", "is", null)
+        .not("email_subject", "is", null)
+        .not("email_body", "is", null)
+        .neq("contact_email", "")
+        .neq("email_subject", "")
+        .neq("email_body", "");
       const { count: sentCount } = await supabase.from("email_engine_leads").select("*", { count: "exact", head: true }).eq("sent", true);
       const { count: errorCount } = await supabase.from("email_engine_leads").select("*", { count: "exact", head: true }).not("send_error", "is", null);
 
       return new Response(JSON.stringify({
         totalLeads: totalLeads || 0,
-        generated: generated || 0,
+        generated: generatedCount || 0,
         sent: sentCount || 0,
         errors: errorCount || 0,
         industries: INDUSTRIES,
