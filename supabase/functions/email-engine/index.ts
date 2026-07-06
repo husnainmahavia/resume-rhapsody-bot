@@ -433,6 +433,7 @@ REQUIREMENTS:
               console.log(`  🚫 ${lead.contact_email} — ${msg}`);
               await supabase.from("email_engine_leads").update({
                 send_error: msg,
+                queued: false,
               }).eq("id", lead.id);
               continue;
             }
