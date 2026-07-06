@@ -450,6 +450,7 @@ REQUIREMENTS:
               sent_at: new Date().toISOString(),
               resend_message_id: info.messageId,
               send_error: null,
+              queued: false,
             }).eq("id", lead.id);
             sent++;
             console.log(`  ✅ Sent to: ${lead.contact_email} — ${info.messageId}`);
