@@ -12,7 +12,7 @@ import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { USER_PROFILE } from "@/lib/user-profile";
-import { runServerPipeline, getPipelineStatus, sendFollowUps } from "@/lib/api";
+import { runServerPipeline, resumeServerPipeline, getPipelineStatus, sendFollowUps } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 type PipelineStep = "idle" | "running" | "complete" | "error";
@@ -124,6 +124,10 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
         const stats = await getPipelineStatus();
         setPipelineStats(stats);
         onUpdate();
+        const updatedAt = (stats as any)?.updatedAt ? new Date((stats as any).updatedAt).getTime() : 0;
+        if ((stats as any)?.running && updatedAt && Date.now() - updatedAt > 4 * 60 * 1000) {
+          await resumeServerPipeline().catch(() => null);
+        }
         // Auto-clear when server reports it finished
         if (stats && (stats as any).running === false && activeRun) {
           localStorage.removeItem(PIPELINE_RUN_KEY);
