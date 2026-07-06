@@ -86,7 +86,31 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
   const { toast } = useToast();
 
   useEffect(() => {
-    getPipelineStatus().then(setPipelineStats).catch(() => {});
+    getPipelineStatus().then((stats) => {
+      setPipelineStats(stats);
+      // If the server says a run is active, restore the "running" UI even if
+      // localStorage was cleared or we're in a fresh tab.
+      if ((stats as any)?.running) {
+        setStatus("running");
+        setShowConfig(false);
+        if (!activeRun) {
+          const snap: PipelineRunSnapshot = {
+            startedAt: (stats as any)?.startedAt ? new Date((stats as any).startedAt).getTime() : Date.now(),
+            location: (stats as any)?.location || location,
+            skillCount: selectedSkills.length,
+            searchMode,
+          };
+          localStorage.setItem(PIPELINE_RUN_KEY, JSON.stringify(snap));
+          setActiveRun(snap);
+        }
+      } else if (activeRun) {
+        // Server says not running — clear stale snapshot
+        localStorage.removeItem(PIPELINE_RUN_KEY);
+        setActiveRun(null);
+        setStatus("complete");
+      }
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -100,6 +124,12 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
         const stats = await getPipelineStatus();
         setPipelineStats(stats);
         onUpdate();
+        // Auto-clear when server reports it finished
+        if (stats && (stats as any).running === false && activeRun) {
+          localStorage.removeItem(PIPELINE_RUN_KEY);
+          setActiveRun(null);
+          setStatus("complete");
+        }
       } catch {
         // Watching can fail without stopping the server-side run.
       }

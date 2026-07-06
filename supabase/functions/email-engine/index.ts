@@ -323,6 +323,7 @@ REQUIREMENTS:
         .select("*")
         .eq("email_generated", true)
         .eq("sent", false)
+        .eq("queued", false)
         .is("send_error", null)
         .not("contact_email", "is", null)
         .not("email_subject", "is", null)
@@ -361,6 +362,12 @@ REQUIREMENTS:
 
       console.log(`📧 Queuing ${sendableLeads.length} emails for background send`);
 
+      // Immediately mark these leads as queued so the UI removes them from "Ready"
+      const queuedIds = sendableLeads.map((l) => l.id);
+      await supabase.from("email_engine_leads")
+        .update({ queued: true, queued_at: new Date().toISOString() })
+        .in("id", queuedIds);
+
       const transporter = nodemailer.createTransport({
         host: "mail.visuosofts.com",
         port: 465,
@@ -387,6 +394,7 @@ REQUIREMENTS:
                 sent: true,
                 sent_at: new Date().toISOString(),
                 send_error: null,
+                queued: false,
               }).eq("id", lead.id);
               continue;
             }
@@ -425,6 +433,7 @@ REQUIREMENTS:
               console.log(`  🚫 ${lead.contact_email} — ${msg}`);
               await supabase.from("email_engine_leads").update({
                 send_error: msg,
+                queued: false,
               }).eq("id", lead.id);
               continue;
             }
@@ -443,6 +452,7 @@ REQUIREMENTS:
               sent_at: new Date().toISOString(),
               resend_message_id: info.messageId,
               send_error: null,
+              queued: false,
             }).eq("id", lead.id);
             sent++;
             console.log(`  ✅ Sent to: ${lead.contact_email} — ${info.messageId}`);
@@ -468,9 +478,14 @@ REQUIREMENTS:
             errors++;
             const errMsg = e instanceof Error ? e.message : String(e);
             console.error(`  ❌ Send error for ${lead.company_name}:`, errMsg);
-            await supabase.from("email_engine_leads").update({ send_error: errMsg }).eq("id", lead.id);
+            await supabase.from("email_engine_leads").update({ send_error: errMsg, queued: false }).eq("id", lead.id);
           }
         }
+        // Safety net: clear queued flag from any lead still queued from this batch
+        await supabase.from("email_engine_leads")
+          .update({ queued: false })
+          .in("id", queuedIds)
+          .eq("queued", true);
         console.log(`🏁 Background send done: ${sent} sent, ${skippedInvalid} skipped (bad address), ${errors} errors`);
       };
 

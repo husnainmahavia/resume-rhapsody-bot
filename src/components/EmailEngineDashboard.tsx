@@ -31,6 +31,8 @@ interface Lead {
   sent_at: string | null;
   send_error: string | null;
   campaign_batch: string | null;
+  queued?: boolean;
+  queued_at?: string | null;
   created_at: string;
 }
 
@@ -43,7 +45,7 @@ interface EngineStats {
   regions: string[];
 }
 
-type StatusFilter = "all" | "ready" | "sent" | "error" | "pending";
+type StatusFilter = "all" | "ready" | "processing" | "sent" | "error" | "pending";
 
 function hasSendableEmail(lead: Lead): boolean {
   return Boolean(
@@ -67,6 +69,7 @@ const DEFAULT_REGIONS = [
 function getLeadStatus(lead: Lead): StatusFilter {
   if (lead.sent) return "sent";
   if (lead.send_error) return "error";
+  if (lead.queued) return "processing";
   if (lead.email_generated && hasSendableEmail(lead)) return "ready";
   return "pending";
 }
@@ -74,6 +77,7 @@ function getLeadStatus(lead: Lead): StatusFilter {
 const FILTER_CONFIG: { key: StatusFilter; label: string; icon: React.ElementType; color: string }[] = [
   { key: "all", label: "All", icon: BarChart3, color: "text-foreground" },
   { key: "ready", label: "Ready", icon: Mail, color: "text-accent" },
+  { key: "processing", label: "Processing", icon: Loader2, color: "text-primary" },
   { key: "sent", label: "Sent", icon: CheckCircle2, color: "text-success" },
   { key: "error", label: "Errors", icon: XCircle, color: "text-destructive" },
   { key: "pending", label: "Pending", icon: Clock, color: "text-muted-foreground" },
@@ -124,10 +128,11 @@ export default function EmailEngineDashboard() {
 
   const filterCounts = useMemo(() => ({
     all: leads.length,
-    ready: leads.filter(l => l.email_generated && hasSendableEmail(l) && !l.sent && !l.send_error).length,
+    ready: leads.filter(l => l.email_generated && hasSendableEmail(l) && !l.sent && !l.send_error && !l.queued).length,
+    processing: leads.filter(l => l.queued && !l.sent && !l.send_error).length,
     sent: leads.filter(l => l.sent).length,
     error: leads.filter(l => !!l.send_error).length,
-    pending: leads.filter(l => (!l.email_generated || !hasSendableEmail(l)) && !l.sent && !l.send_error).length,
+    pending: leads.filter(l => (!l.email_generated || !hasSendableEmail(l)) && !l.sent && !l.send_error && !l.queued).length,
   }), [leads]);
 
   const handleDiscover = async () => {
@@ -206,7 +211,7 @@ export default function EmailEngineDashboard() {
     const unsent = selectedLeads.size > 0
       ? Array.from(selectedLeads).filter(id => {
           const lead = leads.find(l => l.id === id);
-          return lead && !lead.sent && lead.email_generated && hasSendableEmail(lead);
+          return lead && !lead.sent && !lead.queued && lead.email_generated && hasSendableEmail(lead);
         })
       : undefined;
 
@@ -284,8 +289,8 @@ export default function EmailEngineDashboard() {
 
   const selectAllFiltered = () => {
     const selectableLeads = activeFilter === "ready"
-      ? filteredLeads.filter((lead) => !lead.sent && hasSendableEmail(lead))
-      : filteredLeads;
+      ? filteredLeads.filter((lead) => !lead.sent && !lead.queued && hasSendableEmail(lead))
+      : filteredLeads.filter((lead) => !lead.queued);
     const filteredIds = selectableLeads.map(l => l.id);
     if (filteredIds.length === 0) {
       toast({ title: "Nothing selectable", description: "Generate complete emails before selecting ready leads." });
@@ -450,6 +455,8 @@ export default function EmailEngineDashboard() {
                       <Badge className="bg-success/20 text-success text-[9px]"><CheckCircle2 className="h-3 w-3 mr-0.5" />Sent</Badge>
                     ) : status === "error" ? (
                       <Badge className="bg-destructive/20 text-destructive text-[9px]"><XCircle className="h-3 w-3 mr-0.5" />Error</Badge>
+                    ) : status === "processing" ? (
+                      <Badge className="bg-primary/20 text-primary text-[9px]"><Loader2 className="h-3 w-3 mr-0.5 animate-spin" />Processing</Badge>
                     ) : status === "ready" ? (
                       <Badge className="bg-accent/20 text-accent text-[9px]"><Mail className="h-3 w-3 mr-0.5" />Ready</Badge>
                     ) : (
