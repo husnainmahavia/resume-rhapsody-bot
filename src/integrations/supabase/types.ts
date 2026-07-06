@@ -547,6 +547,120 @@ export type Database = {
         }
         Relationships: []
       }
+      services_outreach_leads: {
+        Row: {
+          batch_id: string | null
+          business_name: string
+          contact_email: string | null
+          created_at: string
+          email_body: string | null
+          email_generated: boolean
+          email_subject: string | null
+          id: string
+          industry: string | null
+          location: string | null
+          message_id: string | null
+          opportunity: string | null
+          phone: string | null
+          price_gbp: number | null
+          send_error: string | null
+          sent: boolean
+          sent_at: string | null
+          service_category: string
+          updated_at: string
+          website: string | null
+          website_status: string | null
+        }
+        Insert: {
+          batch_id?: string | null
+          business_name: string
+          contact_email?: string | null
+          created_at?: string
+          email_body?: string | null
+          email_generated?: boolean
+          email_subject?: string | null
+          id?: string
+          industry?: string | null
+          location?: string | null
+          message_id?: string | null
+          opportunity?: string | null
+          phone?: string | null
+          price_gbp?: number | null
+          send_error?: string | null
+          sent?: boolean
+          sent_at?: string | null
+          service_category: string
+          updated_at?: string
+          website?: string | null
+          website_status?: string | null
+        }
+        Update: {
+          batch_id?: string | null
+          business_name?: string
+          contact_email?: string | null
+          created_at?: string
+          email_body?: string | null
+          email_generated?: boolean
+          email_subject?: string | null
+          id?: string
+          industry?: string | null
+          location?: string | null
+          message_id?: string | null
+          opportunity?: string | null
+          phone?: string | null
+          price_gbp?: number | null
+          send_error?: string | null
+          sent?: boolean
+          sent_at?: string | null
+          service_category?: string
+          updated_at?: string
+          website?: string | null
+          website_status?: string | null
+        }
+        Relationships: []
+      }
+      services_outreach_state: {
+        Row: {
+          discovered: number
+          emails_sent: number
+          errors: number
+          finished_at: string | null
+          id: number
+          iteration: number
+          last_log: string | null
+          running: boolean
+          started_at: string | null
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          discovered?: number
+          emails_sent?: number
+          errors?: number
+          finished_at?: string | null
+          id?: number
+          iteration?: number
+          last_log?: string | null
+          running?: boolean
+          started_at?: string | null
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          discovered?: number
+          emails_sent?: number
+          errors?: number
+          finished_at?: string | null
+          id?: number
+          iteration?: number
+          last_log?: string | null
+          running?: boolean
+          started_at?: string | null
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
