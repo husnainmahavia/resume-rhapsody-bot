@@ -131,7 +131,6 @@ export default function EmailEngineDashboard() {
     processing: leads.filter(l => l.queued && !l.sent && !l.send_error).length,
     sent: leads.filter(l => l.sent).length,
     error: leads.filter(l => !!l.send_error).length,
-    pending: leads.filter(l => (!l.email_generated || !hasSendableEmail(l)) && !l.sent && !l.send_error && !l.queued).length,
   }), [leads]);
 
   const handleDiscover = async () => {
