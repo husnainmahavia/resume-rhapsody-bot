@@ -326,7 +326,10 @@ REQUIREMENTS:
         .is("send_error", null)
         .not("contact_email", "is", null)
         .not("email_subject", "is", null)
-        .not("email_body", "is", null);
+        .not("email_body", "is", null)
+        .neq("contact_email", "")
+        .neq("email_subject", "")
+        .neq("email_body", "");
 
       if (targetLeadIds && targetLeadIds.length > 0) {
         query = query.in("id", targetLeadIds);
@@ -499,7 +502,10 @@ REQUIREMENTS:
         .is("send_error", null)
         .not("contact_email", "is", null)
         .not("email_subject", "is", null)
-        .not("email_body", "is", null);
+        .not("email_body", "is", null)
+        .neq("contact_email", "")
+        .neq("email_subject", "")
+        .neq("email_body", "");
       const { count: sentCount } = await supabase.from("email_engine_leads").select("*", { count: "exact", head: true }).eq("sent", true);
       const { count: errorCount } = await supabase.from("email_engine_leads").select("*", { count: "exact", head: true }).not("send_error", "is", null);
 
