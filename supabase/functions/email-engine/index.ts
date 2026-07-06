@@ -478,9 +478,14 @@ REQUIREMENTS:
             errors++;
             const errMsg = e instanceof Error ? e.message : String(e);
             console.error(`  ❌ Send error for ${lead.company_name}:`, errMsg);
-            await supabase.from("email_engine_leads").update({ send_error: errMsg }).eq("id", lead.id);
+            await supabase.from("email_engine_leads").update({ send_error: errMsg, queued: false }).eq("id", lead.id);
           }
         }
+        // Safety net: clear queued flag from any lead still queued from this batch
+        await supabase.from("email_engine_leads")
+          .update({ queued: false })
+          .in("id", queuedIds)
+          .eq("queued", true);
         console.log(`🏁 Background send done: ${sent} sent, ${skippedInvalid} skipped (bad address), ${errors} errors`);
       };
 
