@@ -19,6 +19,7 @@ import CSVUpload from "@/components/CSVUpload";
 import ApplicantProfileForm from "@/components/ApplicantProfileForm";
 import AuthGate from "@/components/AuthGate";
 import EmailEngineDashboard from "@/components/EmailEngineDashboard";
+import ServicesOutreachPipeline from "@/components/ServicesOutreachPipeline";
 import CronMonitorPanel from "@/components/CronMonitorPanel";
 import EmailOpenTracker from "@/components/EmailOpenTracker";
 import { fetchApplications, type JobApplication } from "@/lib/api";
@@ -70,6 +71,7 @@ const Index = () => {
     { id: "linkedin", label: "LinkedIn", icon: Linkedin, group: "Discovery" },
     { id: "scraper", label: "Scraper", icon: Globe, group: "Discovery" },
     { id: "email-engine", label: "Email Engine", icon: Mail, group: "Outreach" },
+    { id: "services-outreach", label: "Services Outreach", icon: Zap, group: "Outreach", badge: "NEW" },
     { id: "review", label: "Review Queue", icon: ShieldCheck, group: "Outreach" },
     { id: "tracking", label: "Open Tracking", icon: Eye, group: "Outreach" },
     { id: "csv", label: "CSV Import", icon: Upload, group: "Tools" },
@@ -112,6 +114,11 @@ const Index = () => {
         icon: Mail, title: "Visuosofts Email Engine", subtitle: "bulk outreach",
         description: "AI discovers companies by industry → generates personalized cold outreach emails → sends from info@visuosofts.com via SMTP.",
         component: <EmailEngineDashboard />,
+      },
+      "services-outreach": {
+        icon: Zap, title: "Services Outreach Pipeline", subtitle: "autonomous B2B",
+        description: "One-click autonomous pipeline: AI finds UK businesses needing websites, dashboards, or AR — writes tailored pitches — sends from info@visuosofts.com. Runs continuously like Auto-Apply.",
+        component: <ServicesOutreachPipeline />,
       },
       review: {
         icon: ShieldCheck, title: "Email Review Queue & Bounce Analytics", subtitle: "pre-send review",
