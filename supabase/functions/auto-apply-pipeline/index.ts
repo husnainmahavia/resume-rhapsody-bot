@@ -1218,14 +1218,18 @@ Sign off with: ${APPLICANT_NAME}, ${APPLICANT_PHONE}, ${APPLICANT_EMAIL}`,
      } catch (bgErr) {
       console.error("Background pipeline error:", bgErr);
      } finally {
-      try {
-        await supabase.from("auto_apply_pipeline_state").upsert({
-          id: 1,
-          running: false,
-          finished_at: new Date().toISOString(),
-          last_log: `Finished. emails=${emailsSentThisRun}`,
-        }, { onConflict: "id" });
-      } catch (_) { /* ignore */ }
+      if (handoffScheduled) {
+        console.log("👋 Isolate exiting after handoff; keeping running=true.");
+      } else {
+        try {
+          await supabase.from("auto_apply_pipeline_state").upsert({
+            id: 1,
+            running: false,
+            finished_at: new Date().toISOString(),
+            last_log: `Finished. emails=${emailsSentThisRun}`,
+          }, { onConflict: "id" });
+        } catch (_) { /* ignore */ }
+      }
      }
     };
 
