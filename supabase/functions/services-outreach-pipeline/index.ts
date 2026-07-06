@@ -414,11 +414,19 @@ serve(async (req) => {
             batch_id: batchId,
           }));
 
-          const { data: inserted, error: insertError } = await supabase.from("services_outreach_leads")
-            .upsert(rows, { onConflict: "contact_email", ignoreDuplicates: true })
-            .select("*");
-          if (insertError) throw insertError;
-          const newRows = inserted || [];
+          const newRows = [];
+          for (const row of rows) {
+            const { data: insertedRow, error: insertError } = await supabase
+              .from("services_outreach_leads")
+              .insert(row)
+              .select("*")
+              .single();
+            if (insertError) {
+              if (/duplicate key|unique constraint/i.test(insertError.message || "")) continue;
+              throw insertError;
+            }
+            if (insertedRow) newRows.push(insertedRow);
+          }
           totalDiscovered += newRows.length;
           await updateState(supabase, { discovered: totalDiscovered, status: "validating" });
 
