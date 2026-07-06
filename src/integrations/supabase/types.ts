@@ -122,6 +122,36 @@ export type Database = {
         }
         Relationships: []
       }
+      email_engine_health_log: {
+        Row: {
+          checked_at: string
+          error_code: string | null
+          error_message: string | null
+          http_status: number | null
+          id: string
+          source: string | null
+          status: string
+        }
+        Insert: {
+          checked_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          http_status?: number | null
+          id?: string
+          source?: string | null
+          status: string
+        }
+        Update: {
+          checked_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          http_status?: number | null
+          id?: string
+          source?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       email_engine_leads: {
         Row: {
           bounced: boolean
