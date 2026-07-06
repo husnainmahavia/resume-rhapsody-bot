@@ -14,6 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import EmailEngineAI from "./EmailEngineAI";
+import { EmailEngineHealthBanner, invokeEmailEngine } from "./EmailEngineHealth";
 
 interface Lead {
   id: string;
@@ -103,14 +104,14 @@ export default function EmailEngineDashboard() {
 
   const loadStats = async () => {
     try {
-      const { data } = await supabase.functions.invoke("email-engine", { body: { action: "status" } });
+      const { data } = await invokeEmailEngine({ action: "status" });
       if (data) setStats(data);
     } catch (e) { console.error("Stats error:", e); }
   };
 
   const loadLeads = async () => {
     try {
-      const { data } = await supabase.functions.invoke("email-engine", { body: { action: "list" } });
+      const { data } = await invokeEmailEngine({ action: "list" });
       if (data?.leads) setLeads(data.leads);
     } catch (e) { console.error("List error:", e); }
   };
@@ -136,9 +137,7 @@ export default function EmailEngineDashboard() {
   const handleDiscover = async () => {
     setDiscovering(true);
     try {
-      const { data } = await supabase.functions.invoke("email-engine", {
-        body: { action: "discover", industry: selectedIndustry, region: selectedRegion },
-      });
+      const { data } = await invokeEmailEngine({ action: "discover", industry: selectedIndustry, region: selectedRegion });
       toast({
         title: `🔍 Discovered ${data?.discovered || 0} companies`,
         description: `${data?.inserted || 0} new leads added, ${data?.duplicatesSkipped || 0} duplicates skipped`,
@@ -187,9 +186,7 @@ export default function EmailEngineDashboard() {
 
     setGenerating(true);
     try {
-      const { data } = await supabase.functions.invoke("email-engine", {
-        body: { action: "generate", leadIds: ids, force },
-      });
+      const { data } = await invokeEmailEngine({ action: "generate", leadIds: ids, force });
       toast({
         title: `✉️ ${force ? "Regenerated" : "Generated"} ${data?.generated || 0} emails`,
         description: `Out of ${data?.total || 0} leads processed`,
@@ -220,9 +217,7 @@ export default function EmailEngineDashboard() {
 
     setSending(true);
     try {
-      const { data } = await supabase.functions.invoke("email-engine", {
-        body: { action: "send", leadIds: unsent },
-      });
+      const { data } = await invokeEmailEngine({ action: "send", leadIds: unsent });
       if ((data?.queued ?? 0) === 0) {
         toast({
           title: "No emails queued",
@@ -263,9 +258,7 @@ export default function EmailEngineDashboard() {
         }).eq("id", lead.id);
       }
       // Now send them
-      const { data } = await supabase.functions.invoke("email-engine", {
-        body: { action: "send", leadIds: errorLeads.map(l => l.id) },
-      });
+      const { data } = await invokeEmailEngine({ action: "send", leadIds: errorLeads.map(l => l.id) });
       toast({
         title: `🔄 Retried ${data?.sent || 0} emails`,
         description: data?.errors ? `${data.errors} still failing` : "All retried successfully",
@@ -314,6 +307,9 @@ export default function EmailEngineDashboard() {
 
   return (
     <div className="space-y-4">
+      {/* Health banner */}
+      <EmailEngineHealthBanner onRecovered={() => { loadStats(); loadLeads(); }} />
+
       {/* Stats Row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
