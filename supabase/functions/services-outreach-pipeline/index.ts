@@ -66,10 +66,9 @@ const CATEGORIES: Record<string, {
 const DEFAULT_ROTATION = Object.keys(CATEGORIES);
 const DAILY_SEND_CAP = 40;
 const MAX_ITERATIONS = 2;
-const MAX_SENDS_PER_INVOCATION = 3;
+const MAX_SENDS_PER_INVOCATION = 1;
 const DISCOVERY_RETRY_ATTEMPTS = 3;
-const MIN_SEND_DELAY_MS = 45_000;
-const MAX_SEND_DELAY_MS = 90_000;
+const MAX_SENDS_PER_DOMAIN_PER_DAY = 3;
 const STALE_RUNNING_MS = 6 * 60_000;
 
 type Client = ReturnType<typeof createClient>;
@@ -97,6 +96,10 @@ function cleanText(value: unknown): string {
 
 function isFatalSmtpError(message: string) {
   return /invalid login|authentication failed|535|bad credentials|auth/i.test(message);
+}
+
+function emailDomain(email: string) {
+  return email.split("@")[1]?.toLowerCase() || "";
 }
 
 async function updateState(supabase: Client, patch: Record<string, unknown>) {
@@ -337,6 +340,16 @@ serve(async (req) => {
       const { count: sentToday } = await supabase.from("services_outreach_leads")
         .select("*", { count: "exact", head: true }).eq("sent", true).gte("sent_at", startOfDay.toISOString());
       let dailySent = sentToday || 0;
+      const { data: todaySentRows } = await supabase.from("services_outreach_leads")
+        .select("contact_email")
+        .eq("sent", true)
+        .gte("sent_at", startOfDay.toISOString());
+      const domainCounts = new Map<string, number>();
+      for (const row of todaySentRows || []) {
+        const email = cleanEmail(row.contact_email);
+        const domain = email ? emailDomain(email) : "";
+        if (domain) domainCounts.set(domain, (domainCounts.get(domain) || 0) + 1);
+      }
 
       const transporter = nodemailer.createTransport({
         host: "mail.visuosofts.com",
@@ -419,6 +432,12 @@ serve(async (req) => {
                 await updateState(supabase, { errors: totalErrors, status: "skipped_bad_address" });
                 continue;
               }
+              const domain = emailDomain(lead.contact_email);
+              if ((domainCounts.get(domain) || 0) >= MAX_SENDS_PER_DOMAIN_PER_DAY) {
+                await supabase.from("services_outreach_leads").update({ send_error: `Skipped: daily domain cap reached (${domain})` }).eq("id", lead.id);
+                await log(supabase, `Skipped ${lead.business_name}: daily domain cap reached for ${domain}.`, { status: "domain_cap" });
+                continue;
+              }
 
               await log(supabase, `Generating checked email for ${lead.business_name}.`, { status: "generating" });
               const generated = await generateEmail(AI_KEY, lead, category);
@@ -454,13 +473,8 @@ serve(async (req) => {
 
               totalSent++;
               dailySent++;
+              domainCounts.set(domain, (domainCounts.get(domain) || 0) + 1);
               await log(supabase, `Sent ${catDef.label} pitch to ${lead.business_name}.`, { emails_sent: totalSent, status: "sent" });
-
-              if (totalSent < MAX_SENDS_PER_INVOCATION) {
-                const delay = MIN_SEND_DELAY_MS + Math.floor(Math.random() * (MAX_SEND_DELAY_MS - MIN_SEND_DELAY_MS));
-                await log(supabase, `Waiting ${Math.round(delay / 1000)}s before next send.`, { status: "pacing" });
-                await new Promise((r) => setTimeout(r, delay));
-              }
             } catch (error) {
               totalErrors++;
               const msg = error instanceof Error ? error.message : String(error);
