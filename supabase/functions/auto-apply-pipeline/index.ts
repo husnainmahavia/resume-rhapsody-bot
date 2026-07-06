@@ -672,6 +672,29 @@ serve(async (req) => {
 
     // Long-running work runs in the background so we return before the 150s
     // edge idle timeout. Client should poll `?action=status` for progress.
+    const runStartedAt = Date.now();
+    const HANDOFF_MS = 100_000; // 100s — self re-invoke before edge wall time
+    let handoffScheduled = false;
+    const scheduleHandoff = async (reason: string) => {
+      if (handoffScheduled) return;
+      handoffScheduled = true;
+      try {
+        const url = `${SUPABASE_URL}/functions/v1/auto-apply-pipeline`;
+        // Fire-and-forget; a new isolate will pick up the `resume` action.
+        fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            "apikey": SUPABASE_SERVICE_ROLE_KEY,
+          },
+          body: JSON.stringify({ action: "resume" }),
+        }).catch((e) => console.warn("handoff fetch failed:", e));
+        console.log(`🔁 Handoff scheduled (${reason})`);
+      } catch (e) {
+        console.warn("handoff error:", e);
+      }
+    };
     const runPipeline = async () => {
       let emailsSentThisRun = 0;
      try {
