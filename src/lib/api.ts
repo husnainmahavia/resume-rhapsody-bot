@@ -131,6 +131,14 @@ export async function runServerPipeline(location: string, skills?: string[], cvV
   return data;
 }
 
+export async function resumeServerPipeline() {
+  const { data, error } = await supabase.functions.invoke("auto-apply-pipeline", {
+    body: { action: "resume" },
+  });
+  if (error) throw error;
+  return data;
+}
+
 export async function sendFollowUps() {
   const { data, error } = await supabase.functions.invoke("follow-up", {
     body: {},
