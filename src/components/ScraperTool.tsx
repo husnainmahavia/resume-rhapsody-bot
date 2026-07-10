@@ -39,25 +39,36 @@ interface ScrapedCompany {
 }
 
 export default function ScraperTool() {
-  const [scraping, setScraping] = useState(false);
-  const [sending, setSending] = useState(false);
+  const [starting, setStarting] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<string[]>(CATEGORIES.map(c => c.value));
   const [location, setLocation] = useState("UK");
   const [stats, setStats] = useState({ total: 0, sent: 0, opened: 0, replied: 0, categories: {} as Record<string, number> });
+  const [worker, setWorker] = useState<any>(null);
   const [companies, setCompanies] = useState<ScrapedCompany[]>([]);
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [showResults, setShowResults] = useState(false);
   const { toast } = useToast();
 
+  const running = !!worker?.running;
+  const workerAction: string | undefined = worker?.action;
+
   const loadData = useCallback(async () => {
     try {
       const [statusData, listData] = await Promise.all([getScraperStatus(), listScrapedCompanies()]);
       setStats(statusData);
+      setWorker(statusData?.worker || null);
       setCompanies(listData.data || []);
     } catch (e) { console.error(e); }
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Poll every 4s while worker is running in the background
+  useEffect(() => {
+    if (!running) return;
+    const t = setInterval(loadData, 4000);
+    return () => clearInterval(t);
+  }, [running, loadData]);
 
   const toggleCategory = (cat: string) => {
     setSelectedCategories(prev =>
@@ -70,37 +81,48 @@ export default function ScraperTool() {
       toast({ title: "Select categories", description: "Pick at least one category to scrape.", variant: "destructive" });
       return;
     }
-    setScraping(true);
+    setStarting(true);
     try {
       const result = await runScraper(selectedCategories, location);
       toast({
-        title: "🔍 Scraping Complete",
-        description: `Found ${result.totalScraped} companies, ${result.totalNew} new added to database`,
+        title: result.accepted ? "🔍 Scraper started" : "Scraper busy",
+        description: result.message || `Queued ${result.total || 0} tasks. Running in background.`,
       });
       await loadData();
       setShowResults(true);
     } catch (e) {
       toast({ title: "Scraper Error", description: String(e), variant: "destructive" });
     } finally {
-      setScraping(false);
+      setStarting(false);
     }
   };
 
   const handleSendEmails = async () => {
-    setSending(true);
+    setStarting(true);
     try {
       const result = await sendScraperEmails(selectedCategories);
       toast({
-        title: "📧 Emails Sent",
-        description: `${result.sent}/${result.total} emails sent successfully`,
+        title: result.accepted ? "📧 Sending started" : "Nothing to send",
+        description: result.message || "Emails dispatching in background.",
       });
       await loadData();
     } catch (e) {
       toast({ title: "Send Error", description: String(e), variant: "destructive" });
     } finally {
-      setSending(false);
+      setStarting(false);
     }
   };
+
+  const handleStop = async () => {
+    try {
+      await stopScraper();
+      toast({ title: "Stopping…", description: "Worker will halt after the current item." });
+      await loadData();
+    } catch (e) {
+      toast({ title: "Stop error", description: String(e), variant: "destructive" });
+    }
+  };
+
 
   const filteredCompanies = filterCategory === "all"
     ? companies
