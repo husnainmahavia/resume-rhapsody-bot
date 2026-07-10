@@ -297,6 +297,30 @@ serve(async (req) => {
       });
     }
 
+    if (action === "mailbox-health") {
+      if (!SMTP_PASS) throw new Error("Visuosofts mailbox password is not configured");
+      const transporter = nodemailer.createTransport({
+        host: "mail.visuosofts.com",
+        port: 465,
+        secure: true,
+        auth: { user: "info@visuosofts.com", pass: SMTP_PASS },
+      });
+      try {
+        await transporter.verify();
+        await updateState(supabase, { status: "mailbox_healthy", last_log: "Mailbox login verified successfully." });
+        return new Response(JSON.stringify({ ok: true, status: "mailbox_healthy" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        await updateState(supabase, { status: "mailbox_auth_failed", last_log: `Mailbox login failed: ${msg}` });
+        return new Response(JSON.stringify({ ok: false, status: "mailbox_auth_failed", error: msg }), {
+          status: 502,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     if (action === "stop") {
       await updateState(supabase, { running: false, status: "stopped", finished_at: new Date().toISOString(), last_log: "Stopped by user." });
       return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
