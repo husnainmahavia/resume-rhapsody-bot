@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Globe, Loader2, Mail, CheckCircle2, XCircle, Database,
-  Play, Send, RefreshCw, Filter, BarChart3
+  Play, Send, RefreshCw, Filter, BarChart3, Square
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +10,8 @@ import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { runScraper, getScraperStatus, sendScraperEmails, listScrapedCompanies } from "@/lib/api";
+import { runScraper, getScraperStatus, sendScraperEmails, listScrapedCompanies, stopScraper } from "@/lib/api";
+
 
 const CATEGORIES = [
   { value: "web_development", label: "Web Development", color: "text-blue-400" },
