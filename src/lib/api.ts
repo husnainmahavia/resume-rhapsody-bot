@@ -155,6 +155,31 @@ export async function getPipelineStatus() {
   return data;
 }
 
+// Background "Send All Approved" - server-side worker, survives tab close
+export async function startBulkSendApproved() {
+  const { data, error } = await supabase.functions.invoke("bulk-send-approved", {
+    body: { action: "run" },
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function getBulkSendStatus() {
+  const { data, error } = await supabase.functions.invoke("bulk-send-approved", {
+    body: { action: "status" },
+  });
+  if (error) throw error;
+  return data?.state ?? null;
+}
+
+export async function stopBulkSend() {
+  const { data, error } = await supabase.functions.invoke("bulk-send-approved", {
+    body: { action: "stop" },
+  });
+  if (error) throw error;
+  return data;
+}
+
 export async function checkInboxReplies() {
   const { data, error } = await supabase.functions.invoke("email-mailbox", {
     body: { action: "fetch_replies" },
