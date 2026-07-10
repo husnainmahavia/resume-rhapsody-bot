@@ -385,118 +385,185 @@ REQUIREMENTS:
         auth: { user: "info@visuosofts.com", pass: VISUOSOFTS_EMAIL_PASSWORD },
       });
 
+      const HANDOFF_MS = 25_000;
+      const runStartedAt = Date.now();
+      let handoffScheduled = false;
+      const scheduleHandoff = (reason: string) => {
+        if (handoffScheduled) return;
+        handoffScheduled = true;
+        try {
+          fetch(`${SUPABASE_URL}/functions/v1/email-engine`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+              "apikey": SUPABASE_SERVICE_ROLE_KEY,
+            },
+            body: JSON.stringify({ action: "send" }),
+          }).catch((e) => console.warn("email-engine handoff fetch failed:", e));
+          console.log(`🔁 email-engine send handoff scheduled (${reason})`);
+        } catch (e) { console.warn("handoff error:", e); }
+      };
+
       const sendJob = async () => {
         let sent = 0;
         let errors = 0;
         let skippedInvalid = 0;
-        for (const lead of sendableLeads) {
-          try {
-            const { data: alreadySent } = await supabase
-              .from("sent_emails")
-              .select("id")
-              .eq("recipient_email", lead.contact_email!.toLowerCase())
-              .eq("sender", "visuosofts")
-              .limit(1);
+        try {
+          for (let i = 0; i < sendableLeads.length; i++) {
+            const lead = sendableLeads[i];
 
-            if (alreadySent && alreadySent.length > 0) {
-              console.log(`⏭ Already sent to ${lead.contact_email} — marking sent`);
+            // Wall-time handoff: release still-queued leads and re-invoke.
+            if (Date.now() - runStartedAt > HANDOFF_MS) {
+              const remaining = sendableLeads.slice(i).map((l) => l.id);
+              if (remaining.length > 0) {
+                await supabase.from("email_engine_leads")
+                  .update({ queued: false })
+                  .in("id", remaining);
+              }
+              console.log(`⏸ handing off, released ${remaining.length} queued leads`);
+              scheduleHandoff("wall-time");
+              return;
+            }
+
+            try {
+              const { data: alreadySent } = await supabase
+                .from("sent_emails")
+                .select("id")
+                .eq("recipient_email", lead.contact_email!.toLowerCase())
+                .eq("sender", "visuosofts")
+                .limit(1);
+
+              if (alreadySent && alreadySent.length > 0) {
+                console.log(`⏭ Already sent to ${lead.contact_email} — marking sent`);
+                await supabase.from("email_engine_leads").update({
+                  sent: true,
+                  sent_at: new Date().toISOString(),
+                  send_error: null,
+                  queued: false,
+                }).eq("id", lead.id);
+                continue;
+              }
+
+              // Pre-send verification (unchanged)
+              let verifyPassed = true;
+              let verifyReason = "";
+              try {
+                const verifyResp = await fetch(`${SUPABASE_URL}/functions/v1/email-verify`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                  },
+                  body: JSON.stringify({ email: lead.contact_email }),
+                });
+                if (verifyResp.ok) {
+                  const vd = await verifyResp.json();
+                  const r = vd.results?.[0];
+                  if (r) {
+                    verifyReason = r.reason || "";
+                    if (!r.checks?.mxRecords || r.reason === "smtp_rejected" || r.reason === "invalid_format" || r.reason === "disposable_domain") {
+                      verifyPassed = false;
+                    }
+                  }
+                }
+              } catch (ve) {
+                console.warn(`  ⚠️ Verify failed for ${lead.contact_email}, proceeding anyway:`, ve);
+              }
+
+              if (!verifyPassed) {
+                skippedInvalid++;
+                const msg = `Skipped: address failed verification (${verifyReason})`;
+                console.log(`  🚫 ${lead.contact_email} — ${msg}`);
+                await supabase.from("email_engine_leads").update({
+                  send_error: msg,
+                  queued: false,
+                }).eq("id", lead.id);
+                continue;
+              }
+
+              const htmlBody = lead.email_body!.replace(/\n/g, "<br>");
+              const info = await transporter.sendMail({
+                from: "Visuosofts <info@visuosofts.com>",
+                to: lead.contact_email,
+                subject: lead.email_subject,
+                text: lead.email_body,
+                html: htmlBody,
+              });
+
               await supabase.from("email_engine_leads").update({
                 sent: true,
                 sent_at: new Date().toISOString(),
+                resend_message_id: info.messageId,
                 send_error: null,
                 queued: false,
               }).eq("id", lead.id);
-              continue;
-            }
+              sent++;
+              console.log(`  ✅ Sent to: ${lead.contact_email} — ${info.messageId}`);
 
-            // 🔍 PRE-SEND VERIFICATION: MX + SMTP RCPT check
-            let verifyPassed = true;
-            let verifyReason = "";
-            try {
-              const verifyResp = await fetch(`${SUPABASE_URL}/functions/v1/email-verify`, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-                },
-                body: JSON.stringify({ email: lead.contact_email }),
-              });
-              if (verifyResp.ok) {
-                const vd = await verifyResp.json();
-                const r = vd.results?.[0];
-                if (r) {
-                  verifyReason = r.reason || "";
-                  // Block only when we have HIGH confidence the address is bad.
-                  // MX-valid but SMTP timeout/blocked is common (many servers block probes) — allow.
-                  if (!r.checks?.mxRecords || r.reason === "smtp_rejected" || r.reason === "invalid_format" || r.reason === "disposable_domain") {
-                    verifyPassed = false;
-                  }
-                }
+              try {
+                await supabase.from("sent_emails").upsert({
+                  recipient_email: lead.contact_email!.toLowerCase(),
+                  sender: "visuosofts",
+                  subject: lead.email_subject,
+                  lead_id: lead.id,
+                  message_id: info.messageId,
+                  sent_at: new Date().toISOString(),
+                }, { onConflict: "recipient_email,sender" });
+              } catch (dedupErr) {
+                console.error("Dedup log error:", dedupErr);
               }
-            } catch (ve) {
-              console.warn(`  ⚠️ Verify failed for ${lead.contact_email}, proceeding anyway:`, ve);
+
+              // Human-like pacing — but bail before the sleep if handoff is due.
+              const delay = 60000 + Math.floor(Math.random() * 60000);
+              if (Date.now() - runStartedAt + delay > HANDOFF_MS) {
+                const remaining = sendableLeads.slice(i + 1).map((l) => l.id);
+                if (remaining.length > 0) {
+                  await supabase.from("email_engine_leads")
+                    .update({ queued: false })
+                    .in("id", remaining);
+                }
+                console.log(`⏸ pacing exceeds handoff window, released ${remaining.length} leads`);
+                scheduleHandoff("pre-sleep");
+                return;
+              }
+              console.log(`  ⏱ Waiting ${Math.round(delay / 1000)}s...`);
+              await new Promise(r => setTimeout(r, delay));
+            } catch (e) {
+              errors++;
+              const errMsg = e instanceof Error ? e.message : String(e);
+              console.error(`  ❌ Send error for ${lead.company_name}:`, errMsg);
+              await supabase.from("email_engine_leads").update({ send_error: errMsg, queued: false }).eq("id", lead.id);
             }
-
-            if (!verifyPassed) {
-              skippedInvalid++;
-              const msg = `Skipped: address failed verification (${verifyReason})`;
-              console.log(`  🚫 ${lead.contact_email} — ${msg}`);
-              await supabase.from("email_engine_leads").update({
-                send_error: msg,
-                queued: false,
-              }).eq("id", lead.id);
-              continue;
-            }
-
-            const htmlBody = lead.email_body!.replace(/\n/g, "<br>");
-            const info = await transporter.sendMail({
-              from: "Visuosofts <info@visuosofts.com>",
-              to: lead.contact_email,
-              subject: lead.email_subject,
-              text: lead.email_body,
-              html: htmlBody,
-            });
-
-            await supabase.from("email_engine_leads").update({
-              sent: true,
-              sent_at: new Date().toISOString(),
-              resend_message_id: info.messageId,
-              send_error: null,
-              queued: false,
-            }).eq("id", lead.id);
-            sent++;
-            console.log(`  ✅ Sent to: ${lead.contact_email} — ${info.messageId}`);
-
-            try {
-              await supabase.from("sent_emails").upsert({
-                recipient_email: lead.contact_email!.toLowerCase(),
-                sender: "visuosofts",
-                subject: lead.email_subject,
-                lead_id: lead.id,
-                message_id: info.messageId,
-                sent_at: new Date().toISOString(),
-              }, { onConflict: "recipient_email,sender" });
-            } catch (dedupErr) {
-              console.error("Dedup log error:", dedupErr);
-            }
-
-            // Human-like pacing: 60-120s between sends
-            const delay = 60000 + Math.floor(Math.random() * 60000);
-            console.log(`  ⏱ Waiting ${Math.round(delay / 1000)}s...`);
-            await new Promise(r => setTimeout(r, delay));
-          } catch (e) {
-            errors++;
-            const errMsg = e instanceof Error ? e.message : String(e);
-            console.error(`  ❌ Send error for ${lead.company_name}:`, errMsg);
-            await supabase.from("email_engine_leads").update({ send_error: errMsg, queued: false }).eq("id", lead.id);
           }
+          // Safety net: clear any lead still queued from this batch
+          await supabase.from("email_engine_leads")
+            .update({ queued: false })
+            .in("id", queuedIds)
+            .eq("queued", true);
+          console.log(`🏁 Background send batch done: ${sent} sent, ${skippedInvalid} skipped, ${errors} errors`);
+
+          // If more leads remain unsent overall, chain another batch.
+          const { count: moreCount } = await supabase
+            .from("email_engine_leads")
+            .select("*", { count: "exact", head: true })
+            .eq("email_generated", true)
+            .eq("sent", false)
+            .eq("queued", false)
+            .is("send_error", null)
+            .not("contact_email", "is", null);
+          if ((moreCount || 0) > 0) {
+            console.log(`↪️ ${moreCount} more leads pending — chaining next batch`);
+            scheduleHandoff("chain-next-batch");
+          }
+        } catch (fatal) {
+          console.error("email-engine sendJob fatal:", fatal);
+          // Release any still-queued leads so they aren't stuck.
+          await supabase.from("email_engine_leads")
+            .update({ queued: false, send_error: `Worker crash: ${fatal instanceof Error ? fatal.message : String(fatal)}` })
+            .in("id", queuedIds)
+            .eq("queued", true);
         }
-        // Safety net: clear queued flag from any lead still queued from this batch
-        await supabase.from("email_engine_leads")
-          .update({ queued: false })
-          .in("id", queuedIds)
-          .eq("queued", true);
-        console.log(`🏁 Background send done: ${sent} sent, ${skippedInvalid} skipped (bad address), ${errors} errors`);
       };
 
 
@@ -512,9 +579,10 @@ REQUIREMENTS:
         success: true,
         queued: sendableLeads.length,
         sent: 0,
-        message: `Queued ${sendableLeads.length} emails — sending in background (60-120s pacing). Refresh to see progress.`,
+        message: `Queued ${sendableLeads.length} emails — sending in background with auto-handoff. Safe to close tab.`,
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
+
 
     // === ACTION: STATUS ===
     if (action === "status") {
