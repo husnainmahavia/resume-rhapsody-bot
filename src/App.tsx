@@ -11,6 +11,7 @@ import NotFound from "./pages/NotFound";
 import Faq from "./pages/Faq";
 import About from "./pages/About";
 import Contact from "./pages/Contact";
+import ResetPassword from "./pages/ResetPassword";
 import OnboardingGuard from "./components/OnboardingGuard";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => (
             <Route path="/faq" element={<Faq />} />
             <Route path="/about" element={<About />} />
             <Route path="/contact" element={<Contact />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
