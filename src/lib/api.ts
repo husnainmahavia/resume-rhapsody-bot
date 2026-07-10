@@ -205,6 +205,15 @@ export async function getScraperStatus() {
   return data;
 }
 
+export async function stopScraper() {
+  const { data, error } = await supabase.functions.invoke("job-scraper", {
+    body: { action: "stop" },
+  });
+  if (error) throw error;
+  return data;
+}
+
+
 export async function sendScraperEmails(categories?: string[]) {
   const { data, error } = await supabase.functions.invoke("job-scraper", {
     body: { action: "send_emails", categories },
