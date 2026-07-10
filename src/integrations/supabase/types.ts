@@ -625,6 +625,57 @@ export type Database = {
         }
         Relationships: []
       }
+      scraper_state: {
+        Row: {
+          action: string | null
+          current_item: string | null
+          done: number
+          failed: number
+          id: number
+          last_error: string | null
+          queue: Json
+          running: boolean
+          sent: number
+          skipped: number
+          started_at: string | null
+          step: string | null
+          total: number
+          updated_at: string
+        }
+        Insert: {
+          action?: string | null
+          current_item?: string | null
+          done?: number
+          failed?: number
+          id?: number
+          last_error?: string | null
+          queue?: Json
+          running?: boolean
+          sent?: number
+          skipped?: number
+          started_at?: string | null
+          step?: string | null
+          total?: number
+          updated_at?: string
+        }
+        Update: {
+          action?: string | null
+          current_item?: string | null
+          done?: number
+          failed?: number
+          id?: number
+          last_error?: string | null
+          queue?: Json
+          running?: boolean
+          sent?: number
+          skipped?: number
+          started_at?: string | null
+          step?: string | null
+          total?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       sent_emails: {
         Row: {
           application_id: string | null
