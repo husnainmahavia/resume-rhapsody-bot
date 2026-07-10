@@ -319,7 +319,7 @@ export default function ScraperTool() {
         )}
       </AnimatePresence>
 
-      {companies.length === 0 && !scraping && (
+      {companies.length === 0 && !running && (
         <div className="text-center py-8 text-muted-foreground">
           <Globe className="h-8 w-8 mx-auto mb-2 opacity-30" />
           <p className="text-xs">No companies scraped yet. Select categories and hit "Scrape Companies".</p>
