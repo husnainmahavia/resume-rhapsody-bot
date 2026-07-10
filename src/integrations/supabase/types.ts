@@ -89,6 +89,54 @@ export type Database = {
         }
         Relationships: []
       }
+      bulk_send_state: {
+        Row: {
+          current_company: string | null
+          done: number
+          failed: number
+          id: number
+          last_error: string | null
+          queue_ids: string[]
+          running: boolean
+          sent: number
+          skipped: number
+          started_at: string | null
+          step: string | null
+          total: number
+          updated_at: string
+        }
+        Insert: {
+          current_company?: string | null
+          done?: number
+          failed?: number
+          id?: number
+          last_error?: string | null
+          queue_ids?: string[]
+          running?: boolean
+          sent?: number
+          skipped?: number
+          started_at?: string | null
+          step?: string | null
+          total?: number
+          updated_at?: string
+        }
+        Update: {
+          current_company?: string | null
+          done?: number
+          failed?: number
+          id?: number
+          last_error?: string | null
+          queue_ids?: string[]
+          running?: boolean
+          sent?: number
+          skipped?: number
+          started_at?: string | null
+          step?: string | null
+          total?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       domain_blacklist: {
         Row: {
           blacklisted_at: string | null
