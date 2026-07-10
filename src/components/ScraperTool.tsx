@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Globe, Loader2, Mail, CheckCircle2, XCircle, Database,
-  Play, Send, RefreshCw, Filter, BarChart3
+  Play, Send, RefreshCw, Filter, BarChart3, Square
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +10,8 @@ import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { runScraper, getScraperStatus, sendScraperEmails, listScrapedCompanies } from "@/lib/api";
+import { runScraper, getScraperStatus, sendScraperEmails, listScrapedCompanies, stopScraper } from "@/lib/api";
+
 
 const CATEGORIES = [
   { value: "web_development", label: "Web Development", color: "text-blue-400" },
@@ -38,25 +39,36 @@ interface ScrapedCompany {
 }
 
 export default function ScraperTool() {
-  const [scraping, setScraping] = useState(false);
-  const [sending, setSending] = useState(false);
+  const [starting, setStarting] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<string[]>(CATEGORIES.map(c => c.value));
   const [location, setLocation] = useState("UK");
   const [stats, setStats] = useState({ total: 0, sent: 0, opened: 0, replied: 0, categories: {} as Record<string, number> });
+  const [worker, setWorker] = useState<any>(null);
   const [companies, setCompanies] = useState<ScrapedCompany[]>([]);
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [showResults, setShowResults] = useState(false);
   const { toast } = useToast();
 
+  const running = !!worker?.running;
+  const workerAction: string | undefined = worker?.action;
+
   const loadData = useCallback(async () => {
     try {
       const [statusData, listData] = await Promise.all([getScraperStatus(), listScrapedCompanies()]);
       setStats(statusData);
+      setWorker(statusData?.worker || null);
       setCompanies(listData.data || []);
     } catch (e) { console.error(e); }
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Poll every 4s while worker is running in the background
+  useEffect(() => {
+    if (!running) return;
+    const t = setInterval(loadData, 4000);
+    return () => clearInterval(t);
+  }, [running, loadData]);
 
   const toggleCategory = (cat: string) => {
     setSelectedCategories(prev =>
@@ -69,37 +81,48 @@ export default function ScraperTool() {
       toast({ title: "Select categories", description: "Pick at least one category to scrape.", variant: "destructive" });
       return;
     }
-    setScraping(true);
+    setStarting(true);
     try {
       const result = await runScraper(selectedCategories, location);
       toast({
-        title: "🔍 Scraping Complete",
-        description: `Found ${result.totalScraped} companies, ${result.totalNew} new added to database`,
+        title: result.accepted ? "🔍 Scraper started" : "Scraper busy",
+        description: result.message || `Queued ${result.total || 0} tasks. Running in background.`,
       });
       await loadData();
       setShowResults(true);
     } catch (e) {
       toast({ title: "Scraper Error", description: String(e), variant: "destructive" });
     } finally {
-      setScraping(false);
+      setStarting(false);
     }
   };
 
   const handleSendEmails = async () => {
-    setSending(true);
+    setStarting(true);
     try {
       const result = await sendScraperEmails(selectedCategories);
       toast({
-        title: "📧 Emails Sent",
-        description: `${result.sent}/${result.total} emails sent successfully`,
+        title: result.accepted ? "📧 Sending started" : "Nothing to send",
+        description: result.message || "Emails dispatching in background.",
       });
       await loadData();
     } catch (e) {
       toast({ title: "Send Error", description: String(e), variant: "destructive" });
     } finally {
-      setSending(false);
+      setStarting(false);
     }
   };
+
+  const handleStop = async () => {
+    try {
+      await stopScraper();
+      toast({ title: "Stopping…", description: "Worker will halt after the current item." });
+      await loadData();
+    } catch (e) {
+      toast({ title: "Stop error", description: String(e), variant: "destructive" });
+    }
+  };
+
 
   const filteredCompanies = filterCategory === "all"
     ? companies
@@ -144,7 +167,7 @@ export default function ScraperTool() {
           onChange={e => setLocation(e.target.value)}
           placeholder="UK, Manchester, Remote..."
           className="bg-secondary border-border"
-          disabled={scraping || sending}
+          disabled={starting || running}
         />
       </div>
 
@@ -162,7 +185,7 @@ export default function ScraperTool() {
             <button
               key={cat.value}
               onClick={() => toggleCategory(cat.value)}
-              disabled={scraping || sending}
+              disabled={starting || running}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all border ${
                 selectedCategories.includes(cat.value)
                   ? "bg-primary/15 text-primary border-primary/40"
@@ -178,27 +201,51 @@ export default function ScraperTool() {
 
       {/* Action Buttons */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Button onClick={handleScrape} disabled={scraping || sending} className="gap-2" size="lg">
-          {scraping ? <><Loader2 className="h-4 w-4 animate-spin" /> Scraping...</> : <><Play className="h-4 w-4" /> Scrape Companies</>}
+        <Button onClick={handleScrape} disabled={starting || running} className="gap-2" size="lg">
+          {starting ? <><Loader2 className="h-4 w-4 animate-spin" /> Starting…</> : running && workerAction === "scrape" ? <><Loader2 className="h-4 w-4 animate-spin" /> Scraping in background…</> : <><Play className="h-4 w-4" /> Scrape Companies</>}
         </Button>
-        <Button onClick={handleSendEmails} disabled={scraping || sending || stats.total === 0} variant="outline" className="gap-2" size="lg">
-          {sending ? <><Loader2 className="h-4 w-4 animate-spin" /> Sending...</> : <><Send className="h-4 w-4" /> Send Emails ({stats.total - stats.sent} unsent)</>}
+        <Button onClick={handleSendEmails} disabled={starting || running || stats.total === 0} variant="outline" className="gap-2" size="lg">
+          {running && workerAction === "send_emails" ? <><Loader2 className="h-4 w-4 animate-spin" /> Sending in background…</> : <><Send className="h-4 w-4" /> Send Emails ({stats.total - stats.sent} unsent)</>}
         </Button>
       </div>
 
-      <Button variant="ghost" onClick={loadData} className="gap-2 w-full" size="sm">
-        <RefreshCw className="h-3 w-3" /> Refresh Data
-      </Button>
+      <div className="grid grid-cols-2 gap-2">
+        <Button variant="ghost" onClick={loadData} className="gap-2" size="sm">
+          <RefreshCw className="h-3 w-3" /> Refresh
+        </Button>
+        <Button variant="ghost" onClick={handleStop} disabled={!running} className="gap-2 text-destructive hover:text-destructive" size="sm">
+          <Square className="h-3 w-3" /> Stop worker
+        </Button>
+      </div>
 
-      {/* Running indicator */}
-      {(scraping || sending) && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2">
-          <Progress value={scraping ? 40 : 60} className="h-2 animate-pulse" />
-          <p className="text-xs text-muted-foreground text-center">
-            {scraping ? "🔍 AI searching across Google, Bing & more..." : "📧 Sending personalized emails with human-like pacing..."}
+      {/* Background worker progress */}
+      {running && worker && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass rounded-lg p-3 space-y-2">
+          <div className="flex items-center justify-between text-xs">
+            <span className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+              <span className="font-medium">
+                {workerAction === "scrape" ? "Scraping" : workerAction === "send_emails" ? "Sending" : "Working"} in background
+              </span>
+            </span>
+            <span className="font-mono text-muted-foreground">
+              {worker.done ?? 0}/{worker.total ?? 0}
+            </span>
+          </div>
+          <Progress value={worker.total ? Math.round(((worker.done ?? 0) / worker.total) * 100) : 5} className="h-2" />
+          <p className="text-[11px] text-muted-foreground truncate">
+            {worker.step || "Working…"}{worker.current_item ? ` — ${worker.current_item}` : ""}
           </p>
+          {(worker.sent || worker.skipped || worker.failed) ? (
+            <div className="flex gap-3 text-[10px] text-muted-foreground">
+              <span>✓ sent {worker.sent ?? 0}</span>
+              <span>↷ skipped {worker.skipped ?? 0}</span>
+              <span>✗ failed {worker.failed ?? 0}</span>
+            </div>
+          ) : null}
         </motion.div>
       )}
+
 
       {/* Category Filter */}
       {companies.length > 0 && (
@@ -272,7 +319,7 @@ export default function ScraperTool() {
         )}
       </AnimatePresence>
 
-      {companies.length === 0 && !scraping && (
+      {companies.length === 0 && !running && (
         <div className="text-center py-8 text-muted-foreground">
           <Globe className="h-8 w-8 mx-auto mb-2 opacity-30" />
           <p className="text-xs">No companies scraped yet. Select categories and hit "Scrape Companies".</p>
