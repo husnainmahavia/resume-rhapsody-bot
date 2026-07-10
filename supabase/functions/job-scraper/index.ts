@@ -247,69 +247,53 @@ serve(async (req) => {
     if (action === "scrape") {
       const targetCategories = categories || CATEGORIES.map(c => c.name);
       const locationFilter = location || "UK";
-      let totalScraped = 0;
-      let totalNew = 0;
-      let totalRejected = 0;
-      const results: Array<{ category: string; found: number; new: number; rejected: number }> = [];
 
-      for (const cat of CATEGORIES) {
-        if (!targetCategories.includes(cat.name)) continue;
-
-        let catFound = 0;
-        let catNew = 0;
-        let catRejected = 0;
-
-        for (const query of cat.queries) {
-          const fullQuery = `${query} ${locationFilter}`;
-          console.log(`Scraping: ${fullQuery}`);
-          
-          const companies = await aiSearchEmails(fullQuery, geminiKey);
-          catFound += companies.length;
-
-          for (const company of companies) {
-            try {
-              const validation = validateBusinessEmail(company.email, company.website);
-              if (!validation.valid || !validation.normalized) {
-                catRejected++;
-                continue;
+      const work = async () => {
+        for (const cat of CATEGORIES) {
+          if (!targetCategories.includes(cat.name)) continue;
+          for (const query of cat.queries) {
+            const fullQuery = `${query} ${locationFilter}`;
+            console.log(`Scraping: ${fullQuery}`);
+            const companies = await aiSearchEmails(fullQuery, geminiKey);
+            for (const company of companies) {
+              try {
+                const validation = validateBusinessEmail(company.email, company.website);
+                if (!validation.valid || !validation.normalized) continue;
+                const { error } = await supabase.from("scraped_companies").upsert({
+                  company_name: company.company,
+                  email: validation.normalized,
+                  website: company.website,
+                  category: cat.name,
+                  source: "ai_search",
+                  location: company.location || locationFilter,
+                  description: company.description,
+                  status: "scraped",
+                }, { onConflict: "email,category" });
+                if (error) console.error("Upsert error:", error.message);
+              } catch (e) {
+                console.error(`Insert error for ${company.email}:`, e);
               }
-
-              const { error } = await supabase.from("scraped_companies").upsert({
-                company_name: company.company,
-                email: validation.normalized,
-                website: company.website,
-                category: cat.name,
-                source: "ai_search",
-                location: company.location || locationFilter,
-                description: company.description,
-                status: "scraped",
-              }, { onConflict: "email,category" });
-
-              if (!error) catNew++;
-              else console.error("Upsert error:", error.message);
-            } catch (e) {
-              console.error(`Insert error for ${company.email}:`, e);
             }
+            await new Promise(r => setTimeout(r, 8000 + Math.random() * 7000));
           }
-
-          // Longer delay between searches to avoid rate limits
-          await new Promise(r => setTimeout(r, 8000 + Math.random() * 7000));
         }
+        console.log("✅ scrape background job complete");
+      };
 
-        results.push({ category: cat.name, found: catFound, new: catNew, rejected: catRejected });
-        totalScraped += catFound;
-        totalNew += catNew;
-        totalRejected += catRejected;
+      // @ts-ignore EdgeRuntime is provided by Supabase
+      if (typeof EdgeRuntime !== "undefined" && EdgeRuntime.waitUntil) {
+        // @ts-ignore
+        EdgeRuntime.waitUntil(work());
+      } else {
+        work();
       }
 
       return new Response(JSON.stringify({
-        success: true,
-        totalScraped,
-        totalNew,
-        totalRejected,
-        results,
-      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        accepted: true,
+        message: "Scrape started in background. Poll status for progress.",
+      }), { status: 202, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
+
 
     if (action === "send_emails") {
       const targetCategories = categories || CATEGORIES.map(c => c.name);
