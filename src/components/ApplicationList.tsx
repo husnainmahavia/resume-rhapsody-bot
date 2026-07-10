@@ -129,111 +129,93 @@ export default function ApplicationList({ applications, onUpdate }: ApplicationL
     onUpdate();
   };
 
+  // ---- Bulk send: fire the server worker and poll its state ------------
+  const refreshBulkStatus = async () => {
+    try {
+      const s = await getBulkSendStatus();
+      if (s && s.running) {
+        setBulkSendProgress({
+          done: s.done ?? 0,
+          total: s.total ?? 0,
+          current: s.current_company ?? undefined,
+          step: s.step ?? undefined,
+          sent: s.sent ?? 0,
+          skipped: s.skipped ?? 0,
+          failed: s.failed ?? 0,
+        });
+        setProcessing("send-all");
+      } else if (s && (s.done || s.total)) {
+        // Show final numbers briefly, then clear.
+        setBulkSendProgress({
+          done: s.done ?? 0,
+          total: s.total ?? 0,
+          step: s.step ?? "Complete",
+          sent: s.sent ?? 0,
+          skipped: s.skipped ?? 0,
+          failed: s.failed ?? 0,
+        });
+        setProcessing(null);
+      } else {
+        setBulkSendProgress(null);
+        setProcessing(null);
+      }
+    } catch {
+      /* transient — next poll retries */
+    }
+  };
+
+  // Restore progress on mount + poll every 5s whenever a run is active.
+  useEffect(() => {
+    refreshBulkStatus();
+    const t = window.setInterval(refreshBulkStatus, 5000);
+    return () => window.clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleSendAllApproved = async () => {
     if (approvedUnsent.length === 0) {
       toast({ title: "Nothing to send", description: "No approved applications waiting to be sent." });
       return;
     }
     if (!window.confirm(
-      `Start applying to ${approvedUnsent.length} approved job(s)?\n\n` +
+      `Start applying to ${approvedUnsent.length} approved job(s) in the background?\n\n` +
       `For each: CV will be tailored (if missing), email drafted (if missing), then sent. ` +
-      `Rows missing a hiring-manager email will be skipped.`
+      `Rows missing a hiring-manager email are skipped.\n\n` +
+      `You can close this tab — the job continues on the server.`
     )) return;
 
     setProcessing("send-all");
-    let sent = 0, skipped = 0, failed = 0;
-    const total = approvedUnsent.length;
-    setBulkSendProgress({ done: 0, total, sent, skipped, failed, current: approvedUnsent[0]?.company, step: "Starting…" });
-
-    for (let i = 0; i < total; i++) {
-      const app = approvedUnsent[i];
-      const setStep = (step: string) =>
-        setBulkSendProgress({ done: i, total, current: app.company, step, sent, skipped, failed });
-
-      try {
-        let current = app;
-
-        // 1. Ensure CV is tailored
-        if (!current.tailored_cv) {
-          setStep("Tailoring CV…");
-          console.log(`[bulk-send ${i + 1}/${total}] Tailoring CV for ${current.company}`);
-          const fit = computeFit(current);
-          const cvVersion = getProfileKey(current, fit);
-          const r = await tailorCV(current.job_title, current.company, current.job_description || "", cvVersion);
-          if (r?.tailored_cv) {
-            await updateApplication(current.id, {
-              tailored_cv: r.tailored_cv, cover_letter: r.cover_letter,
-              status: "cv_tailored", cv_profile: cvVersion,
-            } as any);
-            current = { ...current, tailored_cv: r.tailored_cv, cover_letter: r.cover_letter };
-          }
-        }
-
-        // 2. Ensure email drafted
-        if (!current.email_body || !current.email_subject) {
-          setStep("Drafting email…");
-          console.log(`[bulk-send ${i + 1}/${total}] Drafting email for ${current.company}`);
-          const r = await generateEmail(
-            current.job_title, current.company,
-            current.hiring_manager_name || "Hiring Team",
-            current.job_description || ""
-          );
-          if (r?.body && r?.subject) {
-            await updateApplication(current.id, {
-              email_subject: r.subject, email_body: r.body,
-            } as any);
-            current = { ...current, email_subject: r.subject, email_body: r.body };
-          }
-        }
-
-        // 3. Validate ready-to-send
-        if (!current.hiring_manager_email || !current.email_subject || !current.email_body) {
-          console.log(`[bulk-send ${i + 1}/${total}] Skipping ${current.company} — missing recipient/subject/body`);
-          skipped++;
-          setStep(`Skipped (no recipient)`);
-          continue;
-        }
-
-        // 4. Send
-        setStep(`Sending to ${current.hiring_manager_email}…`);
-        console.log(`[bulk-send ${i + 1}/${total}] Sending to ${current.hiring_manager_email}`);
-        const result = await sendEmail(
-          current.hiring_manager_email, current.email_subject, current.email_body,
-          current.hiring_manager_name || undefined, current.id,
-        );
-        if (result?.skipped) {
-          console.log(`[bulk-send ${i + 1}/${total}] Skipped: ${result?.error || result?.reason}`);
-          skipped++;
-        } else if (result?.sent === false || result?.error) {
-          console.log(`[bulk-send ${i + 1}/${total}] Send blocked: ${result?.error}`);
-          failed++;
-        } else {
-          await updateApplication(current.id, {
-            status: "applied",
-            applied_at: new Date().toISOString(),
-            follow_up_scheduled_at: new Date(Date.now() + 3 * 86400000).toISOString(),
-          } as any);
-          sent++;
-        }
-
-      } catch (err) {
-        console.error(`[bulk-send ${i + 1}/${total}] Failed:`, err);
-        failed++;
+    setBulkSendProgress({ done: 0, total: approvedUnsent.length, step: "Starting…", sent: 0, skipped: 0, failed: 0 });
+    try {
+      const res = await startBulkSendApproved();
+      if (res?.accepted === false) {
+        toast({ title: "Not started", description: res.message || "Bulk send did not start." });
+      } else {
+        toast({
+          title: "🚀 Bulk send started",
+          description: res?.message || "Running server-side. Safe to switch tabs.",
+        });
       }
-
-      setBulkSendProgress({ done: i + 1, total, current: approvedUnsent[i + 1]?.company, step: "", sent, skipped, failed });
+      // Immediate status refresh so the progress panel shows the server state.
+      refreshBulkStatus();
+      onUpdate();
+    } catch (err) {
+      toast({ title: "Failed to start", description: String(err), variant: "destructive" });
+      setProcessing(null);
+      setBulkSendProgress(null);
     }
-
-
-    setBulkSendProgress(null);
-    setProcessing(null);
-    toast({
-      title: "Bulk send complete",
-      description: `${sent} sent · ${skipped} skipped (missing recipient) · ${failed} failed`,
-      variant: failed ? "destructive" : "default",
-    });
-    onUpdate();
   };
+
+  const handleStopBulkSend = async () => {
+    try {
+      await stopBulkSend();
+      toast({ title: "Stopping", description: "The worker will exit after the current app." });
+      refreshBulkStatus();
+    } catch (err) {
+      toast({ title: "Error", description: String(err), variant: "destructive" });
+    }
+  };
+
 
 
   const getProfileKey = (app: JobApplication, fit: FitScore): CvProfileKey =>
