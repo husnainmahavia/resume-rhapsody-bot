@@ -437,10 +437,16 @@ serve(async (req) => {
         }
 
         for (let iter = 1; iter <= MAX_ITERATIONS && totalSent < MAX_SENDS_PER_INVOCATION; iter++) {
+          if (Date.now() - jobStartedAt > HANDOFF_MS) {
+            await log(supabase, `Handing off (iter ${iter}, sent ${totalSent}).`, { status: "handing_off" });
+            scheduleHandoff("wall-time-outer");
+            return;
+          }
           if (dailySent >= DAILY_SEND_CAP) {
             await log(supabase, `Daily cap reached (${dailySent}/${DAILY_SEND_CAP}).`, { status: "daily_cap_reached" });
             break;
           }
+
           const category = requestedCategories[(iter - 1 + Math.floor(Date.now() / 900000)) % requestedCategories.length];
           const catDef = CATEGORIES[category];
           await log(supabase, `Discovering ${catDef.label} leads in ${region}.`, { status: "discovering", iteration: iter });
