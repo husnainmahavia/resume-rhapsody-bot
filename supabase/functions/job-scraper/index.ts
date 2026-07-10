@@ -316,21 +316,19 @@ serve(async (req) => {
         });
       }
 
-      let sent = 0;
-      const sendResults: Array<{ company: string; email: string; status: string }> = [];
+      const companyList = companies;
+      const work = async () => {
+        for (const company of companyList) {
+          try {
+            const validation = validateBusinessEmail(company.email, company.website);
+            if (!validation.valid || !validation.normalized) {
+              await supabase.from("scraped_companies").update({ status: "invalid_email" }).eq("id", company.id);
+              continue;
+            }
 
-      for (const company of companies) {
-        try {
-          const validation = validateBusinessEmail(company.email, company.website);
-          if (!validation.valid || !validation.normalized) {
-            await supabase.from("scraped_companies").update({ status: "invalid_email" }).eq("id", company.id);
-            sendResults.push({ company: company.company_name, email: company.email, status: "invalid_email" });
-            continue;
-          }
-
-          const recipientEmail = validation.normalized;
-          const categoryLabel = company.category.replace(/_/g, " ");
-          const emailResponse = await callGemini(geminiKey, {
+            const recipientEmail = validation.normalized;
+            const categoryLabel = company.category.replace(/_/g, " ");
+            const emailResponse = await callGemini(geminiKey, {
               messages: [{
                 role: "user",
                 content: `Write a professional cold outreach email from Husnain Mahavia (Full-Stack Developer & AI Specialist, 8+ years experience) to ${company.company_name} (${categoryLabel} company).
@@ -350,89 +348,79 @@ Return ONLY a JSON object with "subject" and "body" fields. No markdown, no code
               max_tokens: 800,
             });
 
-          const emailRaw = await emailResponse.text();
-          let emailData;
-          try { emailData = JSON.parse(emailRaw); } catch { 
-            sendResults.push({ company: company.company_name, email: recipientEmail, status: "email_gen_parse_failed" });
-            continue;
-          }
-          
-          const emailContent = emailData.choices?.[0]?.message?.content || "";
-          const cleaned = emailContent.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
-          const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-          
-          if (!jsonMatch) {
-            sendResults.push({ company: company.company_name, email: recipientEmail, status: "email_gen_failed" });
-            continue;
-          }
+            const emailRaw = await emailResponse.text();
+            let emailData;
+            try { emailData = JSON.parse(emailRaw); } catch { continue; }
 
-          const { subject, body } = JSON.parse(jsonMatch[0]);
+            const emailContent = emailData.choices?.[0]?.message?.content || "";
+            const cleaned = emailContent.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+            const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+            if (!jsonMatch) continue;
 
-          // Generate tailored CV and cover letter
-          const cvData = await generateCvAndCoverLetter(company.company_name, company.category, company.description || "", geminiKey);
-          
-          const attachments: Array<{ filename: string; content: string; contentType: string }> = [];
-          if (cvData?.tailored_cv) {
-            attachments.push({
-              filename: `Husnain_Mahavia_CV_${company.company_name.replace(/[^a-zA-Z0-9]/g, "_")}.html`,
-              content: generateCvHtml(cvData.tailored_cv, company.company_name),
-              contentType: "text/html",
+            const { subject, body } = JSON.parse(jsonMatch[0]);
+
+            const cvData = await generateCvAndCoverLetter(company.company_name, company.category, company.description || "", geminiKey);
+            const attachments: Array<{ filename: string; content: string; contentType: string }> = [];
+            if (cvData?.tailored_cv) {
+              attachments.push({
+                filename: `Husnain_Mahavia_CV_${company.company_name.replace(/[^a-zA-Z0-9]/g, "_")}.html`,
+                content: generateCvHtml(cvData.tailored_cv, company.company_name),
+                contentType: "text/html",
+              });
+            }
+            if (cvData?.cover_letter) {
+              attachments.push({
+                filename: `Cover_Letter_${company.company_name.replace(/[^a-zA-Z0-9]/g, "_")}.html`,
+                content: generateCoverLetterHtml(cvData.cover_letter, company.company_name),
+                contentType: "text/html",
+              });
+            }
+
+            const emailBody = body + "\n\nPlease find my CV and cover letter attached.\n\nBest regards,\nHusnain Mahavia\n+44 7387 055617\nhusnainmahavia.1@gmail.com";
+
+            const sendResponse = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${supabaseKey}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ to: recipientEmail, subject, body: emailBody, attachments }),
             });
-          }
-          if (cvData?.cover_letter) {
-            attachments.push({
-              filename: `Cover_Letter_${company.company_name.replace(/[^a-zA-Z0-9]/g, "_")}.html`,
-              content: generateCoverLetterHtml(cvData.cover_letter, company.company_name),
-              contentType: "text/html",
-            });
-          }
 
-          const emailBody = body + "\n\nPlease find my CV and cover letter attached.\n\nBest regards,\nHusnain Mahavia\n+44 7387 055617\nhusnainmahavia.1@gmail.com";
-
-          const sendResponse = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${supabaseKey}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              to: recipientEmail,
-              subject,
-              body: emailBody,
-              attachments,
-            }),
-          });
-
-          const sendResult = await sendResponse.json();
-
-          if (sendResult.success || sendResult.sent) {
-            await supabase.from("scraped_companies").update({
-              email_sent: true,
-              email_sent_at: new Date().toISOString(),
-              status: "emailed",
-            }).eq("id", company.id);
-
-            sent++;
-            sendResults.push({ company: company.company_name, email: recipientEmail, status: "sent" });
-          } else {
-            sendResults.push({ company: company.company_name, email: recipientEmail, status: sendResult.bounce ? "bounced" : "failed" });
-            if (sendResult.bounce) {
+            const sendResult = await sendResponse.json();
+            if (sendResult.success || sendResult.sent) {
+              await supabase.from("scraped_companies").update({
+                email_sent: true,
+                email_sent_at: new Date().toISOString(),
+                status: "emailed",
+              }).eq("id", company.id);
+            } else if (sendResult.bounce) {
               await supabase.from("scraped_companies").update({ status: "bounced" }).eq("id", company.id);
             }
-          }
 
-          // Human-like delay between emails
-          await new Promise(r => setTimeout(r, 45000 + Math.random() * 75000));
-        } catch (e) {
-          console.error(`Email error for ${company.email}:`, e);
-          sendResults.push({ company: company.company_name, email: company.email, status: "error" });
+            await new Promise(r => setTimeout(r, 45000 + Math.random() * 75000));
+          } catch (e) {
+            console.error(`Email error for ${company.email}:`, e);
+          }
         }
+        console.log("✅ send_emails background job complete");
+      };
+
+      // @ts-ignore EdgeRuntime is provided by Supabase
+      if (typeof EdgeRuntime !== "undefined" && EdgeRuntime.waitUntil) {
+        // @ts-ignore
+        EdgeRuntime.waitUntil(work());
+      } else {
+        work();
       }
 
-      return new Response(JSON.stringify({ success: true, sent, total: companies.length, results: sendResults }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(JSON.stringify({
+        accepted: true,
+        total: companyList.length,
+        message: `Sending ${companyList.length} emails in background. Safe to close tab.`,
+      }), { status: 202, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
+
 
     if (action === "list") {
       const { data } = await supabase
