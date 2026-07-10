@@ -393,11 +393,21 @@ export default function ApplicationList({ applications, onUpdate }: ApplicationL
               style={{ width: `${(bulkSendProgress.done / Math.max(1, bulkSendProgress.total)) * 100}%` }}
             />
           </div>
-          <div className="flex gap-3 text-[11px] text-muted-foreground">
-            <span className="text-success">✓ {bulkSendProgress.sent} sent</span>
-            <span>⊘ {bulkSendProgress.skipped} skipped</span>
-            <span className="text-destructive">✗ {bulkSendProgress.failed} failed</span>
+          <div className="flex items-center justify-between gap-3 text-[11px] text-muted-foreground">
+            <div className="flex gap-3">
+              <span className="text-success">✓ {bulkSendProgress.sent} sent</span>
+              <span>⊘ {bulkSendProgress.skipped} skipped</span>
+              <span className="text-destructive">✗ {bulkSendProgress.failed} failed</span>
+            </div>
+            {processing === "send-all" && (
+              <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px]" onClick={handleStopBulkSend}>
+                Stop
+              </Button>
+            )}
           </div>
+          <p className="text-[10px] text-muted-foreground/80">
+            Running server-side — safe to close this tab.
+          </p>
         </div>
       )}
 
