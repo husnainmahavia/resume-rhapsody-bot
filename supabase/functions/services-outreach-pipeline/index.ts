@@ -329,10 +329,16 @@ serve(async (req) => {
     if (!AI_KEY) throw new Error("AI key is not configured");
     if (!SMTP_PASS) throw new Error("Visuosofts mailbox password is not configured");
 
+    const isResume = action === "resume";
     const { data: existing } = await supabase.from("services_outreach_state").select("running, updated_at").eq("id", 1).single();
     const stale = existing?.running && existing.updated_at && (Date.now() - new Date(existing.updated_at).getTime()) > STALE_RUNNING_MS;
-    if (existing?.running && !stale) {
+    if (!isResume && existing?.running && !stale) {
       return new Response(JSON.stringify({ ok: true, message: "Services outreach is already running." }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (isResume && !existing?.running) {
+      return new Response(JSON.stringify({ ok: true, message: "Nothing to resume." }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -342,17 +348,42 @@ serve(async (req) => {
       : DEFAULT_ROTATION;
     const region = hasText(body.region) ? body.region : "United Kingdom";
 
-    await updateState(supabase, {
-      running: true,
-      status: stale ? "recovering" : "starting",
-      iteration: 0,
-      discovered: 0,
-      emails_sent: 0,
-      errors: 0,
-      started_at: new Date().toISOString(),
-      finished_at: null,
-      last_log: stale ? "Recovered stale outreach run; starting a fresh batch." : "Starting services outreach batch...",
-    });
+    if (!isResume) {
+      await updateState(supabase, {
+        running: true,
+        status: stale ? "recovering" : "starting",
+        iteration: 0,
+        discovered: 0,
+        emails_sent: 0,
+        errors: 0,
+        started_at: new Date().toISOString(),
+        finished_at: null,
+        last_log: stale ? "Recovered stale outreach run; starting a fresh batch." : "Starting services outreach batch...",
+      });
+    } else {
+      await updateState(supabase, { status: "resuming", last_log: "Resumed by background handoff." });
+    }
+
+    const HANDOFF_MS = 25_000;
+    const jobStartedAt = Date.now();
+    let handoffScheduled = false;
+    const scheduleHandoff = (reason: string) => {
+      if (handoffScheduled) return;
+      handoffScheduled = true;
+      try {
+        fetch(`${SUPABASE_URL}/functions/v1/services-outreach-pipeline`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            "apikey": SUPABASE_SERVICE_ROLE_KEY,
+          },
+          body: JSON.stringify({ action: "resume", categories: requestedCategories, region }),
+        }).catch((e) => console.warn("services-outreach handoff fetch failed:", e));
+        console.log(`🔁 services-outreach handoff scheduled (${reason})`);
+      } catch (e) { console.warn("handoff error:", e); }
+    };
+
 
     const runJob = async () => {
       const batchId = `svc_${Date.now()}`;
