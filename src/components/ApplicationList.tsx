@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { JobApplication } from "@/lib/api";
-import { tailorCV, generateEmail, sendEmail, updateApplication } from "@/lib/api";
+import { tailorCV, generateEmail, sendEmail, updateApplication, startBulkSendApproved, getBulkSendStatus, stopBulkSend } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { scoreJob, ROLE_PROFILES, type FitScore, type CvProfileKey } from "@/lib/jobScoring";
 import { ScoreBadge, AtsPanel } from "@/components/AtsPanel";
