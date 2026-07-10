@@ -11,6 +11,7 @@ import NotFound from "./pages/NotFound";
 import Faq from "./pages/Faq";
 import About from "./pages/About";
 import Contact from "./pages/Contact";
+import ResetPassword from "./pages/ResetPassword";
 import OnboardingGuard from "./components/OnboardingGuard";
 
 const queryClient = new QueryClient();
