@@ -141,6 +141,16 @@ export default function OnboardingGuard({ children }: Props) {
               >
                 {isSignUp ? "Have an account? Sign in" : "Need an account? Sign up"}
               </button>
+              {!isSignUp && (
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  disabled={submitting}
+                  className="w-full text-xs text-primary hover:underline"
+                >
+                  Forgot password?
+                </button>
+              )}
             </form>
           </CardContent>
         </Card>
