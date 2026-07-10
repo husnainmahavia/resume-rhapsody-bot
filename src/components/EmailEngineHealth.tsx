@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Activity, AlertTriangle, CheckCircle2, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -84,12 +84,19 @@ export function EmailEngineHealthBanner({
     [loadRecent, onRecovered],
   );
 
+  // Keep the latest callbacks in refs so the mount effect below has stable deps
+  // and doesn't re-fire (and re-flip to "checking…") on every parent render.
+  const runCheckRef = useRef(runCheck);
+  const loadRecentRef = useRef(loadRecent);
+  runCheckRef.current = runCheck;
+  loadRecentRef.current = loadRecent;
+
   useEffect(() => {
-    runCheck("initial");
-    loadRecent();
-    const t = window.setInterval(() => runCheck("interval"), 60_000);
+    runCheckRef.current("initial");
+    loadRecentRef.current();
+    const t = window.setInterval(() => runCheckRef.current("interval"), 60_000);
     return () => window.clearInterval(t);
-  }, [runCheck, loadRecent]);
+  }, []);
 
   const bg = state.healthy
     ? "bg-success/10 border-success/30 text-success"
