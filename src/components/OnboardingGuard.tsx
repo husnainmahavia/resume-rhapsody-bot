@@ -80,6 +80,25 @@ export default function OnboardingGuard({ children }: Props) {
     }
   };
 
+  const handleForgotPassword = async () => {
+    if (!email) {
+      toast({ title: "Enter your email first", description: "Type your email above, then click Forgot password.", variant: "destructive" });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + "/reset-password",
+      });
+      if (error) throw error;
+      toast({ title: "Reset email sent", description: `Check ${email} for a password reset link.` });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   if (authLoading || (session && profileState === "loading")) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
