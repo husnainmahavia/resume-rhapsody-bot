@@ -492,7 +492,13 @@ serve(async (req) => {
           await updateState(supabase, { discovered: totalDiscovered, status: "validating" });
 
           for (const lead of newRows) {
+            if (Date.now() - jobStartedAt > HANDOFF_MS) {
+              await log(supabase, `Handing off mid-batch (sent ${totalSent}).`, { status: "handing_off" });
+              scheduleHandoff("wall-time-inner");
+              return;
+            }
             if (totalSent >= MAX_SENDS_PER_INVOCATION || dailySent >= DAILY_SEND_CAP) break;
+
             try {
               const verification = await verifyAddress(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, lead.contact_email);
               if (!verification.ok) {
