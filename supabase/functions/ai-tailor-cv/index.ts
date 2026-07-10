@@ -76,15 +76,16 @@ Tailor the CV and write a cover letter. Return ONLY valid JSON with keys: tailor
       ],
     });
 
-    // Retry with exponential backoff for rate limits
+    // Retry with short backoff. Total worst-case wait stays well under the
+    // 150s edge idle-timeout: ~5s + ~10s = 15s of sleeps, plus API time.
     let response: Response | null = null;
-    for (let attempt = 0; attempt < 4; attempt++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
       response = await callGemini(OPENROUTER_API_KEY, JSON.parse(requestBody));
 
       if (response.status !== 429 && response.status !== 503) break;
 
-      const waitMs = (attempt + 1) * 20000 + Math.random() * 10000;
-      console.log(`Rate limited, retrying in ${Math.round(waitMs / 1000)}s (attempt ${attempt + 1}/4)`);
+      const waitMs = (attempt + 1) * 5000 + Math.random() * 2000;
+      console.log(`Rate limited, retrying in ${Math.round(waitMs / 1000)}s (attempt ${attempt + 1}/3)`);
       await new Promise(r => setTimeout(r, waitMs));
     }
 
