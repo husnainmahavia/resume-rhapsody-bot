@@ -167,7 +167,7 @@ export default function ScraperTool() {
           onChange={e => setLocation(e.target.value)}
           placeholder="UK, Manchester, Remote..."
           className="bg-secondary border-border"
-          disabled={scraping || sending}
+          disabled={starting || running}
         />
       </div>
 
@@ -185,7 +185,7 @@ export default function ScraperTool() {
             <button
               key={cat.value}
               onClick={() => toggleCategory(cat.value)}
-              disabled={scraping || sending}
+              disabled={starting || running}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all border ${
                 selectedCategories.includes(cat.value)
                   ? "bg-primary/15 text-primary border-primary/40"
@@ -201,27 +201,51 @@ export default function ScraperTool() {
 
       {/* Action Buttons */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Button onClick={handleScrape} disabled={scraping || sending} className="gap-2" size="lg">
-          {scraping ? <><Loader2 className="h-4 w-4 animate-spin" /> Scraping...</> : <><Play className="h-4 w-4" /> Scrape Companies</>}
+        <Button onClick={handleScrape} disabled={starting || running} className="gap-2" size="lg">
+          {starting ? <><Loader2 className="h-4 w-4 animate-spin" /> Starting…</> : running && workerAction === "scrape" ? <><Loader2 className="h-4 w-4 animate-spin" /> Scraping in background…</> : <><Play className="h-4 w-4" /> Scrape Companies</>}
         </Button>
-        <Button onClick={handleSendEmails} disabled={scraping || sending || stats.total === 0} variant="outline" className="gap-2" size="lg">
-          {sending ? <><Loader2 className="h-4 w-4 animate-spin" /> Sending...</> : <><Send className="h-4 w-4" /> Send Emails ({stats.total - stats.sent} unsent)</>}
+        <Button onClick={handleSendEmails} disabled={starting || running || stats.total === 0} variant="outline" className="gap-2" size="lg">
+          {running && workerAction === "send_emails" ? <><Loader2 className="h-4 w-4 animate-spin" /> Sending in background…</> : <><Send className="h-4 w-4" /> Send Emails ({stats.total - stats.sent} unsent)</>}
         </Button>
       </div>
 
-      <Button variant="ghost" onClick={loadData} className="gap-2 w-full" size="sm">
-        <RefreshCw className="h-3 w-3" /> Refresh Data
-      </Button>
+      <div className="grid grid-cols-2 gap-2">
+        <Button variant="ghost" onClick={loadData} className="gap-2" size="sm">
+          <RefreshCw className="h-3 w-3" /> Refresh
+        </Button>
+        <Button variant="ghost" onClick={handleStop} disabled={!running} className="gap-2 text-destructive hover:text-destructive" size="sm">
+          <Square className="h-3 w-3" /> Stop worker
+        </Button>
+      </div>
 
-      {/* Running indicator */}
-      {(scraping || sending) && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2">
-          <Progress value={scraping ? 40 : 60} className="h-2 animate-pulse" />
-          <p className="text-xs text-muted-foreground text-center">
-            {scraping ? "🔍 AI searching across Google, Bing & more..." : "📧 Sending personalized emails with human-like pacing..."}
+      {/* Background worker progress */}
+      {running && worker && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass rounded-lg p-3 space-y-2">
+          <div className="flex items-center justify-between text-xs">
+            <span className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+              <span className="font-medium">
+                {workerAction === "scrape" ? "Scraping" : workerAction === "send_emails" ? "Sending" : "Working"} in background
+              </span>
+            </span>
+            <span className="font-mono text-muted-foreground">
+              {worker.done ?? 0}/{worker.total ?? 0}
+            </span>
+          </div>
+          <Progress value={worker.total ? Math.round(((worker.done ?? 0) / worker.total) * 100) : 5} className="h-2" />
+          <p className="text-[11px] text-muted-foreground truncate">
+            {worker.step || "Working…"}{worker.current_item ? ` — ${worker.current_item}` : ""}
           </p>
+          {(worker.sent || worker.skipped || worker.failed) ? (
+            <div className="flex gap-3 text-[10px] text-muted-foreground">
+              <span>✓ sent {worker.sent ?? 0}</span>
+              <span>↷ skipped {worker.skipped ?? 0}</span>
+              <span>✗ failed {worker.failed ?? 0}</span>
+            </div>
+          ) : null}
         </motion.div>
       )}
+
 
       {/* Category Filter */}
       {companies.length > 0 && (
