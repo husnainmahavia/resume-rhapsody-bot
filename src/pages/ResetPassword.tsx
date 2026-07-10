@@ -16,13 +16,22 @@ export default function ResetPassword() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") setReady(true);
+    // Supabase parses the recovery tokens from the URL hash automatically.
+    // We just wait until a session exists (either already there, or fired via
+    // onAuthStateChange after detectSessionInUrl runs).
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) setReady(true);
     });
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) setReady(true);
     });
-    return () => subscription.unsubscribe();
+    // Fail-safe: enable the form after 1.5s so a valid session that arrived
+    // before this component mounted doesn't leave the input stuck disabled.
+    const t = setTimeout(() => setReady(true), 1500);
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(t);
+    };
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -35,7 +44,13 @@ export default function ResetPassword() {
       await supabase.auth.signOut();
       navigate("/app");
     } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({
+        title: "Error",
+        description: err.message?.includes("session")
+          ? "Your reset link expired or was already used. Request a new one from the sign-in page."
+          : err.message,
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -49,9 +64,7 @@ export default function ResetPassword() {
             <KeyRound className="h-4 w-4 text-primary" /> Set a new password
           </CardTitle>
           <p className="text-xs text-muted-foreground">
-            {ready
-              ? "Enter a new password for your account."
-              : "Waiting for a valid recovery link. Open the reset email on this device."}
+            Enter a new password for your account.
           </p>
         </CardHeader>
         <CardContent>
@@ -64,7 +77,7 @@ export default function ResetPassword() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={6}
-                disabled={!ready}
+                autoFocus
               />
             </div>
             <Button type="submit" disabled={loading || !ready} className="w-full gap-2">
