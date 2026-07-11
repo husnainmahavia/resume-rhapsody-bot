@@ -64,13 +64,17 @@ const Index = () => {
     loadApplications();
   }, []);
 
+  const showRiskTools = useSetting(getShowRiskTools);
+
   const navItems: NavItem[] = [
     { id: "auto", label: "Auto-Apply", icon: Rocket, group: "Core" },
     { id: "dashboard", label: "Dashboard", icon: BarChart3, group: "Core" },
     { id: "applications", label: "Pipeline", icon: FileText, group: "Core", badge: applications.length > 0 ? String(applications.length) : undefined },
     { id: "search", label: "Manual Search", icon: Search, group: "Discovery" },
-    { id: "linkedin", label: "LinkedIn", icon: Linkedin, group: "Discovery" },
-    { id: "scraper", label: "Scraper", icon: Globe, group: "Discovery" },
+    ...(showRiskTools ? [
+      { id: "linkedin", label: "LinkedIn", icon: Linkedin, group: "Discovery" } as NavItem,
+      { id: "scraper", label: "Scraper", icon: Globe, group: "Discovery" } as NavItem,
+    ] : []),
     { id: "email-engine", label: "Email Engine", icon: Mail, group: "Outreach" },
     { id: "services-outreach", label: "Services Outreach", icon: Zap, group: "Outreach", badge: "NEW" },
     { id: "review", label: "Review Queue", icon: ShieldCheck, group: "Outreach" },
@@ -78,6 +82,7 @@ const Index = () => {
     { id: "csv", label: "CSV Import", icon: Upload, group: "Tools" },
     { id: "profile", label: "Profile", icon: UserCog, group: "Tools" },
     { id: "cron", label: "Cron Monitor", icon: Timer, group: "Tools" },
+    { id: "settings", label: "Settings", icon: ShieldCheck, group: "Tools" },
   ];
 
   const groups = ["Core", "Discovery", "Outreach", "Tools"];
