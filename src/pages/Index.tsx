@@ -22,7 +22,9 @@ import EmailEngineDashboard from "@/components/EmailEngineDashboard";
 import ServicesOutreachPipeline from "@/components/ServicesOutreachPipeline";
 import CronMonitorPanel from "@/components/CronMonitorPanel";
 import EmailOpenTracker from "@/components/EmailOpenTracker";
+import ComplianceSettings from "@/components/ComplianceSettings";
 import { fetchApplications, type JobApplication } from "@/lib/api";
+import { getShowRiskTools, setShowRiskTools, useSetting } from "@/lib/settings";
 
 interface NavItem {
   id: string;
@@ -63,13 +65,17 @@ const Index = () => {
     loadApplications();
   }, []);
 
+  const showRiskTools = useSetting(getShowRiskTools);
+
   const navItems: NavItem[] = [
     { id: "auto", label: "Auto-Apply", icon: Rocket, group: "Core" },
     { id: "dashboard", label: "Dashboard", icon: BarChart3, group: "Core" },
     { id: "applications", label: "Pipeline", icon: FileText, group: "Core", badge: applications.length > 0 ? String(applications.length) : undefined },
     { id: "search", label: "Manual Search", icon: Search, group: "Discovery" },
-    { id: "linkedin", label: "LinkedIn", icon: Linkedin, group: "Discovery" },
-    { id: "scraper", label: "Scraper", icon: Globe, group: "Discovery" },
+    ...(showRiskTools ? [
+      { id: "linkedin", label: "LinkedIn", icon: Linkedin, group: "Discovery" } as NavItem,
+      { id: "scraper", label: "Scraper", icon: Globe, group: "Discovery" } as NavItem,
+    ] : []),
     { id: "email-engine", label: "Email Engine", icon: Mail, group: "Outreach" },
     { id: "services-outreach", label: "Services Outreach", icon: Zap, group: "Outreach", badge: "NEW" },
     { id: "review", label: "Review Queue", icon: ShieldCheck, group: "Outreach" },
@@ -77,6 +83,7 @@ const Index = () => {
     { id: "csv", label: "CSV Import", icon: Upload, group: "Tools" },
     { id: "profile", label: "Profile", icon: UserCog, group: "Tools" },
     { id: "cron", label: "Cron Monitor", icon: Timer, group: "Tools" },
+    { id: "settings", label: "Settings", icon: ShieldCheck, group: "Tools" },
   ];
 
   const groups = ["Core", "Discovery", "Outreach", "Tools"];
@@ -144,6 +151,11 @@ const Index = () => {
         icon: Timer, title: "Cron Job Monitor", subtitle: "24/7 automation",
         description: "Real-time view of all 8 hourly cron jobs — job applications, email engine, scraper, follow-ups, and inbox checks.",
         component: <CronMonitorPanel />,
+      },
+      settings: {
+        icon: ShieldCheck, title: "Compliance & Settings", subtitle: "safety controls",
+        description: "Control which risk tools appear in the sidebar. Product policy: review before send.",
+        component: <ComplianceSettings />,
       },
     };
 
