@@ -22,6 +22,7 @@ import EmailEngineDashboard from "@/components/EmailEngineDashboard";
 import ServicesOutreachPipeline from "@/components/ServicesOutreachPipeline";
 import CronMonitorPanel from "@/components/CronMonitorPanel";
 import EmailOpenTracker from "@/components/EmailOpenTracker";
+import ComplianceSettings from "@/components/ComplianceSettings";
 import { fetchApplications, type JobApplication } from "@/lib/api";
 import { getShowRiskTools, setShowRiskTools, useSetting } from "@/lib/settings";
 
