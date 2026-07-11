@@ -85,6 +85,7 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
     }
   });
   const { toast } = useToast();
+  const autonomousAck = useSetting(getAutonomousAck);
 
   useEffect(() => {
     getPipelineStatus().then((stats) => {
