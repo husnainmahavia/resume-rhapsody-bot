@@ -258,6 +258,27 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
 
   return (
     <div className="space-y-4">
+      {/* Autonomous-mode compliance banner */}
+      <div className="flex items-start gap-2 p-3 rounded-lg bg-warning/10 border border-warning/30">
+        <AlertTriangle className="h-4 w-4 text-warning mt-0.5 shrink-0" />
+        <div className="text-xs text-muted-foreground flex-1">
+          <span className="text-foreground font-medium">Autonomous mode.</span>{" "}
+          This pipeline sends emails from your inbox without per-item review. The product default is
+          <span className="text-foreground"> Assisted mode</span> — prepare applications here, then approve each one in the
+          <span className="text-foreground"> Review Queue</span> before it goes out.
+          <label className="mt-2 flex items-center gap-2 cursor-pointer select-none">
+            <Checkbox
+              checked={autonomousAck}
+              onCheckedChange={(v) => setAutonomousAck(!!v)}
+              disabled={status === "running"}
+            />
+            <span className="text-foreground">
+              I understand this sends emails automatically without reviewing each one.
+            </span>
+          </label>
+        </div>
+      </div>
+
       {/* Gmail Safety Info */}
       <div className="flex items-start gap-2 p-3 rounded-lg bg-secondary/50 border border-border">
         <Shield className="h-4 w-4 text-success mt-0.5 shrink-0" />
@@ -269,6 +290,7 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
           </span>
         </div>
       </div>
+
 
       {/* Config toggle */}
       <button
