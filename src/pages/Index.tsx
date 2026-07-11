@@ -23,6 +23,7 @@ import ServicesOutreachPipeline from "@/components/ServicesOutreachPipeline";
 import CronMonitorPanel from "@/components/CronMonitorPanel";
 import EmailOpenTracker from "@/components/EmailOpenTracker";
 import { fetchApplications, type JobApplication } from "@/lib/api";
+import { getShowRiskTools, setShowRiskTools, useSetting } from "@/lib/settings";
 
 interface NavItem {
   id: string;
