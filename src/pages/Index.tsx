@@ -151,6 +151,11 @@ const Index = () => {
         description: "Real-time view of all 8 hourly cron jobs — job applications, email engine, scraper, follow-ups, and inbox checks.",
         component: <CronMonitorPanel />,
       },
+      settings: {
+        icon: ShieldCheck, title: "Compliance & Settings", subtitle: "safety controls",
+        description: "Control which risk tools appear in the sidebar. Product policy: review before send.",
+        component: <ComplianceSettings />,
+      },
     };
 
     const content = contentMap[activeTab];
