@@ -416,7 +416,7 @@ export default function AutoApplyPipeline({ onUpdate }: AutoApplyPipelineProps) 
       <Button
         onClick={runPipeline}
         className="gap-2 glow-primary w-full"
-        disabled={status === "running" || selectedSkills.length === 0}
+        disabled={status === "running" || selectedSkills.length === 0 || !autonomousAck}
         size="lg"
       >
         {status === "running" ? (
