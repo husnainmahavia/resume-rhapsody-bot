@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { USER_PROFILE } from "@/lib/user-profile";
 import { runServerPipeline, resumeServerPipeline, getPipelineStatus, sendFollowUps } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { getAutonomousAck, setAutonomousAck, useSetting } from "@/lib/settings";
 
 type PipelineStep = "idle" | "running" | "complete" | "error";
 
