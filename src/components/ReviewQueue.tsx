@@ -392,6 +392,18 @@ export default function ReviewQueue() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-medium truncate">{item.company}</p>
                         {validationBadge(item)}
+                        {detectRiskFlags(item).map((r, i) => (
+                          <Badge
+                            key={i}
+                            className={`text-[9px] gap-1 ${
+                              r.tone === "warn"
+                                ? "bg-warning/20 text-warning"
+                                : "bg-accent/20 text-accent"
+                            }`}
+                          >
+                            <AlertTriangle className="h-2.5 w-2.5" /> {r.label}
+                          </Badge>
+                        ))}
                       </div>
                       <p className="text-xs text-muted-foreground truncate">
                         {item.recipient_email}
