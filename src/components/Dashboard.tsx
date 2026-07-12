@@ -142,6 +142,8 @@ export default function Dashboard({ applications }: DashboardProps) {
 
   return (
     <div className="space-y-4">
+      <DailyFiftyBar applications={applications} sentToday={stats.todaySent} />
+
       {/* Check Inbox Button */}
       <div className="flex gap-2">
         <Button
