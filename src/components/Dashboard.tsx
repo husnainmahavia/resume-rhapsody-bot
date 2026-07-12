@@ -142,6 +142,8 @@ export default function Dashboard({ applications }: DashboardProps) {
 
   return (
     <div className="space-y-4">
+      <DailyFiftyBar applications={applications} sentToday={stats.todaySent} />
+
       {/* Check Inbox Button */}
       <div className="flex gap-2">
         <Button
@@ -359,3 +361,55 @@ function BounceChart() {
     </Card>
   );
 }
+
+const DAILY_CAP = 50;
+
+function DailyFiftyBar({ applications, sentToday }: { applications: JobApplication[]; sentToday: number }) {
+  const [reviewedToday, setReviewedToday] = useState(0);
+  const today = new Date().toISOString().split("T")[0];
+  const preparedToday = applications.filter(a => a.created_at?.startsWith(today)).length;
+
+  useEffect(() => {
+    (async () => {
+      const start = new Date(); start.setHours(0, 0, 0, 0);
+      const { count } = await supabase
+        .from("email_review_queue")
+        .select("id", { count: "exact", head: true })
+        .eq("approved", true)
+        .gte("approved_at", start.toISOString());
+      setReviewedToday(count || 0);
+    })();
+  }, [today, sentToday]);
+
+  const pct = Math.min(100, (sentToday / DAILY_CAP) * 100);
+  const preparedPct = Math.min(100, (preparedToday / DAILY_CAP) * 100);
+  const reviewedPct = Math.min(100, (reviewedToday / DAILY_CAP) * 100);
+
+  return (
+    <Card className="bg-secondary/30 border-border">
+      <CardContent className="p-4 space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-primary" />
+            <span className="text-sm font-semibold">Today's Daily-50</span>
+          </div>
+          <span className="font-mono text-sm">
+            <span className="text-primary font-bold">{sentToday}</span>
+            <span className="text-muted-foreground"> / {DAILY_CAP} sent</span>
+          </span>
+        </div>
+        <div className="relative h-2.5 rounded-full bg-secondary/60 overflow-hidden">
+          <div className="absolute inset-y-0 left-0 bg-muted-foreground/30" style={{ width: `${preparedPct}%` }} />
+          <div className="absolute inset-y-0 left-0 bg-accent/60" style={{ width: `${reviewedPct}%` }} />
+          <div className="absolute inset-y-0 left-0 bg-primary" style={{ width: `${pct}%` }} />
+        </div>
+        <div className="flex justify-between text-[10px] text-muted-foreground font-mono">
+          <span><span className="inline-block h-1.5 w-1.5 rounded-full bg-muted-foreground/50 mr-1" />Prepared {preparedToday}</span>
+          <span><span className="inline-block h-1.5 w-1.5 rounded-full bg-accent/60 mr-1" />Reviewed {reviewedToday}</span>
+          <span><span className="inline-block h-1.5 w-1.5 rounded-full bg-primary mr-1" />Sent {sentToday}</span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+

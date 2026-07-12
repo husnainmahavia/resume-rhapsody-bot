@@ -112,6 +112,19 @@ function validateEmailContent(item: QueueItem): ValidationResult {
   return { valid: issues.length === 0, issues };
 }
 
+// ─── Risk Flags (client-side, non-blocking) ─────────────────────────
+const RISK_PATTERNS: { label: string; pattern: RegExp; tone: "warn" | "info" }[] = [
+  { label: "Salary mentioned", pattern: /\b(salary|compensation|£\s?\d|\$\s?\d|\d{2,3}\s?k\b|per\s+annum)\b/i, tone: "warn" },
+  { label: "Visa / work auth", pattern: /\b(visa|sponsorship|work\s+authori[sz]ation|right\s+to\s+work|H-?1B|Tier\s?2)\b/i, tone: "warn" },
+  { label: "Sensitive PII ask", pattern: /\b(date\s+of\s+birth|dob|national\s+insurance|nino|ssn|passport\s+number|bank\s+account)\b/i, tone: "warn" },
+  { label: "Notice period", pattern: /\bnotice\s+period\b/i, tone: "info" },
+];
+
+function detectRiskFlags(item: QueueItem): { label: string; tone: "warn" | "info" }[] {
+  const text = `${item.email_subject || ""}\n${item.email_body || ""}`;
+  return RISK_PATTERNS.filter(r => r.pattern.test(text)).map(r => ({ label: r.label, tone: r.tone }));
+}
+
 // ─── Component ─────────────────────────────────────────────────────
 export default function ReviewQueue() {
   const [queue, setQueue] = useState<QueueItem[]>([]);
@@ -379,6 +392,18 @@ export default function ReviewQueue() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-medium truncate">{item.company}</p>
                         {validationBadge(item)}
+                        {detectRiskFlags(item).map((r, i) => (
+                          <Badge
+                            key={i}
+                            className={`text-[9px] gap-1 ${
+                              r.tone === "warn"
+                                ? "bg-warning/20 text-warning"
+                                : "bg-accent/20 text-accent"
+                            }`}
+                          >
+                            <AlertTriangle className="h-2.5 w-2.5" /> {r.label}
+                          </Badge>
+                        ))}
                       </div>
                       <p className="text-xs text-muted-foreground truncate">
                         {item.recipient_email}
