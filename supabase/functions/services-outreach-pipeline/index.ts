@@ -160,6 +160,7 @@ Rules: only real businesses; skip uncertain entries; use diverse locations; retu
   let lastError = "";
   for (let attempt = 1; attempt <= DISCOVERY_RETRY_ATTEMPTS; attempt++) {
     const resp = await callGemini(apiKey, {
+      model: "qwen/qwen3-next-80b-a3b-instruct:free",
       messages: [
         { role: "system", content: "Return valid JSON only. Do not invent fake businesses." },
         { role: "user", content: prompt },
@@ -194,8 +195,8 @@ Rules: only real businesses; skip uncertain entries; use diverse locations; retu
         },
       }],
       tool_choice: { type: "function", function: { name: "return_leads" } },
-      timeout_ms: 18_000,
-      max_model_attempts: 2,
+      timeout_ms: 25_000,
+      max_model_attempts: 3,
     });
 
     if (resp.ok) {
