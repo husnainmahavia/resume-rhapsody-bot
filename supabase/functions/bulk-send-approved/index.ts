@@ -310,7 +310,7 @@ serve(async (req) => {
             body: app.email_body,
             hiringManagerName: app.hiring_manager_name || undefined,
             applicationId: appId,
-          }, PER_ITEM_MS);
+          }, SEND_MS);
 
           const sendData = s.data || {};
           if (sendData.skipped) {
