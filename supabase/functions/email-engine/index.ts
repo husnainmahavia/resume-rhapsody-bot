@@ -52,6 +52,16 @@ function hasText(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+function normalizeEmailResult(value: unknown): { subject: string; body: string } | null {
+  if (!value || typeof value !== "object") return null;
+  const result = value as { subject?: unknown; body?: unknown };
+  if (!hasText(result.subject) || !hasText(result.body)) return null;
+  return {
+    subject: result.subject.trim(),
+    body: result.body.trim(),
+  };
+}
+
 // Rotate through industry/region combos based on current hour
 function getRotatingTarget(): { industry: string; region: string } {
   const now = new Date();
@@ -74,6 +84,23 @@ serve(async (req) => {
     const VISUOSOFTS_EMAIL_PASSWORD = Deno.env.get("VISUOSOFTS_EMAIL_PASSWORD");
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    if (action !== "health") {
+      await Promise.all([
+        supabase
+          .from("email_engine_leads")
+          .update({ queued: false })
+          .eq("sent", false)
+          .eq("queued", true)
+          .lt("queued_at", new Date(Date.now() - 10 * 60 * 1000).toISOString()),
+        supabase
+          .from("email_engine_leads")
+          .update({ email_generated: false, queued: false })
+          .eq("sent", false)
+          .eq("email_generated", true)
+          .or("email_subject.is.null,email_body.is.null,email_subject.eq.,email_body.eq."),
+      ]);
+    }
 
     // === ACTION: HEALTH (lightweight ping to detect blob eviction) ===
     if (action === "health") {
@@ -203,6 +230,15 @@ CRITICAL RULES:
       const targetLeadIds = leadIds as string[] | undefined;
       const shouldForce = Boolean(force);
 
+      // Repair older rows that were incorrectly marked generated even though
+      // the AI response did not contain a complete subject/body.
+      await supabase
+        .from("email_engine_leads")
+        .update({ email_generated: false })
+        .eq("sent", false)
+        .eq("email_generated", true)
+        .or("email_subject.is.null,email_body.is.null,email_subject.eq.,email_body.eq.");
+
       let query = supabase
         .from("email_engine_leads")
         .select("*")
@@ -297,14 +333,25 @@ REQUIREMENTS:
             ? JSON.parse(emailData.choices[0].message.tool_calls[0].function.arguments)
             : null;
 
-          if (emailResult) {
+          const normalizedEmail = normalizeEmailResult(emailResult);
+
+          if (normalizedEmail) {
             await supabase.from("email_engine_leads").update({
-              email_subject: emailResult.subject,
-              email_body: emailResult.body,
+              email_subject: normalizedEmail.subject,
+              email_body: normalizedEmail.body,
               email_generated: true,
+              send_error: null,
+              queued: false,
             }).eq("id", lead.id);
             generated++;
             console.log(`  ✅ Email generated for: ${lead.company_name}`);
+          } else {
+            await supabase.from("email_engine_leads").update({
+              email_generated: false,
+              send_error: "Email generation returned incomplete content — retry generation",
+              queued: false,
+            }).eq("id", lead.id);
+            console.warn(`  ⚠️ Incomplete email generated for: ${lead.company_name}`);
           }
 
           // Rate limit: 800ms between generations
@@ -326,6 +373,22 @@ REQUIREMENTS:
           status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+
+      // Previous interrupted runs can leave rows stuck as queued forever.
+      await supabase
+        .from("email_engine_leads")
+        .update({ queued: false })
+        .eq("sent", false)
+        .eq("queued", true)
+        .lt("queued_at", new Date(Date.now() - 10 * 60 * 1000).toISOString());
+
+      // Keep sendability truth in sync before selecting rows.
+      await supabase
+        .from("email_engine_leads")
+        .update({ email_generated: false, queued: false })
+        .eq("sent", false)
+        .eq("email_generated", true)
+        .or("email_subject.is.null,email_body.is.null,email_subject.eq.,email_body.eq.");
 
       const targetLeadIds = leadIds as string[] | undefined;
       let query = supabase
@@ -614,6 +677,76 @@ REQUIREMENTS:
 
     // === ACTION: LIST ===
     if (action === "list") {
+      const [readyResult, processingResult, errorResult, pendingResult, sentResult] = await Promise.all([
+        supabase
+          .from("email_engine_leads")
+          .select("*")
+          .eq("email_generated", true)
+          .eq("sent", false)
+          .eq("queued", false)
+          .is("send_error", null)
+          .not("contact_email", "is", null)
+          .not("email_subject", "is", null)
+          .not("email_body", "is", null)
+          .neq("contact_email", "")
+          .neq("email_subject", "")
+          .neq("email_body", "")
+          .order("created_at", { ascending: false })
+          .limit(200),
+        supabase
+          .from("email_engine_leads")
+          .select("*")
+          .eq("queued", true)
+          .eq("sent", false)
+          .is("send_error", null)
+          .order("queued_at", { ascending: false })
+          .limit(100),
+        supabase
+          .from("email_engine_leads")
+          .select("*")
+          .eq("sent", false)
+          .not("send_error", "is", null)
+          .order("updated_at", { ascending: false })
+          .limit(100),
+        supabase
+          .from("email_engine_leads")
+          .select("*")
+          .eq("sent", false)
+          .eq("email_generated", false)
+          .is("send_error", null)
+          .order("created_at", { ascending: false })
+          .limit(100),
+        supabase
+          .from("email_engine_leads")
+          .select("*")
+          .eq("sent", true)
+          .order("sent_at", { ascending: false })
+          .limit(100),
+      ]);
+
+      const firstError = readyResult.error || processingResult.error || errorResult.error || pendingResult.error || sentResult.error;
+      if (firstError) throw firstError;
+
+      const seen = new Set<string>();
+      const leads = [
+        ...(readyResult.data || []),
+        ...(processingResult.data || []),
+        ...(errorResult.data || []),
+        ...(pendingResult.data || []),
+        ...(sentResult.data || []),
+      ].filter((lead) => {
+        if (seen.has(lead.id)) return false;
+        seen.add(lead.id);
+        return true;
+      }).slice(0, 300);
+
+      return new Response(JSON.stringify({ leads }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // === ACTION: LIST LEGACY FALLBACK ===
+    if (action === "list-legacy") {
       const { data: leads, error } = await supabase
         .from("email_engine_leads")
         .select("*")
