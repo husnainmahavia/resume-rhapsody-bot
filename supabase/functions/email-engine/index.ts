@@ -660,6 +660,76 @@ REQUIREMENTS:
 
     // === ACTION: LIST ===
     if (action === "list") {
+      const [readyResult, processingResult, errorResult, pendingResult, sentResult] = await Promise.all([
+        supabase
+          .from("email_engine_leads")
+          .select("*")
+          .eq("email_generated", true)
+          .eq("sent", false)
+          .eq("queued", false)
+          .is("send_error", null)
+          .not("contact_email", "is", null)
+          .not("email_subject", "is", null)
+          .not("email_body", "is", null)
+          .neq("contact_email", "")
+          .neq("email_subject", "")
+          .neq("email_body", "")
+          .order("created_at", { ascending: false })
+          .limit(200),
+        supabase
+          .from("email_engine_leads")
+          .select("*")
+          .eq("queued", true)
+          .eq("sent", false)
+          .is("send_error", null)
+          .order("queued_at", { ascending: false })
+          .limit(100),
+        supabase
+          .from("email_engine_leads")
+          .select("*")
+          .eq("sent", false)
+          .not("send_error", "is", null)
+          .order("updated_at", { ascending: false })
+          .limit(100),
+        supabase
+          .from("email_engine_leads")
+          .select("*")
+          .eq("sent", false)
+          .eq("email_generated", false)
+          .is("send_error", null)
+          .order("created_at", { ascending: false })
+          .limit(100),
+        supabase
+          .from("email_engine_leads")
+          .select("*")
+          .eq("sent", true)
+          .order("sent_at", { ascending: false })
+          .limit(100),
+      ]);
+
+      const firstError = readyResult.error || processingResult.error || errorResult.error || pendingResult.error || sentResult.error;
+      if (firstError) throw firstError;
+
+      const seen = new Set<string>();
+      const leads = [
+        ...(readyResult.data || []),
+        ...(processingResult.data || []),
+        ...(errorResult.data || []),
+        ...(pendingResult.data || []),
+        ...(sentResult.data || []),
+      ].filter((lead) => {
+        if (seen.has(lead.id)) return false;
+        seen.add(lead.id);
+        return true;
+      }).slice(0, 300);
+
+      return new Response(JSON.stringify({ leads }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // === ACTION: LIST LEGACY FALLBACK ===
+    if (action === "list-legacy") {
       const { data: leads, error } = await supabase
         .from("email_engine_leads")
         .select("*")
