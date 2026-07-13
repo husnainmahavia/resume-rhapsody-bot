@@ -13,7 +13,8 @@ const corsHeaders = {
 };
 
 const HANDOFF_MS = 25_000;
-const PER_ITEM_MS = 60_000; // per-app hard cap so a stuck call doesn't wedge the loop
+const PER_ITEM_MS = 90_000; // AI calls: keep tight
+const SEND_MS = 180_000; // email-mailbox: verify + SMTP handshake + send can be slow
 const RETRY_BASE_MS = 4_000;
 
 function jsonResponse(body: unknown, init: ResponseInit = {}) {
@@ -309,7 +310,7 @@ serve(async (req) => {
             body: app.email_body,
             hiringManagerName: app.hiring_manager_name || undefined,
             applicationId: appId,
-          }, PER_ITEM_MS);
+          }, SEND_MS);
 
           const sendData = s.data || {};
           if (sendData.skipped) {

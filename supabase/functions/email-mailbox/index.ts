@@ -318,6 +318,9 @@ async function handleSend(payload: Record<string, unknown>) {
     port: 465,
     secure: true,
     auth: { user: senderEmail, pass: password },
+    connectionTimeout: 20_000,
+    greetingTimeout: 15_000,
+    socketTimeout: 45_000,
   });
 
   const appId = applicationId ?? (await findLatestApplicationByEmail(supabase, to));
