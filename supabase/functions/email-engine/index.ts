@@ -85,6 +85,23 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+    if (action !== "health") {
+      await Promise.all([
+        supabase
+          .from("email_engine_leads")
+          .update({ queued: false })
+          .eq("sent", false)
+          .eq("queued", true)
+          .lt("queued_at", new Date(Date.now() - 10 * 60 * 1000).toISOString()),
+        supabase
+          .from("email_engine_leads")
+          .update({ email_generated: false, queued: false })
+          .eq("sent", false)
+          .eq("email_generated", true)
+          .or("email_subject.is.null,email_body.is.null,email_subject.eq.,email_body.eq."),
+      ]);
+    }
+
     // === ACTION: HEALTH (lightweight ping to detect blob eviction) ===
     if (action === "health") {
       return new Response(JSON.stringify({
