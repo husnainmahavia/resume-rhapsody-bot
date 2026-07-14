@@ -325,6 +325,17 @@ async function handleSend(payload: Record<string, unknown>) {
 
   const appId = applicationId ?? (await findLatestApplicationByEmail(supabase, to));
   const applicationSource = appId ? await getApplicationAttachmentSource(supabase, appId) : null;
+
+  // Safety net: if this is a job application send, refuse without CV + cover letter.
+  if (applicationId && (!applicationSource?.tailored_cv?.trim() || !applicationSource?.cover_letter?.trim())) {
+    console.log(`🚫 Refusing send for application ${applicationId} → ${to}: missing CV or cover letter`);
+    return json({
+      success: false,
+      sent: false,
+      error: "missing_cv_or_cover_letter",
+    });
+  }
+
   const attachments = buildApplicationAttachments(applicationSource);
   const sanitizedBody = sanitizeGeneratedEmail(body);
 
