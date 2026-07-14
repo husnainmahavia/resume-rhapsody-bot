@@ -187,26 +187,61 @@ CRITICAL RULES:
         ? JSON.parse(toolCall.function.arguments).leads || []
         : [];
 
-      console.log(`✅ Discovered ${leads.length} leads`);
+      console.log(`✅ Discovered ${leads.length} raw leads — resolving REAL emails via find-email...`);
 
-      // Check for duplicates and insert
+      const REAL_EMAIL_SOURCES = new Set(["mailto", "json-ld", "scrape", "smtp_verified"]);
+      const extractDomain = (website: string | undefined): string | null => {
+        if (!website || typeof website !== "string") return null;
+        try {
+          const withProto = /^https?:\/\//i.test(website) ? website : `https://${website}`;
+          return new URL(withProto).hostname.toLowerCase().replace(/^www\./, "");
+        } catch { return null; }
+      };
+
+      // Check for duplicates, resolve real email, and insert
       let inserted = 0;
+      let droppedNoRealEmail = 0;
       for (const lead of leads) {
+        const domain = extractDomain(lead.website);
+        if (!domain) { droppedNoRealEmail++; continue; }
+
+        let realEmail: string | null = null;
+        try {
+          const finderRes = await fetch(`${SUPABASE_URL}/functions/v1/find-email`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+            body: JSON.stringify({ companyDomain: domain, companyName: lead.company_name }),
+          });
+          if (finderRes.ok) {
+            const finderData = await finderRes.json();
+            const best = (finderData.emails || []).find((e: any) => e.confidence >= 70 || REAL_EMAIL_SOURCES.has(e.source));
+            if (best) realEmail = best.email;
+          }
+        } catch (e) {
+          console.warn(`find-email failed for ${domain}:`, e);
+        }
+
+        if (!realEmail) {
+          droppedNoRealEmail++;
+          console.log(`⏭ Dropped ${lead.company_name} — no verified real email for ${domain}`);
+          continue;
+        }
+
         const { data: existing } = await supabase
           .from("email_engine_leads")
           .select("id")
-          .eq("contact_email", lead.contact_email)
+          .eq("contact_email", realEmail)
           .limit(1);
 
         if (existing && existing.length > 0) {
-          console.log(`⏭ Duplicate: ${lead.company_name}`);
+          console.log(`⏭ Duplicate: ${lead.company_name} (${realEmail})`);
           continue;
         }
 
         await supabase.from("email_engine_leads").insert({
           company_name: lead.company_name,
           website: lead.website,
-          contact_email: lead.contact_email,
+          contact_email: realEmail,
           industry: targetIndustry,
           region: targetRegion,
           description: lead.description,
@@ -216,11 +251,14 @@ CRITICAL RULES:
         inserted++;
       }
 
+      console.log(`📥 email-engine discover: kept ${inserted}, dropped ${droppedNoRealEmail} (no verified real email)`);
+
       return new Response(JSON.stringify({
         success: true,
         discovered: leads.length,
         inserted,
-        duplicatesSkipped: leads.length - inserted,
+        droppedNoRealEmail,
+        duplicatesSkipped: leads.length - inserted - droppedNoRealEmail,
         batch: campaignBatch,
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
