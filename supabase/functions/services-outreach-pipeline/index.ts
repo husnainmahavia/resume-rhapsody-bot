@@ -487,16 +487,28 @@ serve(async (req) => {
           await log(supabase, `Discovering ${catDef.label} leads in ${region}.`, { status: "discovering", iteration: iter });
 
           const discovered = await discoverLeads(AI_KEY, category, region);
-          const fresh = discovered
-            .map((lead) => ({ ...lead, contact_email: cleanEmail(lead.contact_email) }))
-            .filter((lead) => hasText(lead.business_name) && hasText(lead.contact_email) && !seenEmails.has(lead.contact_email));
-
-          if (fresh.length === 0) {
-            await log(supabase, `No verified fresh addresses found for ${catDef.label}.`, { status: "no_fresh_leads" });
-            continue;
+          // Discard AI-supplied contact_email; resolve real email via find-email using website domain.
+          let droppedNoRealEmail = 0;
+          const enriched: Array<Record<string, unknown> & { contact_email: string }> = [];
+          for (const lead of discovered) {
+            if (!hasText(lead.business_name)) { droppedNoRealEmail++; continue; }
+            const domain = extractDomainFromWebsite(lead.website);
+            if (!domain) { droppedNoRealEmail++; continue; }
+            const real = await findRealEmailForDomain(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, domain, String(lead.business_name));
+            if (!real) { droppedNoRealEmail++; continue; }
+            const cleaned = cleanEmail(real.email);
+            if (!cleaned || seenEmails.has(cleaned)) { droppedNoRealEmail++; continue; }
+            enriched.push({ ...lead, contact_email: cleaned });
+            seenEmails.add(cleaned);
           }
 
-          const rows = fresh.map((lead) => ({
+          if (enriched.length === 0) {
+            await log(supabase, `${catDef.label}: ${discovered.length} AI leads, 0 with verified real emails (${droppedNoRealEmail} dropped).`, { status: "no_fresh_leads" });
+            continue;
+          }
+          await log(supabase, `${catDef.label}: kept ${enriched.length}/${discovered.length} leads with verified real emails (${droppedNoRealEmail} dropped).`, { status: "discovering" });
+
+          const rows = enriched.map((lead) => ({
             business_name: cleanText(lead.business_name),
             website: hasText(lead.website) ? lead.website : null,
             contact_email: lead.contact_email,
