@@ -284,7 +284,7 @@ serve(async (req) => {
             }
           }
 
-          // 3. Validate ready-to-send
+          // 3. Validate ready-to-send (recipient + subject + body + CV + cover letter)
           if (!app.hiring_manager_email || !app.email_subject || !app.email_body) {
             skipped++;
             done++;
@@ -292,6 +292,48 @@ serve(async (req) => {
             await supabase.from("bulk_send_state").update({
               queue_ids: queueIds, done, sent, skipped, failed,
               step: "Skipped — missing recipient/subject/body",
+              updated_at: new Date().toISOString(),
+            }).eq("id", 1);
+            continue;
+          }
+
+          // Retry CV tailoring once if attachments missing (e.g. earlier rate limit)
+          if (!app.tailored_cv || !app.cover_letter) {
+            await supabase.from("bulk_send_state").update({
+              step: "Retrying CV tailoring (attachments missing)…",
+              updated_at: new Date().toISOString(),
+            }).eq("id", 1);
+            const cvVersion = app.cv_profile || "fullstack";
+            const rr = await callSibling("ai-tailor-cv", {
+              jobTitle: app.job_title,
+              company: app.company,
+              jobDescription: app.job_description || "",
+              cvVersion,
+            }, PER_ITEM_MS);
+            if (rr.ok && rr.data?.tailored_cv && rr.data?.cover_letter) {
+              await supabase.from("job_applications").update({
+                tailored_cv: rr.data.tailored_cv,
+                cover_letter: rr.data.cover_letter,
+                status: "cv_tailored",
+                cv_profile: cvVersion,
+              }).eq("id", appId);
+              app.tailored_cv = rr.data.tailored_cv;
+              app.cover_letter = rr.data.cover_letter;
+            }
+          }
+
+          if (!app.tailored_cv || !app.cover_letter) {
+            skipped++;
+            done++;
+            queueIds.shift();
+            await supabase.from("job_applications").update({
+              status: "needs_cv",
+              notes: "Skipped by bulk-send: missing CV or cover letter after retry.",
+            }).eq("id", appId);
+            await supabase.from("bulk_send_state").update({
+              queue_ids: queueIds, done, sent, skipped, failed,
+              step: "Skipped — missing CV/cover letter",
+              last_error: `${app.company}: missing CV/cover letter after retry`,
               updated_at: new Date().toISOString(),
             }).eq("id", 1);
             continue;

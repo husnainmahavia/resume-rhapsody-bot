@@ -66,7 +66,41 @@ const CATEGORIES: Record<string, {
 const DEFAULT_ROTATION = Object.keys(CATEGORIES);
 const DAILY_SEND_CAP = 40;
 const MAX_ITERATIONS = 2;
-const MAX_SENDS_PER_INVOCATION = 1;
+const MAX_SENDS_PER_INVOCATION = 8;
+
+const REAL_EMAIL_SOURCES = new Set(["mailto", "json-ld", "scrape", "smtp_verified"]);
+
+function extractDomainFromWebsite(website: unknown): string | null {
+  if (!hasText(website)) return null;
+  try {
+    const withProtocol = /^https?:\/\//i.test(website) ? website : `https://${website}`;
+    return new URL(withProtocol).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
+
+async function findRealEmailForDomain(
+  SUPABASE_URL: string,
+  SERVICE_KEY: string,
+  domain: string,
+  companyName?: string,
+): Promise<{ email: string; confidence: number; source: string } | null> {
+  try {
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/find-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${SERVICE_KEY}` },
+      body: JSON.stringify({ companyDomain: domain, companyName }),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const emails: Array<{ email: string; confidence: number; source: string }> = data?.emails || [];
+    const best = emails.find(e => e.confidence >= 70 || REAL_EMAIL_SOURCES.has(e.source));
+    return best ? { email: best.email, confidence: best.confidence, source: best.source } : null;
+  } catch {
+    return null;
+  }
+}
 const DISCOVERY_RETRY_ATTEMPTS = 3;
 const MAX_SENDS_PER_DOMAIN_PER_DAY = 3;
 const STALE_RUNNING_MS = 6 * 60_000;
@@ -453,16 +487,28 @@ serve(async (req) => {
           await log(supabase, `Discovering ${catDef.label} leads in ${region}.`, { status: "discovering", iteration: iter });
 
           const discovered = await discoverLeads(AI_KEY, category, region);
-          const fresh = discovered
-            .map((lead) => ({ ...lead, contact_email: cleanEmail(lead.contact_email) }))
-            .filter((lead) => hasText(lead.business_name) && hasText(lead.contact_email) && !seenEmails.has(lead.contact_email));
-
-          if (fresh.length === 0) {
-            await log(supabase, `No verified fresh addresses found for ${catDef.label}.`, { status: "no_fresh_leads" });
-            continue;
+          // Discard AI-supplied contact_email; resolve real email via find-email using website domain.
+          let droppedNoRealEmail = 0;
+          const enriched: Array<Record<string, unknown> & { contact_email: string }> = [];
+          for (const lead of discovered) {
+            if (!hasText(lead.business_name)) { droppedNoRealEmail++; continue; }
+            const domain = extractDomainFromWebsite(lead.website);
+            if (!domain) { droppedNoRealEmail++; continue; }
+            const real = await findRealEmailForDomain(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, domain, String(lead.business_name));
+            if (!real) { droppedNoRealEmail++; continue; }
+            const cleaned = cleanEmail(real.email);
+            if (!cleaned || seenEmails.has(cleaned)) { droppedNoRealEmail++; continue; }
+            enriched.push({ ...lead, contact_email: cleaned });
+            seenEmails.add(cleaned);
           }
 
-          const rows = fresh.map((lead) => ({
+          if (enriched.length === 0) {
+            await log(supabase, `${catDef.label}: ${discovered.length} AI leads, 0 with verified real emails (${droppedNoRealEmail} dropped).`, { status: "no_fresh_leads" });
+            continue;
+          }
+          await log(supabase, `${catDef.label}: kept ${enriched.length}/${discovered.length} leads with verified real emails (${droppedNoRealEmail} dropped).`, { status: "discovering" });
+
+          const rows = enriched.map((lead) => ({
             business_name: cleanText(lead.business_name),
             website: hasText(lead.website) ? lead.website : null,
             contact_email: lead.contact_email,
