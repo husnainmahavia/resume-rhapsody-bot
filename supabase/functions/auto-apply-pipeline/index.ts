@@ -922,12 +922,15 @@ Return JSON with: title, company, location, salary_range, description, url, hiri
             });
             if (finderRes.ok) {
               const finderData = await finderRes.json();
-              if (finderData.emails?.length > 0) {
-                const bestEmail = finderData.emails[0];
-                console.log(`  ✅ Found: ${bestEmail.email} (confidence: ${bestEmail.confidence})`);
+              const REAL_EMAIL_SOURCES = new Set(["mailto", "json-ld", "scrape", "smtp_verified"]);
+              const bestEmail = (finderData.emails || []).find((e: any) => e.confidence >= 70 || REAL_EMAIL_SOURCES.has(e.source));
+              if (bestEmail) {
+                console.log(`  ✅ Found verified email: ${bestEmail.email} (confidence: ${bestEmail.confidence}, source: ${bestEmail.source})`);
                 job.hiring_email = bestEmail.email;
                 job.hiring_manager = bestEmail.name || job.hiring_manager;
                 emailValidation = validateHiringEmail(job.hiring_email, expectedDomains);
+              } else if (finderData.emails?.length > 0) {
+                console.log(`  ⏭ Skipped low-confidence email (${finderData.emails[0].email}, conf ${finderData.emails[0].confidence}) — falling through`);
               }
             }
           } catch (finderErr) {
