@@ -826,6 +826,39 @@ export type Database = {
         }
         Relationships: []
       }
+      verified_emails: {
+        Row: {
+          all_emails: Json | null
+          best_email: string
+          confidence: number
+          created_at: string
+          domain: string
+          expires_at: string
+          mx_valid: boolean | null
+          source: string
+        }
+        Insert: {
+          all_emails?: Json | null
+          best_email: string
+          confidence: number
+          created_at?: string
+          domain: string
+          expires_at?: string
+          mx_valid?: boolean | null
+          source: string
+        }
+        Update: {
+          all_emails?: Json | null
+          best_email?: string
+          confidence?: number
+          created_at?: string
+          domain?: string
+          expires_at?: string
+          mx_valid?: boolean | null
+          source?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
