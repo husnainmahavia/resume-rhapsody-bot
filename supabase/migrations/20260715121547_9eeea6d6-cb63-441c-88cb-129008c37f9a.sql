@@ -1,0 +1,1 @@
+ALTER TABLE public.services_outreach_leads ADD COLUMN IF NOT EXISTS bounced BOOLEAN NOT NULL DEFAULT false;
