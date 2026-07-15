@@ -128,37 +128,42 @@ export async function callGemini(apiKey: string, body: Record<string, unknown>):
 
   let response: Response | null = null;
   let lastErr = "";
-  const openRouterModels = [outBody.model as string, ...FALLBACK_MODELS.filter(m => m !== outBody.model)]
-    .slice(0, maxModelAttempts);
-  for (const model of openRouterModels) {
-    response = await postChatCompletion(OPENROUTER_URL, headers, { ...outBody, model }, timeoutMs);
-    if (response.ok) break;
-    lastErr = await response.text().catch(() => "");
-    if (response.status !== 404 && response.status !== 400 && response.status !== 429) break;
-    console.warn(`OpenRouter model ${model} failed (${response.status}): ${lastErr.slice(0, 200)}`);
+
+  const LOVABLE_KEY = Deno.env.get("LOVABLE_API_KEY");
+  const callerModel = outBody.model as string;
+
+  // === Primary: Lovable AI Gateway ===
+  if (LOVABLE_KEY && maxLovableAttempts > 0) {
+    const lovableModels = [callerModel, ...LOVABLE_PRIMARY_MODELS.filter(m => m !== callerModel)]
+      .filter(m => m.includes("/") && !m.endsWith(":free"))
+      .slice(0, Math.max(maxLovableAttempts, 1));
+    for (const model of lovableModels) {
+      const r = await postChatCompletion(
+        "https://ai.gateway.lovable.dev/v1/chat/completions",
+        { "Content-Type": "application/json", "Lovable-API-Key": LOVABLE_KEY },
+        { ...outBody, model },
+        timeoutMs,
+      );
+      if (r.ok) { response = r; break; }
+      lastErr = await r.text().catch(() => "");
+      console.warn(`Lovable AI model ${model} failed (${r.status}): ${lastErr.slice(0, 200)}`);
+      if (r.status !== 429 && r.status !== 402 && r.status !== 404 && r.status !== 400) break;
+    }
   }
 
-  // Fallback to Lovable AI Gateway when OpenRouter is exhausted / rate-limited.
+  // === Fallback: OpenRouter free tier ===
   if (!response || !response.ok) {
-    const LOVABLE_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (LOVABLE_KEY && maxLovableAttempts > 0) {
-      console.log("OpenRouter unavailable — falling back to Lovable AI Gateway");
-      const lovableModels = ["google/gemini-3-flash-preview", "google/gemini-2.5-flash-lite", "openai/gpt-5-mini"]
-        .slice(0, maxLovableAttempts);
-      for (const model of lovableModels) {
-        const r = await postChatCompletion(
-          "https://ai.gateway.lovable.dev/v1/chat/completions",
-          {
-            "Content-Type": "application/json",
-            "Lovable-API-Key": LOVABLE_KEY,
-          },
-          { ...outBody, model },
-          timeoutMs,
-        );
-        if (r.ok) { response = r; break; }
-        lastErr = await r.text().catch(() => "");
-        console.warn(`Lovable AI model ${model} failed (${r.status}): ${lastErr.slice(0, 200)}`);
-        if (r.status !== 429 && r.status !== 402 && r.status !== 404) break;
+    const openRouterModels = [callerModel, ...FALLBACK_MODELS.filter(m => m !== callerModel)]
+      .filter(m => m.endsWith(":free") || FALLBACK_MODELS.includes(m))
+      .slice(0, maxModelAttempts);
+    if (openRouterModels.length > 0) {
+      console.log("Trying OpenRouter free-tier fallback");
+      for (const model of openRouterModels) {
+        response = await postChatCompletion(OPENROUTER_URL, headers, { ...outBody, model }, timeoutMs);
+        if (response.ok) break;
+        lastErr = await response.text().catch(() => "");
+        if (response.status !== 404 && response.status !== 400 && response.status !== 429) break;
+        console.warn(`OpenRouter model ${model} failed (${response.status}): ${lastErr.slice(0, 200)}`);
       }
     }
   }
