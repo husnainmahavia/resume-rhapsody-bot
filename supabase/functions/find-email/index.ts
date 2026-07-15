@@ -1,4 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -210,6 +212,42 @@ serve(async (req) => {
     const domain = normalizeDomain(companyDomain);
     console.log(`🔍 Finding real emails for: ${domain}`);
 
+    // === Cache lookup (30-day TTL) ===
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const supabase = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
+      ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+      : null;
+    if (supabase) {
+      try {
+        const { data: cached } = await supabase
+          .from("verified_emails")
+          .select("best_email, confidence, source, all_emails, mx_valid, expires_at")
+          .eq("domain", domain)
+          .gt("expires_at", new Date().toISOString())
+          .maybeSingle();
+        if (cached?.best_email) {
+          console.log(`⚡ Cache HIT for ${domain}: ${cached.best_email} (${cached.confidence}%)`);
+          const emails = Array.isArray(cached.all_emails) && cached.all_emails.length > 0
+            ? cached.all_emails
+            : [{
+                email: cached.best_email, name: "", title: "",
+                confidence: cached.confidence,
+                isHR: HR_KEYWORDS.some(k => cached.best_email.includes(k)),
+                source: cached.source, verifiedStatus: cached.mx_valid ? "mx_valid" : "mx_unknown",
+              }];
+          return new Response(JSON.stringify({
+            domain, organization: companyName || domain, emails,
+            totalFound: emails.length, mxValid: !!cached.mx_valid, cached: true,
+            strategy: "cache-hit",
+          }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+      } catch (cacheErr) {
+        console.warn("Cache read failed:", cacheErr);
+      }
+    }
+
+
     const foundEmails = new Map<string, FoundEmail>();
 
     // Step 1: MX + Scrape in parallel for speed
@@ -304,6 +342,27 @@ serve(async (req) => {
       .slice(0, 10);
 
     console.log(`✅ ${emails.length} emails for ${domain} | Best: ${emails[0]?.email || "none"} (${emails[0]?.confidence || 0}%, ${emails[0]?.source || "-"})`);
+
+    // === Cache write (only if we found a strong real result) ===
+    const best = emails[0];
+    if (supabase && best && best.confidence >= 70
+        && ["mailto", "json-ld", "scrape", "smtp_verified"].includes(best.source)) {
+      try {
+        await supabase.from("verified_emails").upsert({
+          domain,
+          best_email: best.email,
+          confidence: best.confidence,
+          source: best.source,
+          all_emails: emails,
+          mx_valid: mxValid,
+          created_at: new Date().toISOString(),
+          expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        }, { onConflict: "domain" });
+        console.log(`💾 Cached ${domain} → ${best.email}`);
+      } catch (writeErr) {
+        console.warn("Cache write failed:", writeErr);
+      }
+    }
 
     return new Response(JSON.stringify({
       domain, organization: companyName || domain, emails,

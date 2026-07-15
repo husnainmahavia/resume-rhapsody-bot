@@ -715,6 +715,7 @@ export type Database = {
       services_outreach_leads: {
         Row: {
           batch_id: string | null
+          bounced: boolean
           business_name: string
           contact_email: string | null
           created_at: string
@@ -738,6 +739,7 @@ export type Database = {
         }
         Insert: {
           batch_id?: string | null
+          bounced?: boolean
           business_name: string
           contact_email?: string | null
           created_at?: string
@@ -761,6 +763,7 @@ export type Database = {
         }
         Update: {
           batch_id?: string | null
+          bounced?: boolean
           business_name?: string
           contact_email?: string | null
           created_at?: string
@@ -823,6 +826,39 @@ export type Database = {
           started_at?: string | null
           status?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      verified_emails: {
+        Row: {
+          all_emails: Json | null
+          best_email: string
+          confidence: number
+          created_at: string
+          domain: string
+          expires_at: string
+          mx_valid: boolean | null
+          source: string
+        }
+        Insert: {
+          all_emails?: Json | null
+          best_email: string
+          confidence: number
+          created_at?: string
+          domain: string
+          expires_at?: string
+          mx_valid?: boolean | null
+          source: string
+        }
+        Update: {
+          all_emails?: Json | null
+          best_email?: string
+          confidence?: number
+          created_at?: string
+          domain?: string
+          expires_at?: string
+          mx_valid?: boolean | null
+          source?: string
         }
         Relationships: []
       }
