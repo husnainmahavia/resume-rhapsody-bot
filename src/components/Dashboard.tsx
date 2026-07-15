@@ -137,6 +137,7 @@ export default function Dashboard({ applications }: DashboardProps) {
     { label: "CV Tailored", count: applications.filter(a => a.status === "cv_tailored").length, color: "bg-accent" },
     { label: "Applied", count: applications.filter(a => a.status === "applied").length, color: "bg-primary" },
     { label: "Interview", count: applications.filter(a => a.status === "interview").length, color: "bg-warning" },
+    { label: "Needs CV", count: applications.filter(a => a.status === "needs_cv").length, color: "bg-warning" },
     { label: "No Email", count: applications.filter(a => a.status === "no_email").length, color: "bg-destructive" },
   ];
 
