@@ -8,7 +8,9 @@
 // downstream parsing code keeps working.
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const DEFAULT_MODEL = "openai/gpt-oss-120b:free";
+// Primary is now Lovable AI Gateway (paid tier, no daily 429s). OpenRouter
+// free tier is kept as a fallback for cost, but no longer the default.
+const DEFAULT_MODEL = "google/gemini-3.5-flash";
 const DEFAULT_TIMEOUT_MS = 20_000;
 const FALLBACK_MODELS = [
   "openai/gpt-oss-120b:free",
@@ -17,6 +19,12 @@ const FALLBACK_MODELS = [
   "qwen/qwen3-next-80b-a3b-instruct:free",
   "z-ai/glm-4.5-air:free",
   "meta-llama/llama-3.3-70b-instruct:free",
+];
+// Lovable-AI-first model chain (used when DEFAULT_MODEL isn't overridden).
+const LOVABLE_PRIMARY_MODELS = [
+  "google/gemini-3.5-flash",
+  "google/gemini-3.1-flash-lite",
+  "openai/gpt-5.4-mini",
 ];
 
 async function postChatCompletion(
