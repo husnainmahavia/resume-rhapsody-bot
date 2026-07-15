@@ -294,7 +294,9 @@ Rules:
   const subject = cleanText(args?.subject);
   const body = cleanText(args?.body);
   if (!subject || !body || /\[[^\]]+\]|company name|recipient name/i.test(`${subject}\n${body}`)) {
-    throw new Error("email content failed safety checks");
+    console.warn("⚠️ Safety-check failure. Raw AI output:", JSON.stringify(args)?.slice(0, 500));
+    const reason = !subject ? "empty_subject" : !body ? "empty_body" : "placeholder_leftover";
+    throw new Error(`email content failed safety checks (${reason})`);
   }
   return { subject, body };
 }
@@ -465,11 +467,26 @@ serve(async (req) => {
       try {
         const { data: existingLeads } = await supabase.from("services_outreach_leads").select("contact_email");
         const seenEmails = new Set((existingLeads || []).map((r) => cleanEmail(r.contact_email)).filter(Boolean) as string[]);
-        const { data: sentRows } = await supabase.from("sent_emails").select("recipient_email").eq("sender", "visuosofts").limit(3000);
+        const { data: sentRows } = await supabase.from("sent_emails").select("recipient_email").limit(5000);
         for (const row of sentRows || []) {
           const email = cleanEmail(row.recipient_email);
           if (email) seenEmails.add(email);
         }
+        // Cross-dedupe: also skip anything already targeted by the other pipelines
+        const { data: engineRows } = await supabase.from("email_engine_leads").select("contact_email").limit(10000);
+        for (const row of engineRows || []) {
+          const email = cleanEmail(row.contact_email);
+          if (email) seenEmails.add(email);
+        }
+        const { data: appRows } = await supabase.from("job_applications").select("hiring_manager_email").not("hiring_manager_email", "is", null);
+        for (const row of appRows || []) {
+          const email = cleanEmail(row.hiring_manager_email);
+          if (email) seenEmails.add(email);
+        }
+        const { data: blacklistedDomains } = await supabase.from("domain_blacklist").select("domain").eq("is_blacklisted", true);
+        const blacklistDomainSet = new Set((blacklistedDomains || []).map((r) => (r.domain || "").toLowerCase()).filter(Boolean));
+        console.log(`🔎 Cross-dedupe: ${seenEmails.size} known recipients, ${blacklistDomainSet.size} blacklisted domains`);
+
 
         for (let iter = 1; iter <= MAX_ITERATIONS && totalSent < MAX_SENDS_PER_INVOCATION; iter++) {
           if (Date.now() - jobStartedAt > HANDOFF_MS) {
@@ -609,8 +626,13 @@ serve(async (req) => {
             } catch (error) {
               totalErrors++;
               const msg = error instanceof Error ? error.message : String(error);
-              await supabase.from("services_outreach_leads").update({ send_error: msg }).eq("id", lead.id);
-              await log(supabase, `${lead.business_name}: ${msg}`, { errors: totalErrors, status: isFatalSmtpError(msg) ? "mailbox_auth_failed" : "error" });
+              // Detect SMTP hard-bounce (invalid recipient) and mark `bounced=true`.
+              const isBounce = /\b(550|553|554)\b|mailbox not found|user unknown|does not exist|invalid recipient|no such user/i.test(msg);
+              await supabase.from("services_outreach_leads").update({
+                send_error: msg,
+                bounced: isBounce ? true : undefined,
+              }).eq("id", lead.id);
+              await log(supabase, `${lead.business_name}: ${msg}`, { errors: totalErrors, status: isFatalSmtpError(msg) ? "mailbox_auth_failed" : (isBounce ? "bounced" : "error") });
               if (isFatalSmtpError(msg)) throw error;
             }
           }
