@@ -235,14 +235,24 @@ CRITICAL RULES:
           continue;
         }
 
-        const { data: existing } = await supabase
-          .from("email_engine_leads")
-          .select("id")
-          .eq("contact_email", realEmail)
-          .limit(1);
-
-        if (existing && existing.length > 0) {
-          console.log(`⏭ Duplicate: ${lead.company_name} (${realEmail})`);
+        // Cross-system dedupe: skip if already in engine, sent, services outreach,
+        // job applications, or on a blacklisted domain.
+        const emailLower = realEmail.toLowerCase();
+        const emailDom = emailLower.split("@")[1];
+        const [existing, sentDup, svcDup, appDup, blacklistDup] = await Promise.all([
+          supabase.from("email_engine_leads").select("id").eq("contact_email", realEmail).limit(1),
+          supabase.from("sent_emails").select("id").eq("recipient_email", emailLower).limit(1),
+          supabase.from("services_outreach_leads").select("id").eq("contact_email", realEmail).limit(1),
+          supabase.from("job_applications").select("id").eq("hiring_manager_email", realEmail).limit(1),
+          emailDom ? supabase.from("domain_blacklist").select("id").eq("domain", emailDom).eq("is_blacklisted", true).limit(1) : Promise.resolve({ data: [] as any[] }),
+        ]);
+        const dupReason = (existing.data?.length && "in_email_engine")
+          || (sentDup.data?.length && "already_sent")
+          || (svcDup.data?.length && "in_services_outreach")
+          || (appDup.data?.length && "in_job_applications")
+          || ((blacklistDup as any).data?.length && "domain_blacklisted");
+        if (dupReason) {
+          console.log(`⏭ Duplicate (${dupReason}): ${lead.company_name} (${realEmail})`);
           continue;
         }
 
@@ -642,7 +652,21 @@ REQUIREMENTS:
               errors++;
               const errMsg = e instanceof Error ? e.message : String(e);
               console.error(`  ❌ Send error for ${lead.company_name}:`, errMsg);
-              await supabase.from("email_engine_leads").update({ send_error: errMsg, queued: false }).eq("id", lead.id);
+              const isBounce = /\b(550|553|554)\b|mailbox not found|user unknown|does not exist|invalid recipient|no such user/i.test(errMsg);
+              await supabase.from("email_engine_leads").update({
+                send_error: errMsg,
+                queued: false,
+                bounced: isBounce ? true : undefined,
+              }).eq("id", lead.id);
+              if (isBounce) {
+                const bd = (lead.contact_email || "").split("@")[1]?.toLowerCase();
+                if (bd) {
+                  await supabase.from("domain_blacklist").upsert({
+                    domain: bd, is_blacklisted: false, bounce_count: 1,
+                    last_bounced_at: new Date().toISOString(),
+                  }, { onConflict: "domain" }).catch(() => {});
+                }
+              }
             }
           }
           // Safety net: clear any lead still queued from this batch
