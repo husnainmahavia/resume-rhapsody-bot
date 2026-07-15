@@ -198,14 +198,10 @@ CRITICAL RULES:
         } catch { return null; }
       };
 
-      // Check for duplicates, resolve real email, and insert
-      let inserted = 0;
-      let droppedNoRealEmail = 0;
-      for (const lead of leads) {
+      // Resolve real emails in parallel (concurrency 4) to keep within edge timeout
+      const resolveOne = async (lead: any): Promise<{ lead: any; email: string | null }> => {
         const domain = extractDomain(lead.website);
-        if (!domain) { droppedNoRealEmail++; continue; }
-
-        let realEmail: string | null = null;
+        if (!domain) return { lead, email: null };
         try {
           const finderRes = await fetch(`${SUPABASE_URL}/functions/v1/find-email`, {
             method: "POST",
@@ -215,15 +211,27 @@ CRITICAL RULES:
           if (finderRes.ok) {
             const finderData = await finderRes.json();
             const best = (finderData.emails || []).find((e: any) => e.confidence >= 70 || REAL_EMAIL_SOURCES.has(e.source));
-            if (best) realEmail = best.email;
+            if (best) return { lead, email: best.email };
           }
         } catch (e) {
           console.warn(`find-email failed for ${domain}:`, e);
         }
+        return { lead, email: null };
+      };
 
+      const POOL = 4;
+      const resolved: Array<{ lead: any; email: string | null }> = [];
+      for (let i = 0; i < leads.length; i += POOL) {
+        const batch = leads.slice(i, i + POOL);
+        resolved.push(...await Promise.all(batch.map(resolveOne)));
+      }
+
+      let inserted = 0;
+      let droppedNoRealEmail = 0;
+      for (const { lead, email: realEmail } of resolved) {
         if (!realEmail) {
           droppedNoRealEmail++;
-          console.log(`⏭ Dropped ${lead.company_name} — no verified real email for ${domain}`);
+          console.log(`⏭ Dropped ${lead.company_name} — no verified real email`);
           continue;
         }
 

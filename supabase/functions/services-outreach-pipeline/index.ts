@@ -490,16 +490,25 @@ serve(async (req) => {
           // Discard AI-supplied contact_email; resolve real email via find-email using website domain.
           let droppedNoRealEmail = 0;
           const enriched: Array<Record<string, unknown> & { contact_email: string }> = [];
-          for (const lead of discovered) {
-            if (!hasText(lead.business_name)) { droppedNoRealEmail++; continue; }
-            const domain = extractDomainFromWebsite(lead.website);
-            if (!domain) { droppedNoRealEmail++; continue; }
-            const real = await findRealEmailForDomain(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, domain, String(lead.business_name));
-            if (!real) { droppedNoRealEmail++; continue; }
-            const cleaned = cleanEmail(real.email);
-            if (!cleaned || seenEmails.has(cleaned)) { droppedNoRealEmail++; continue; }
-            enriched.push({ ...lead, contact_email: cleaned });
-            seenEmails.add(cleaned);
+
+          // Resolve real emails in parallel (concurrency 4) to stay within handoff window
+          const POOL = 4;
+          for (let i = 0; i < discovered.length; i += POOL) {
+            const batch = discovered.slice(i, i + POOL);
+            const results = await Promise.all(batch.map(async (lead) => {
+              if (!hasText(lead.business_name)) return { lead, real: null as any };
+              const domain = extractDomainFromWebsite(lead.website);
+              if (!domain) return { lead, real: null };
+              const real = await findRealEmailForDomain(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, domain, String(lead.business_name));
+              return { lead, real };
+            }));
+            for (const { lead, real } of results) {
+              if (!real) { droppedNoRealEmail++; continue; }
+              const cleaned = cleanEmail(real.email);
+              if (!cleaned || seenEmails.has(cleaned)) { droppedNoRealEmail++; continue; }
+              enriched.push({ ...lead, contact_email: cleaned });
+              seenEmails.add(cleaned);
+            }
           }
 
           if (enriched.length === 0) {

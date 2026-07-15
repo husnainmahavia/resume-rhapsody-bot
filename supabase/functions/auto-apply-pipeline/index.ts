@@ -952,10 +952,18 @@ Return JSON with: title, company, location, salary_range, description, url, hiri
             });
             if (scrapeRes.ok) {
               const scrapeData = await scrapeRes.json();
-              if (scrapeData.emails?.length > 0) {
-                console.log(`  ✅ Scraped email: ${scrapeData.emails[0]}`);
-                job.hiring_email = scrapeData.emails[0];
+              // Prefer high-quality sources (mailto/json-ld/scrape) over pattern guesses
+              const REAL_SOURCES = new Set(["mailto", "json-ld", "scrape"]);
+              const details: Array<{ email: string; score: number; source: string }> = scrapeData.emailDetails || [];
+              const best = details.find(d => REAL_SOURCES.has(d.source) && d.score >= 70)
+                       || details.find(d => REAL_SOURCES.has(d.source));
+              const pickedEmail = best?.email || null;
+              if (pickedEmail) {
+                console.log(`  ✅ Scraped email: ${pickedEmail} (${best?.source}, score ${best?.score})`);
+                job.hiring_email = pickedEmail;
                 emailValidation = validateHiringEmail(job.hiring_email, expectedDomains);
+              } else {
+                console.log(`  ⏭ Scraped emails were low-quality guesses only — skipping`);
               }
             }
           } catch (scrapeErr) {
