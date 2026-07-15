@@ -25,6 +25,8 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.
   interview: { label: "Interview", color: "bg-warning/20 text-warning", icon: <Star className="h-3 w-3" /> },
   rejected: { label: "Rejected", color: "bg-destructive/20 text-destructive", icon: <X className="h-3 w-3" /> },
   offer: { label: "Offer!", color: "bg-primary/30 text-primary", icon: <Star className="h-3 w-3" /> },
+  needs_cv: { label: "Needs CV", color: "bg-warning/20 text-warning", icon: <FileText className="h-3 w-3" /> },
+  no_email: { label: "No Email", color: "bg-destructive/20 text-destructive", icon: <ShieldAlert className="h-3 w-3" /> },
 };
 
 interface ApplicationListProps {
