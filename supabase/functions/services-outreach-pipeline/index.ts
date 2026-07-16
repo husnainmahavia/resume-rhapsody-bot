@@ -709,7 +709,7 @@ serve(async (req) => {
               totalSent++;
               dailySent++;
               domainCounts.set(domain, (domainCounts.get(domain) || 0) + 1);
-              await log(supabase, `Sent ${catDef.label} pitch to ${lead.business_name}.`, { emails_sent: totalSent, status: "sent" });
+              await log(supabase, `Sent ${leadCatDef?.label || leadCategory} pitch to ${lead.business_name}.`, { emails_sent: totalSent, status: "sent" });
             } catch (error) {
               totalErrors++;
               const msg = error instanceof Error ? error.message : String(error);
