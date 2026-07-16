@@ -64,9 +64,52 @@ const CATEGORIES: Record<string, {
 };
 
 const DEFAULT_ROTATION = Object.keys(CATEGORIES);
-const DAILY_SEND_CAP = 40;
+const DEFAULT_DAILY_SEND_CAP = 40;
 const MAX_ITERATIONS = 2;
 const MAX_SENDS_PER_INVOCATION = 8;
+const OSM_BATCH_SIZE = 12;
+
+async function getDailyCap(supabase: Client, mailbox: string): Promise<number> {
+  const { data } = await supabase.from("sender_config").select("daily_cap").eq("mailbox", mailbox).maybeSingle();
+  const cap = Number(data?.daily_cap);
+  return Number.isFinite(cap) && cap > 0 ? cap : DEFAULT_DAILY_SEND_CAP;
+}
+
+// Inline website quality scoring. Returns 0-100. Fetch failure = 0 (treat as refresh candidate).
+async function scoreWebsite(website: string): Promise<number> {
+  try {
+    const url = /^https?:\/\//i.test(website) ? website : `https://${website}`;
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 6000);
+    const resp = await fetch(url, { redirect: "follow", signal: controller.signal, headers: { "User-Agent": "Mozilla/5.0 VisuosoftsBot" } });
+    clearTimeout(t);
+    if (!resp.ok) return 0;
+    const html = (await resp.text()).slice(0, 200_000);
+    let score = 40;
+    if (url.toLowerCase().startsWith("https://")) score += 15;
+    if (/<meta[^>]+name=["']viewport["']/i.test(html)) score += 20;
+    if (/(__NEXT_DATA__|data-reactroot|data-nuxt|ng-version|svelte-)/i.test(html)) score += 15;
+    if (/wp-content|wordpress/i.test(html)) score += 10; // WP OK
+    if (/FrontPage|Dreamweaver|<font\s|<center>|<marquee/i.test(html)) score -= 30;
+    const yearMatch = html.match(/©\s*(?:copyright\s*)?(20\d{2})/i);
+    if (yearMatch) {
+      const y = Number(yearMatch[1]);
+      const nowYear = new Date().getFullYear();
+      if (nowYear - y >= 3) score -= 20;
+    }
+    return Math.max(0, Math.min(100, score));
+  } catch {
+    return 0;
+  }
+}
+
+function categoryForWebsite(website: string | null, score: number, requested: string[]): string | null {
+  // web-dev-new preferred: no website
+  if (!website && requested.includes("web-dev-new")) return "web-dev-new";
+  if (website && score < 45 && requested.includes("web-dev-refresh")) return "web-dev-refresh";
+  return null;
+}
+
 
 const REAL_EMAIL_SOURCES = new Set(["mailto", "json-ld", "scrape", "smtp_verified"]);
 
@@ -488,6 +531,32 @@ serve(async (req) => {
         console.log(`🔎 Cross-dedupe: ${seenEmails.size} known recipients, ${blacklistDomainSet.size} blacklisted domains`);
 
 
+        const DAILY_SEND_CAP = await getDailyCap(supabase, "info@visuosofts.com");
+        await log(supabase, `Daily send cap for this mailbox: ${DAILY_SEND_CAP}.`, { status: "starting" });
+
+        // Ensure the OSM cache has fresh candidates for the requested categories.
+        // Trigger discovery for the first requested category if the pending pool is thin.
+        for (const cat of requestedCategories) {
+          const { count } = await supabase.from("osm_raw_leads")
+            .select("*", { count: "exact", head: true })
+            .eq("category", cat).eq("processed", false);
+          if ((count || 0) < 20) {
+            await log(supabase, `OSM cache low for ${cat} (${count || 0}); fetching more.`, { status: "osm_fetch" });
+            try {
+              await fetch(`${SUPABASE_URL}/functions/v1/osm-lead-discovery`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                  "apikey": SUPABASE_SERVICE_ROLE_KEY,
+                },
+                body: JSON.stringify({ category: cat, maxAreas: 2 }),
+              });
+            } catch (e) { console.warn("osm-lead-discovery invoke failed", e); }
+            break; // only refill one per invocation to protect the wall-clock budget
+          }
+        }
+
         for (let iter = 1; iter <= MAX_ITERATIONS && totalSent < MAX_SENDS_PER_INVOCATION; iter++) {
           if (Date.now() - jobStartedAt > HANDOFF_MS) {
             await log(supabase, `Handing off (iter ${iter}, sent ${totalSent}).`, { status: "handing_off" });
@@ -499,57 +568,65 @@ serve(async (req) => {
             break;
           }
 
-          const category = requestedCategories[(iter - 1 + Math.floor(Date.now() / 900000)) % requestedCategories.length];
-          const catDef = CATEGORIES[category];
-          await log(supabase, `Discovering ${catDef.label} leads in ${region}.`, { status: "discovering", iteration: iter });
+          await log(supabase, `Pulling OSM candidates for [${requestedCategories.join(", ")}] in ${region}.`, { status: "discovering", iteration: iter });
 
-          const discovered = await discoverLeads(AI_KEY, category, region);
-          // Discard AI-supplied contact_email; resolve real email via find-email using website domain.
-          let droppedNoRealEmail = 0;
-          const enriched: Array<Record<string, unknown> & { contact_email: string }> = [];
+          // Pull a batch of unprocessed OSM rows that have a website (needed for find-email).
+          const { data: osmBatch } = await supabase.from("osm_raw_leads")
+            .select("*")
+            .in("category", requestedCategories)
+            .eq("processed", false)
+            .not("website", "is", null)
+            .order("seen_at", { ascending: true })
+            .limit(OSM_BATCH_SIZE);
 
-          // Resolve real emails in parallel (concurrency 4) to stay within handoff window
-          const POOL = 4;
-          for (let i = 0; i < discovered.length; i += POOL) {
-            const batch = discovered.slice(i, i + POOL);
-            const results = await Promise.all(batch.map(async (lead) => {
-              if (!hasText(lead.business_name)) return { lead, real: null as any };
-              const domain = extractDomainFromWebsite(lead.website);
-              if (!domain) return { lead, real: null };
-              const real = await findRealEmailForDomain(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, domain, String(lead.business_name));
-              return { lead, real };
-            }));
-            for (const { lead, real } of results) {
-              if (!real) { droppedNoRealEmail++; continue; }
-              const cleaned = cleanEmail(real.email);
-              if (!cleaned || seenEmails.has(cleaned)) { droppedNoRealEmail++; continue; }
-              enriched.push({ ...lead, contact_email: cleaned });
-              seenEmails.add(cleaned);
+          if (!osmBatch || osmBatch.length === 0) {
+            await log(supabase, `No OSM candidates ready. Discovery running in background.`, { status: "no_osm_candidates" });
+            break;
+          }
+
+          const newRows: any[] = [];
+          for (const osm of osmBatch) {
+            if (Date.now() - jobStartedAt > HANDOFF_MS) {
+              scheduleHandoff("wall-time-osm-scoring");
+              return;
             }
-          }
+            const website = String(osm.website || "");
+            const domain = extractDomainFromWebsite(website);
+            // Always mark processed so we don't retry the same POI
+            await supabase.from("osm_raw_leads").update({ processed: true, processed_at: new Date().toISOString() }).eq("id", osm.id);
 
-          if (enriched.length === 0) {
-            await log(supabase, `${catDef.label}: ${discovered.length} AI leads, 0 with verified real emails (${droppedNoRealEmail} dropped).`, { status: "no_fresh_leads" });
-            continue;
-          }
-          await log(supabase, `${catDef.label}: kept ${enriched.length}/${discovered.length} leads with verified real emails (${droppedNoRealEmail} dropped).`, { status: "discovering" });
+            if (!domain) continue;
+            if (blacklistDomainSet.has(domain)) continue;
 
-          const rows = enriched.map((lead) => ({
-            business_name: cleanText(lead.business_name),
-            website: hasText(lead.website) ? lead.website : null,
-            contact_email: lead.contact_email,
-            phone: hasText(lead.phone) ? lead.phone : null,
-            location: hasText(lead.location) ? lead.location : null,
-            industry: hasText(lead.industry) ? lead.industry : null,
-            service_category: category,
-            website_status: hasText(lead.website_status) ? lead.website_status : null,
-            opportunity: cleanText(lead.opportunity),
-            price_gbp: catDef.price ?? null,
-            batch_id: batchId,
-          }));
+            const score = await scoreWebsite(website);
+            const category = categoryForWebsite(website, score, requestedCategories);
+            if (!category) continue; // site is fine → not a web-dev opportunity in this build
 
-          const newRows = [];
-          for (const row of rows) {
+            const catDef = CATEGORIES[category];
+            const real = await findRealEmailForDomain(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, domain, String(osm.business_name));
+            if (!real) continue;
+            const cleaned = cleanEmail(real.email);
+            if (!cleaned || seenEmails.has(cleaned)) continue;
+            seenEmails.add(cleaned);
+
+            const row = {
+              business_name: cleanText(osm.business_name),
+              website,
+              contact_email: cleaned,
+              phone: hasText(osm.phone) ? String(osm.phone) : null,
+              location: hasText(osm.address) ? String(osm.address) : osm.area,
+              industry: null,
+              service_category: category,
+              website_status: score === 0 ? "unreachable" : score < 45 ? "outdated" : "modern",
+              opportunity: category === "web-dev-new"
+                ? `${osm.business_name} has no working website in our checks — offer £${catDef.price} launch package.`
+                : `${osm.business_name}'s site scored ${score}/100 — offer £${catDef.price} modern refresh.`,
+              price_gbp: catDef.price ?? null,
+              batch_id: batchId,
+              source: "osm",
+              website_score: score,
+            };
+
             const { data: insertedRow, error: insertError } = await supabase
               .from("services_outreach_leads")
               .insert(row)
@@ -557,12 +634,19 @@ serve(async (req) => {
               .single();
             if (insertError) {
               if (/duplicate key|unique constraint/i.test(insertError.message || "")) continue;
-              throw insertError;
+              console.warn("insert error:", insertError.message);
+              continue;
             }
             if (insertedRow) newRows.push(insertedRow);
           }
+
+          if (newRows.length === 0) {
+            await log(supabase, `Iter ${iter}: no new sendable leads from ${osmBatch.length} OSM rows.`, { status: "no_fresh_leads" });
+            continue;
+          }
           totalDiscovered += newRows.length;
           await updateState(supabase, { discovered: totalDiscovered, status: "validating" });
+
 
           for (const lead of newRows) {
             if (Date.now() - jobStartedAt > HANDOFF_MS) {
@@ -588,7 +672,10 @@ serve(async (req) => {
               }
 
               await log(supabase, `Generating checked email for ${lead.business_name}.`, { status: "generating" });
-              const generated = await generateEmail(AI_KEY, lead, category);
+              const leadCategory = String(lead.service_category);
+              const leadCatDef = CATEGORIES[leadCategory];
+              const generated = await generateEmail(AI_KEY, lead, leadCategory);
+
               await supabase.from("services_outreach_leads").update({
                 email_subject: generated.subject,
                 email_body: generated.body,
@@ -622,7 +709,7 @@ serve(async (req) => {
               totalSent++;
               dailySent++;
               domainCounts.set(domain, (domainCounts.get(domain) || 0) + 1);
-              await log(supabase, `Sent ${catDef.label} pitch to ${lead.business_name}.`, { emails_sent: totalSent, status: "sent" });
+              await log(supabase, `Sent ${leadCatDef?.label || leadCategory} pitch to ${lead.business_name}.`, { emails_sent: totalSent, status: "sent" });
             } catch (error) {
               totalErrors++;
               const msg = error instanceof Error ? error.message : String(error);

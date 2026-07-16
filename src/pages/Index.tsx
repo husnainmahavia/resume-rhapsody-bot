@@ -23,6 +23,8 @@ import ServicesOutreachPipeline from "@/components/ServicesOutreachPipeline";
 import CronMonitorPanel from "@/components/CronMonitorPanel";
 import EmailOpenTracker from "@/components/EmailOpenTracker";
 import ComplianceSettings from "@/components/ComplianceSettings";
+import DeliverabilityPanel from "@/components/DeliverabilityPanel";
+
 import { fetchApplications, type JobApplication } from "@/lib/api";
 import { getShowRiskTools, setShowRiskTools, useSetting } from "@/lib/settings";
 
@@ -83,8 +85,10 @@ const Index = () => {
     { id: "csv", label: "CSV Import", icon: Upload, group: "Tools" },
     { id: "profile", label: "Profile", icon: UserCog, group: "Tools" },
     { id: "cron", label: "Cron Monitor", icon: Timer, group: "Tools" },
+    { id: "deliverability", label: "Deliverability", icon: Mail, group: "Tools" },
     { id: "settings", label: "Settings", icon: ShieldCheck, group: "Tools" },
   ];
+
 
   const groups = ["Core", "Discovery", "Outreach", "Tools"];
 
@@ -152,12 +156,18 @@ const Index = () => {
         description: "Real-time view of all 8 hourly cron jobs — job applications, email engine, scraper, follow-ups, and inbox checks.",
         component: <CronMonitorPanel />,
       },
+      deliverability: {
+        icon: Mail, title: "Deliverability", subtitle: "DNS + sender ramp",
+        description: "Check SPF, DKIM, DMARC on the sending domain and set the daily send cap for warm-up.",
+        component: <DeliverabilityPanel />,
+      },
       settings: {
         icon: ShieldCheck, title: "Compliance & Settings", subtitle: "safety controls",
         description: "Control which risk tools appear in the sidebar. Product policy: review before send.",
         component: <ComplianceSettings />,
       },
     };
+
 
     const content = contentMap[activeTab];
     if (!content) return null;
