@@ -672,7 +672,10 @@ serve(async (req) => {
               }
 
               await log(supabase, `Generating checked email for ${lead.business_name}.`, { status: "generating" });
-              const generated = await generateEmail(AI_KEY, lead, category);
+              const leadCategory = String(lead.service_category);
+              const leadCatDef = CATEGORIES[leadCategory];
+              const generated = await generateEmail(AI_KEY, lead, leadCategory);
+
               await supabase.from("services_outreach_leads").update({
                 email_subject: generated.subject,
                 email_body: generated.body,
