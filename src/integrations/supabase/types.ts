@@ -568,6 +568,57 @@ export type Database = {
         }
         Relationships: []
       }
+      osm_raw_leads: {
+        Row: {
+          address: string | null
+          area: string
+          business_name: string | null
+          category: string
+          created_at: string
+          id: string
+          lat: number | null
+          lon: number | null
+          osm_id: string
+          phone: string | null
+          processed: boolean
+          processed_at: string | null
+          seen_at: string
+          website: string | null
+        }
+        Insert: {
+          address?: string | null
+          area: string
+          business_name?: string | null
+          category: string
+          created_at?: string
+          id?: string
+          lat?: number | null
+          lon?: number | null
+          osm_id: string
+          phone?: string | null
+          processed?: boolean
+          processed_at?: string | null
+          seen_at?: string
+          website?: string | null
+        }
+        Update: {
+          address?: string | null
+          area?: string
+          business_name?: string | null
+          category?: string
+          created_at?: string
+          id?: string
+          lat?: number | null
+          lon?: number | null
+          osm_id?: string
+          phone?: string | null
+          processed?: boolean
+          processed_at?: string | null
+          seen_at?: string
+          website?: string | null
+        }
+        Relationships: []
+      }
       scraped_companies: {
         Row: {
           category: string
@@ -676,6 +727,36 @@ export type Database = {
         }
         Relationships: []
       }
+      sender_config: {
+        Row: {
+          created_at: string
+          daily_cap: number
+          id: string
+          mailbox: string
+          notes: string | null
+          ramp_step: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          daily_cap?: number
+          id?: string
+          mailbox: string
+          notes?: string | null
+          ramp_step?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          daily_cap?: number
+          id?: string
+          mailbox?: string
+          notes?: string | null
+          ramp_step?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       sent_emails: {
         Row: {
           application_id: string | null
@@ -726,6 +807,7 @@ export type Database = {
           industry: string | null
           location: string | null
           message_id: string | null
+          opened_at: string | null
           opportunity: string | null
           phone: string | null
           price_gbp: number | null
@@ -733,8 +815,10 @@ export type Database = {
           sent: boolean
           sent_at: string | null
           service_category: string
+          source: string | null
           updated_at: string
           website: string | null
+          website_score: number | null
           website_status: string | null
         }
         Insert: {
@@ -750,6 +834,7 @@ export type Database = {
           industry?: string | null
           location?: string | null
           message_id?: string | null
+          opened_at?: string | null
           opportunity?: string | null
           phone?: string | null
           price_gbp?: number | null
@@ -757,8 +842,10 @@ export type Database = {
           sent?: boolean
           sent_at?: string | null
           service_category: string
+          source?: string | null
           updated_at?: string
           website?: string | null
+          website_score?: number | null
           website_status?: string | null
         }
         Update: {
@@ -774,6 +861,7 @@ export type Database = {
           industry?: string | null
           location?: string | null
           message_id?: string | null
+          opened_at?: string | null
           opportunity?: string | null
           phone?: string | null
           price_gbp?: number | null
@@ -781,8 +869,10 @@ export type Database = {
           sent?: boolean
           sent_at?: string | null
           service_category?: string
+          source?: string | null
           updated_at?: string
           website?: string | null
+          website_score?: number | null
           website_status?: string | null
         }
         Relationships: []
