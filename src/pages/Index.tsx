@@ -85,8 +85,10 @@ const Index = () => {
     { id: "csv", label: "CSV Import", icon: Upload, group: "Tools" },
     { id: "profile", label: "Profile", icon: UserCog, group: "Tools" },
     { id: "cron", label: "Cron Monitor", icon: Timer, group: "Tools" },
+    { id: "deliverability", label: "Deliverability", icon: Mail, group: "Tools" },
     { id: "settings", label: "Settings", icon: ShieldCheck, group: "Tools" },
   ];
+
 
   const groups = ["Core", "Discovery", "Outreach", "Tools"];
 
