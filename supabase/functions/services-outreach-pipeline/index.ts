@@ -64,9 +64,52 @@ const CATEGORIES: Record<string, {
 };
 
 const DEFAULT_ROTATION = Object.keys(CATEGORIES);
-const DAILY_SEND_CAP = 40;
+const DEFAULT_DAILY_SEND_CAP = 40;
 const MAX_ITERATIONS = 2;
 const MAX_SENDS_PER_INVOCATION = 8;
+const OSM_BATCH_SIZE = 12;
+
+async function getDailyCap(supabase: Client, mailbox: string): Promise<number> {
+  const { data } = await supabase.from("sender_config").select("daily_cap").eq("mailbox", mailbox).maybeSingle();
+  const cap = Number(data?.daily_cap);
+  return Number.isFinite(cap) && cap > 0 ? cap : DEFAULT_DAILY_SEND_CAP;
+}
+
+// Inline website quality scoring. Returns 0-100. Fetch failure = 0 (treat as refresh candidate).
+async function scoreWebsite(website: string): Promise<number> {
+  try {
+    const url = /^https?:\/\//i.test(website) ? website : `https://${website}`;
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 6000);
+    const resp = await fetch(url, { redirect: "follow", signal: controller.signal, headers: { "User-Agent": "Mozilla/5.0 VisuosoftsBot" } });
+    clearTimeout(t);
+    if (!resp.ok) return 0;
+    const html = (await resp.text()).slice(0, 200_000);
+    let score = 40;
+    if (url.toLowerCase().startsWith("https://")) score += 15;
+    if (/<meta[^>]+name=["']viewport["']/i.test(html)) score += 20;
+    if (/(__NEXT_DATA__|data-reactroot|data-nuxt|ng-version|svelte-)/i.test(html)) score += 15;
+    if (/wp-content|wordpress/i.test(html)) score += 10; // WP OK
+    if (/FrontPage|Dreamweaver|<font\s|<center>|<marquee/i.test(html)) score -= 30;
+    const yearMatch = html.match(/©\s*(?:copyright\s*)?(20\d{2})/i);
+    if (yearMatch) {
+      const y = Number(yearMatch[1]);
+      const nowYear = new Date().getFullYear();
+      if (nowYear - y >= 3) score -= 20;
+    }
+    return Math.max(0, Math.min(100, score));
+  } catch {
+    return 0;
+  }
+}
+
+function categoryForWebsite(website: string | null, score: number, requested: string[]): string | null {
+  // web-dev-new preferred: no website
+  if (!website && requested.includes("web-dev-new")) return "web-dev-new";
+  if (website && score < 45 && requested.includes("web-dev-refresh")) return "web-dev-refresh";
+  return null;
+}
+
 
 const REAL_EMAIL_SOURCES = new Set(["mailto", "json-ld", "scrape", "smtp_verified"]);
 
